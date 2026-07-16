@@ -57,7 +57,12 @@ export class AdminOperationsService {
         const apiKey = model.apiKey || (model.apiKeyEnvVar ? process.env[model.apiKeyEnvVar] : undefined);
         const startedAt = Date.now();
         try {
-            await axios.get(`${endpoint.replace(/\/$/, '')}/models`, {
+            await axios.post(`${endpoint.replace(/\/$/, '')}/chat/completions`, {
+                model: model.modelId,
+                messages: [{ role: 'user', content: 'Reply with OK.' }],
+                max_tokens: 1,
+                temperature: 0,
+            }, {
                 headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
                 timeout: 10_000,
             });

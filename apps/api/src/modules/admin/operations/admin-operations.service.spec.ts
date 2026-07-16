@@ -7,7 +7,7 @@ describe('AdminOperationsService', () => {
     const prisma = {
         llmModel: { findUnique: jest.fn() },
     };
-    const axiosGet = axios.get as jest.Mock;
+    const axiosPost = axios.post as jest.Mock;
     let service: AdminOperationsService;
 
     beforeEach(() => {
@@ -20,20 +20,26 @@ describe('AdminOperationsService', () => {
         delete process.env.INTERNAL_LLM_API_KEY;
     });
 
-    it('checks an OpenAI-compatible model endpoint without returning its API key', async () => {
+    it('checks an OpenAI-compatible chat model without returning its API key', async () => {
         prisma.llmModel.findUnique.mockResolvedValue({
             id: 'model-1',
             name: 'Internal Ollama',
             provider: 'ollama',
+            modelId: 'llama3.2',
             endpoint: 'http://ollama:11434/v1/',
             apiKey: null,
             apiKeyEnvVar: 'INTERNAL_LLM_API_KEY',
         });
-        axiosGet.mockResolvedValue({ status: 200 });
+        axiosPost.mockResolvedValue({ status: 200 });
 
         const result = await service.testModel('model-1');
 
-        expect(axiosGet).toHaveBeenCalledWith('http://ollama:11434/v1/models', {
+        expect(axiosPost).toHaveBeenCalledWith('http://ollama:11434/v1/chat/completions', {
+            model: 'llama3.2',
+            messages: [{ role: 'user', content: 'Reply with OK.' }],
+            max_tokens: 1,
+            temperature: 0,
+        }, {
             headers: { Authorization: 'Bearer test-key' },
             timeout: 10_000,
         });
@@ -55,6 +61,6 @@ describe('AdminOperationsService', () => {
             success: false,
             error: 'Model endpoint is not configured',
         });
-        expect(axiosGet).not.toHaveBeenCalled();
+        expect(axiosPost).not.toHaveBeenCalled();
     });
 });
