@@ -29,17 +29,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <div className="min-h-screen flex bg-gray-50">
-            <aside className="w-56 flex-shrink-0 border-r bg-white flex flex-col">
+        <div className="min-h-screen flex bg-background">
+            <aside className="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
                 <Link href="/dashboard" className="flex items-center gap-2 px-4 py-4 border-b">
-                    <Sparkles className="h-6 w-6 text-purple-600" />
-                    <span className="text-lg font-bold">JaSlide</span>
+                    <Sparkles className="h-6 w-6 text-foreground" />
+                    <span className="text-lg font-bold font-display tracking-tight">JaSlide</span>
                 </Link>
 
                 <div className="p-3">
                     <Link
                         href="/dashboard?focus=1"
-                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 text-sm font-medium"
+                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-foreground text-background hover:opacity-85 transition-opacity text-sm font-medium"
                     >
                         <Plus className="h-4 w-4" />
                         새로 만들기
@@ -53,8 +53,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             href={href}
                             className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
                                 pathname === href
-                                    ? 'bg-purple-50 text-purple-700 font-medium'
-                                    : 'text-gray-600 hover:bg-gray-100'
+                                    ? 'bg-secondary text-foreground font-medium'
+                                    : 'text-muted-foreground hover:bg-secondary'
                             }`}
                         >
                             <Icon className="h-4 w-4" />
@@ -64,7 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     {isAdminRole(user?.role) && (
                         <Link
                             href="/admin"
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary"
                         >
                             <Shield className="h-4 w-4" />
                             관리자
@@ -74,12 +74,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
                 <div className="p-3 border-t">
                     <div className="flex items-center gap-2 px-3 py-2">
-                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                            <span className="text-purple-600 font-medium text-sm">
+                        <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-foreground font-medium text-sm">
                                 {user?.name?.[0] || user?.email?.[0] || 'U'}
                             </span>
                         </div>
-                        <span className="text-sm text-gray-700 truncate">{user?.name || user?.email}</span>
+                        <span className="text-sm text-foreground truncate">{user?.name || user?.email}</span>
                     </div>
                     <button
                         onClick={handleLogout}

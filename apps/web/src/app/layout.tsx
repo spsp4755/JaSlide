@@ -1,9 +1,19 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { IBM_Plex_Sans_KR, Noto_Serif_KR } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
 
-const inter = Inter({ subsets: ['latin'] });
+// ponytail: next/font self-hosts at build time — no runtime CDN, closed-network safe
+const plexSans = IBM_Plex_Sans_KR({
+    weight: ['400', '500', '600', '700'],
+    subsets: ['latin'],
+    variable: '--font-sans',
+});
+const serifDisplay = Noto_Serif_KR({
+    weight: ['600', '700', '900'],
+    subsets: ['latin'],
+    variable: '--font-display',
+});
 
 export const metadata: Metadata = {
     title: 'JaSlide - AI 프레젠테이션 자동 생성',
@@ -18,7 +28,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="ko" suppressHydrationWarning>
-            <body className={inter.className}>
+            <body className={`${plexSans.variable} ${serifDisplay.variable} font-sans`}>
                 <Providers>{children}</Providers>
             </body>
         </html>

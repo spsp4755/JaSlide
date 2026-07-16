@@ -3,10 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
-import { Sparkles, ArrowLeft } from 'lucide-react';
 
 export default function RegisterPage() {
     const router = useRouter();
@@ -46,109 +44,78 @@ export default function RegisterPage() {
         }
     };
 
+    const inputClass =
+        'w-full px-4 py-3.5 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow';
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-white mb-8">
-                    <ArrowLeft className="h-4 w-4" />
-                    홈으로
-                </Link>
-
-                <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
-                    <div className="flex items-center justify-center gap-2 mb-8">
-                        <Sparkles className="h-8 w-8 text-purple-400" />
-                        <span className="text-2xl font-bold text-white">JaSlide</span>
-                    </div>
-
-                    <h1 className="text-2xl font-bold text-white text-center mb-2">
-                        회원가입
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+            <div className="w-full max-w-sm">
+                <div className="text-center mb-10">
+                    <h1 className="font-display text-4xl font-black tracking-tight text-foreground">
+                        JaSlide
                     </h1>
-                    <p className="text-gray-400 text-center mb-8">
-                        무료로 시작하고 100 크레딧을 받으세요
+                    <p className="mt-3 text-muted-foreground">
+                        계정을 만들고 바로 시작하세요.
                     </p>
-
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
-                                이름
-                            </label>
-                            <input
-                                id="name"
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                placeholder="홍길동"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                                이메일
-                            </label>
-                            <input
-                                id="email"
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                placeholder="you@example.com"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                                비밀번호
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                placeholder="••••••••"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
-                                비밀번호 확인
-                            </label>
-                            <input
-                                id="confirmPassword"
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                placeholder="••••••••"
-                                required
-                            />
-                        </div>
-
-                        {error && (
-                            <div className="text-red-400 text-sm text-center">{error}</div>
-                        )}
-
-                        <Button
-                            type="submit"
-                            className="w-full bg-purple-600 hover:bg-purple-700 py-6"
-                            disabled={loading}
-                        >
-                            {loading ? '가입 중...' : '회원가입'}
-                        </Button>
-                    </form>
-
-                    <div className="mt-6 text-center">
-                        <p className="text-gray-400">
-                            이미 계정이 있으신가요?{' '}
-                            <Link href="/login" className="text-purple-400 hover:text-purple-300">
-                                로그인
-                            </Link>
-                        </p>
-                    </div>
                 </div>
+
+                <form onSubmit={handleSubmit} className="space-y-3">
+                    <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className={inputClass}
+                        placeholder="이름"
+                        aria-label="이름"
+                        required
+                    />
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={inputClass}
+                        placeholder="이메일"
+                        aria-label="이메일"
+                        required
+                    />
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className={inputClass}
+                        placeholder="비밀번호 (8자 이상)"
+                        aria-label="비밀번호"
+                        required
+                    />
+                    <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={inputClass}
+                        placeholder="비밀번호 확인"
+                        aria-label="비밀번호 확인"
+                        required
+                    />
+
+                    {error && (
+                        <p className="text-destructive text-sm text-center" role="alert">{error}</p>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full py-3.5 rounded-xl bg-foreground text-background font-medium hover:opacity-85 disabled:opacity-40 transition-opacity"
+                    >
+                        {loading ? '가입 중...' : '회원가입'}
+                    </button>
+                </form>
+
+                <p className="mt-8 text-center text-sm text-muted-foreground">
+                    이미 계정이 있으신가요?{' '}
+                    <Link href="/login" className="text-foreground underline underline-offset-4 hover:opacity-70">
+                        로그인
+                    </Link>
+                </p>
             </div>
         </div>
     );

@@ -197,8 +197,8 @@ export default function HomePage() {
 
     if (!hasHydrated || !isAuthenticated) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
             </div>
         );
     }
@@ -230,7 +230,7 @@ export default function HomePage() {
 
                 {/* Hero */}
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">JaSlide AI 슬라이드</h1>
+                    <h1 className="font-display text-5xl font-black tracking-tight text-foreground mb-3">JaSlide AI 슬라이드</h1>
                     <p className="text-gray-500">누구나 전문가처럼 덱을 만들 수 있도록.</p>
                 </div>
 
@@ -245,8 +245,8 @@ export default function HomePage() {
                             }}
                             className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
                                 selectedPurpose.id === purpose.id
-                                    ? 'bg-gray-900 text-white border-gray-900'
-                                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                                    ? 'bg-foreground text-background border-foreground'
+                                    : 'bg-card text-muted-foreground border-border hover:border-foreground/40'
                             }`}
                         >
                             {purpose.title}
@@ -255,7 +255,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Prompt box */}
-                <div className="bg-white rounded-2xl border shadow-sm p-4 mb-3">
+                <div className="bg-card rounded-2xl border border-border shadow-sm p-4 mb-3">
                     <textarea
                         ref={inputRef}
                         value={textContent}
@@ -291,7 +291,7 @@ export default function HomePage() {
                                             <input
                                                 type="range" min={3} max={30} value={slideCount}
                                                 onChange={(e) => setSlideCount(Number(e.target.value))}
-                                                className="w-full accent-purple-600"
+                                                className="w-full accent-foreground"
                                             />
                                         </div>
                                         <div>
@@ -303,7 +303,7 @@ export default function HomePage() {
                                                         onClick={() => setLanguage(lang)}
                                                         className={`px-3 py-1.5 rounded-lg text-sm border ${
                                                             language === lang
-                                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                                ? 'bg-foreground text-background border-foreground'
                                                                 : 'bg-white text-gray-600 border-gray-200'
                                                         }`}
                                                     >
@@ -317,7 +317,7 @@ export default function HomePage() {
                                                 <input
                                                     type="checkbox" checked={includeImages}
                                                     onChange={(e) => setIncludeImages(e.target.checked)}
-                                                    className="rounded accent-purple-600"
+                                                    className="rounded accent-foreground"
                                                 />
                                                 이미지 포함
                                             </label>
@@ -325,7 +325,7 @@ export default function HomePage() {
                                                 <input
                                                     type="checkbox" checked={includeCharts}
                                                     onChange={(e) => setIncludeCharts(e.target.checked)}
-                                                    className="rounded accent-purple-600"
+                                                    className="rounded accent-foreground"
                                                 />
                                                 차트 포함
                                             </label>
@@ -337,7 +337,7 @@ export default function HomePage() {
                         <button
                             onClick={handleGenerate}
                             disabled={!textContent.trim() && !uploadedFile}
-                            className="p-2.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40"
+                            className="p-2.5 rounded-full bg-foreground text-background hover:opacity-85 disabled:opacity-40 transition-opacity"
                             title="생성 시작"
                         >
                             <Send className="h-4 w-4" />
@@ -348,7 +348,7 @@ export default function HomePage() {
                 {/* Attached file / selected template chips */}
                 <div className="flex flex-wrap gap-2 mb-12 min-h-[28px]">
                     {uploadedFile && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-secondary text-foreground rounded-full text-sm">
                             <FileText className="h-3.5 w-3.5" />
                             {uploadedFile.name}
                             <button onClick={() => setUploadedFile(null)}>
@@ -377,8 +377,8 @@ export default function HomePage() {
                                     onClick={() => setCategoryFilter(cat)}
                                     className={`px-3 py-1 rounded-full text-sm border ${
                                         categoryFilter === cat
-                                            ? 'bg-gray-900 text-white border-gray-900'
-                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                                            ? 'bg-foreground text-background border-foreground'
+                                            : 'bg-card text-muted-foreground border-border hover:border-foreground/40'
                                     }`}
                                 >
                                     {cat ?? '전체'}
@@ -388,7 +388,7 @@ export default function HomePage() {
                     )}
                     {loadingTemplates ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                         </div>
                     ) : templates.length === 0 ? (
                         <p className="text-sm text-gray-500 text-center py-8">사용 가능한 템플릿이 없습니다.</p>
@@ -405,7 +405,7 @@ export default function HomePage() {
                                     }
                                     className={`relative text-left rounded-xl overflow-hidden border-2 transition-all ${
                                         selectedTemplateId === template.id
-                                            ? 'border-purple-600 ring-2 ring-purple-200'
+                                            ? 'border-foreground ring-2 ring-foreground/15'
                                             : 'border-gray-200 hover:border-gray-300'
                                     }`}
                                 >
@@ -425,8 +425,8 @@ export default function HomePage() {
                                         <p className="text-xs text-gray-500 truncate">{template.category}</p>
                                     </div>
                                     {selectedTemplateId === template.id && (
-                                        <div className="absolute top-2 right-2 w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center">
-                                            <Check className="h-3 w-3 text-white" />
+                                        <div className="absolute top-2 right-2 w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
+                                            <Check className="h-3 w-3 text-background" />
                                         </div>
                                     )}
                                 </button>
