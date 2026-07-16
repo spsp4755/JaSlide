@@ -1,11 +1,52 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaginationDto } from '../dto';
 import { TemplateCategory } from '@prisma/client';
 
 @Injectable()
 export class AdminTemplatesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private configService: ConfigService,
+    ) { }
+
+    async importPptx(
+        file: Express.Multer.File,
+        data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },
+    ) {
+        if (!file || !file.originalname.toLowerCase().endsWith('.pptx') ||
+            file.mimetype !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+            file.size > 20 * 1024 * 1024) {
+            throw new BadRequestException('PPTX file up to 20MB required');
+        }
+
+        const form = new FormData();
+        form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
+        const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
+        let response: { data?: { config?: unknown } };
+        try {
+            response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 15000 });
+        } catch {
+            throw new BadRequestException('Failed to extract PPTX style');
+        }
+        if (!this.isTemplateConfig(response.data?.config)) {
+            throw new BadRequestException('Invalid renderer template config');
+        }
+        return this.create({ ...data, category: data.category || 'CUSTOM', config: response.data.config });
+    }
+
+    private isTemplateConfig(config: unknown): config is { colors: Record<string, string>; typography: Record<string, string> } {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return false;
+        const value = config as Record<string, unknown>;
+        return this.isStringRecord(value.colors) && this.isStringRecord(value.typography);
+    }
+
+    private isStringRecord(value: unknown): value is Record<string, string> {
+        return !!value && typeof value === 'object' && !Array.isArray(value) &&
+            Object.values(value).every(item => typeof item === 'string');
+    }
 
     async findAll(filter: PaginationDto & { category?: string; isPublic?: boolean }) {
         const { page = 1, limit = 20, category, isPublic } = filter;

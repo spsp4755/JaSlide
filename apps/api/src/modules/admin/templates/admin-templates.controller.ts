@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminTemplatesService } from './admin-templates.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -24,6 +25,22 @@ export class AdminTemplatesController {
     @Post()
     async create(@Body() data: any) {
         return this.templatesService.create(data);
+    }
+
+    @Post('import-pptx')
+    @UseInterceptors(FileInterceptor('file', {
+        limits: { fileSize: 20 * 1024 * 1024 },
+        fileFilter: (_request, file, callback) => callback(
+            null,
+            file.originalname.toLowerCase().endsWith('.pptx') &&
+            file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ),
+    }))
+    async importPptx(
+        @UploadedFile() file: Express.Multer.File,
+        @Body() data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },
+    ) {
+        return this.templatesService.importPptx(file, data);
     }
 
     @Patch(':id')
