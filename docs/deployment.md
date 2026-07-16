@@ -1,6 +1,6 @@
 # Closed-network deployment
 
-1. Copy `.env.example` to `.env` and replace `POSTGRES_PASSWORD`, `JWT_SECRET`, and the Keycloak/LLM values. Set `NEXT_PUBLIC_API_URL` to the browser-reachable internal API URL (for example `https://jaslide.example.internal/api`) before building.
+1. Copy `.env.example` to `.env` and replace `POSTGRES_PASSWORD`, `JWT_SECRET`, and the Keycloak/LLM values. Set `NEXT_PUBLIC_API_URL` to the browser-reachable internal API URL (for example `https://jaslide.example.internal/api`) and `CORS_ORIGIN` to the browser URL (for example `https://jaslide.example.internal`) before building.
 2. Make the internal OpenAI-compatible endpoint reachable from the `api` container through `OPENAI_BASE_URL`.
 3. Build and start the immutable images:
 
