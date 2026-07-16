@@ -6,13 +6,17 @@ jest.mock('axios');
 describe('AdminOperationsService', () => {
     const prisma = {
         llmModel: { findUnique: jest.fn() },
+        $queryRaw: jest.fn(),
     };
     const axiosPost = axios.post as jest.Mock;
+    const axiosGet = axios.get as jest.Mock;
+    const queueService = { ping: jest.fn() };
+    const configService = { get: jest.fn().mockReturnValue('http://renderer.internal') };
     let service: AdminOperationsService;
 
     beforeEach(() => {
         jest.clearAllMocks();
-        service = new AdminOperationsService(prisma as any);
+        service = new AdminOperationsService(prisma as any, queueService as any, configService as any);
         process.env.INTERNAL_LLM_API_KEY = 'test-key';
     });
 
@@ -45,6 +49,19 @@ describe('AdminOperationsService', () => {
         });
         expect(result).toEqual(expect.objectContaining({ success: true, model: 'Internal Ollama' }));
         expect(JSON.stringify(result)).not.toContain('test-key');
+    });
+
+    it('reports degraded health when a required service is unavailable', async () => {
+        prisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+        queueService.ping.mockRejectedValue(new Error('redis unavailable'));
+        axiosGet.mockResolvedValue({ status: 200 });
+
+        const result = await service.getSystemHealth();
+
+        expect(result.status).toBe('degraded');
+        expect(result.services.database.status).toBe('up');
+        expect(result.services.redis.status).toBe('down');
+        expect(result.services.renderer.status).toBe('up');
     });
 
     it('reports a missing endpoint instead of claiming the model is healthy', async () => {

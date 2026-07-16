@@ -41,6 +41,10 @@ export class QueueService implements OnModuleDestroy {
         });
     }
 
+    async ping() {
+        return ((await this.generationQueue.client) as unknown as { ping: () => Promise<string> }).ping();
+    }
+
     async onModuleDestroy() {
         await this.generationWorker?.close();
         await this.generationQueue.close();

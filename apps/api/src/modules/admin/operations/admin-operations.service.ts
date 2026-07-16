@@ -1,33 +1,43 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { QueueService } from '../../queue/queue.service';
 
 @Injectable()
 export class AdminOperationsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private queueService: QueueService,
+        private configService: ConfigService,
+    ) { }
 
     async getSystemHealth() {
         const startTime = process.hrtime();
-        let dbStatus = 'up';
-        let dbLatency = 0;
-
-        try {
-            const dbStart = Date.now();
-            await this.prisma.$queryRaw`SELECT 1`;
-            dbLatency = Date.now() - dbStart;
-        } catch {
-            dbStatus = 'down';
-        }
+        const check = async (action: () => Promise<unknown>) => {
+            const startedAt = Date.now();
+            try {
+                await action();
+                return { status: 'up', latency: Date.now() - startedAt };
+            } catch {
+                return { status: 'down', latency: Date.now() - startedAt };
+            }
+        };
+        const [database, redis, renderer] = await Promise.all([
+            check(() => this.prisma.$queryRaw`SELECT 1`),
+            check(() => this.queueService.ping()),
+            check(() => axios.get(`${(this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000').replace(/\/$/, '')}/health`, { timeout: 3_000 })),
+        ]);
 
         const memoryUsage = process.memoryUsage();
 
         return {
-            status: dbStatus === 'up' ? 'healthy' : 'degraded',
+            status: [database, redis, renderer].every((service) => service.status === 'up') ? 'healthy' : 'degraded',
             services: {
                 api: { status: 'up', latency: 0 },
-                database: { status: dbStatus, latency: dbLatency },
-                redis: { status: 'up', latency: 3 }, // Placeholder
-                renderer: { status: 'up', latency: 120 }, // Placeholder
+                database,
+                redis,
+                renderer,
             },
             memory: {
                 heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
