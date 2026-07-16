@@ -4,15 +4,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sparkles, FileText, Palette, Download, ArrowRight, User, LogOut, LayoutDashboard, Settings } from 'lucide-react';
+import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function HomePage() {
     const router = useRouter();
     const { user, isAuthenticated, hasHydrated, clearAuth } = useAuthStore();
 
-    const handleLogout = () => {
-        clearAuth();
-        router.refresh();
+    const handleLogout = async () => {
+        try {
+            await authApi.logout();
+        } catch (error) {
+            console.error('Failed to end session:', error);
+        } finally {
+            clearAuth();
+            router.refresh();
+        }
     };
 
     return (

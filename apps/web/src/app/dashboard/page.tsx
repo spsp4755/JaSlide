@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
-import { presentationsApi, creditsApi } from '@/lib/api';
+import { authApi, presentationsApi, creditsApi } from '@/lib/api';
 import {
     Plus,
     Sparkles,
@@ -60,9 +60,15 @@ export default function DashboardPage() {
         }
     };
 
-    const handleLogout = () => {
-        clearAuth();
-        router.push('/');
+    const handleLogout = async () => {
+        try {
+            await authApi.logout();
+        } catch (error) {
+            console.error('Failed to end session:', error);
+        } finally {
+            clearAuth();
+            router.push('/');
+        }
     };
 
     const formatDate = (dateString: string) => {
