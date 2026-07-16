@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import axios from 'axios';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -48,13 +49,31 @@ export class AdminOperationsService {
             return { success: false, error: 'Model not found' };
         }
 
-        // Placeholder - implement actual model test
-        return {
-            success: true,
-            model: model.name,
-            responseTime: 250,
-            message: 'Model test successful',
-        };
+        const endpoint = model.endpoint || (model.provider.toLowerCase() === 'openai' ? 'https://api.openai.com/v1' : null);
+        if (!endpoint) {
+            return { success: false, error: 'Model endpoint is not configured' };
+        }
+
+        const apiKey = model.apiKey || (model.apiKeyEnvVar ? process.env[model.apiKeyEnvVar] : undefined);
+        const startedAt = Date.now();
+        try {
+            await axios.get(`${endpoint.replace(/\/$/, '')}/models`, {
+                headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+                timeout: 10_000,
+            });
+            return {
+                success: true,
+                model: model.name,
+                responseTime: Date.now() - startedAt,
+                message: 'Model endpoint is reachable',
+            };
+        } catch (error) {
+            const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+            return {
+                success: false,
+                error: status ? `Model endpoint returned HTTP ${status}` : 'Model endpoint is unreachable',
+            };
+        }
     }
 
     async forceStopJobs() {

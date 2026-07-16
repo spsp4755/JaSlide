@@ -35,6 +35,7 @@ export default function AdminModelsPage() {
     const [editingModel, setEditingModel] = useState<LlmModel | null>(null);
     const [formData, setFormData] = useState(defaultFormData);
     const [submitting, setSubmitting] = useState(false);
+    const [testingModelId, setTestingModelId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchModels();
@@ -117,6 +118,25 @@ export default function AdminModelsPage() {
             body: JSON.stringify({ isActive: !isActive }),
         });
         fetchModels();
+    };
+
+    const testModel = async (id: string) => {
+        setTestingModelId(id);
+        try {
+            const response = await adminFetch(`${API_URL}/admin/operations/model-test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modelId: id }),
+            });
+            const result = await response.json();
+            alert(result.success
+                ? `Model endpoint is reachable (${result.responseTime}ms)`
+                : `Model test failed: ${result.error || 'Unknown error'}`);
+        } catch {
+            alert('Model test failed: Admin API is unreachable');
+        } finally {
+            setTestingModelId(null);
+        }
     };
 
     const deleteModel = async (id: string) => {
@@ -207,6 +227,9 @@ export default function AdminModelsPage() {
                                         기본 설정
                                     </button>
                                 )}
+                                <button onClick={() => testModel(model.id)} disabled={testingModelId === model.id} className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 disabled:opacity-50">
+                                    {testingModelId === model.id ? 'Testing...' : 'Test'}
+                                </button>
                                 <button onClick={() => openEditModal(model)} className="p-2 hover:bg-gray-100 rounded-lg"><Edit size={16} className="text-gray-500" /></button>
                                 <button onClick={() => deleteModel(model.id)} className="p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} className="text-red-500" /></button>
                             </div>
