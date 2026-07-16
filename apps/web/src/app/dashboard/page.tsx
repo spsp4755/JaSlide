@@ -1,86 +1,200 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useDropzone } from 'react-dropzone';
+import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';
-import { authApi, presentationsApi, creditsApi } from '@/lib/api';
+import { generationApi, templatesApi } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
+import { GenerationProgress } from '@/components/generation-progress';
+import { PURPOSE_OPTIONS, PurposeOption } from '@/components/purpose-onboarding';
 import {
-    Plus,
-    Sparkles,
-    FileText,
-    Clock,
-    MoreVertical,
-    LogOut,
-    Wallet,
-    Settings,
+    Plus, Send, Settings2, X, FileText, Check, Loader2,
 } from 'lucide-react';
 
-interface Presentation {
+interface Template {
     id: string;
-    title: string;
-    status: string;
-    createdAt: string;
-    updatedAt: string;
-    _count: { slides: number };
+    name: string;
+    description?: string;
+    thumbnail?: string;
+    category: string;
+    config?: {
+        colors?: { primary?: string; background?: string; text?: string };
+        backgrounds?: { value?: string };
+    };
 }
 
-export default function DashboardPage() {
+export default function HomePage() {
     const router = useRouter();
-    const { user, isAuthenticated, hasHydrated, clearAuth } = useAuthStore();
-    const [presentations, setPresentations] = useState<Presentation[]>([]);
-    const [credits, setCredits] = useState<number>(0);
-    const [loading, setLoading] = useState(true);
+    const searchParams = useSearchParams();
+    const { isAuthenticated, hasHydrated } = useAuthStore();
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+
+    // Prompt state
+    const [textContent, setTextContent] = useState('');
+    const [selectedPurpose, setSelectedPurpose] = useState<PurposeOption>(PURPOSE_OPTIONS[0]);
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+    // Options popover state
+    const [showOptions, setShowOptions] = useState(false);
+    const [slideCount, setSlideCount] = useState(10);
+    const [language, setLanguage] = useState('ko');
+    const [includeImages, setIncludeImages] = useState(true);
+    const [includeCharts, setIncludeCharts] = useState(true);
+
+    // Template gallery state
+    const [templates, setTemplates] = useState<Template[]>([]);
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+    // Generation state
+    const [jobId, setJobId] = useState<string | null>(null);
+    const [progress, setProgress] = useState(0);
+    const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'completed' | 'failed'>('idle');
+    const [generationStartTime, setGenerationStartTime] = useState<Date | null>(null);
 
     useEffect(() => {
-        // Wait for hydration before checking auth
         if (!hasHydrated) return;
-
-        if (!isAuthenticated) {
-            router.push('/login');
-            return;
-        }
-
-        fetchData();
+        if (!isAuthenticated) router.push('/login');
     }, [hasHydrated, isAuthenticated, router]);
 
-    const fetchData = async () => {
+    useEffect(() => {
+        if (searchParams.get('focus')) inputRef.current?.focus();
+    }, [searchParams]);
+
+    useEffect(() => {
+        (async () => {
+            setLoadingTemplates(true);
+            try {
+                const [apiRes, defaultsRes] = await Promise.all([
+                    templatesApi.list().catch(() => ({ data: [] })),
+                    templatesApi.defaults().catch(() => ({ data: [] })),
+                ]);
+                const apiTemplates = Array.isArray(apiRes.data) ? apiRes.data : [];
+                const defaultTemplates = Array.isArray(defaultsRes.data) ? defaultsRes.data : [];
+                setTemplates([...defaultTemplates, ...apiTemplates]);
+            } catch (err) {
+                console.error('Failed to fetch templates:', err);
+            } finally {
+                setLoadingTemplates(false);
+            }
+        })();
+    }, []);
+
+    const onDrop = useCallback((acceptedFiles: File[]) => {
+        if (acceptedFiles.length > 0) setUploadedFile(acceptedFiles[0]);
+    }, []);
+
+    const { getRootProps, getInputProps, open: openFilePicker } = useDropzone({
+        onDrop,
+        accept: {
+            'application/pdf': ['.pdf'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+            'text/plain': ['.txt'],
+            'text/markdown': ['.md'],
+            'text/csv': ['.csv'],
+        },
+        maxFiles: 1,
+        maxSize: 50 * 1024 * 1024,
+        noClick: true,
+        noKeyboard: true,
+    });
+
+    const getSourceType = () => {
+        if (!uploadedFile) return 'TEXT';
+        const ext = uploadedFile.name.split('.').pop()?.toLowerCase();
+        const typeMap: Record<string, string> = {
+            pdf: 'PDF', docx: 'DOCX', doc: 'DOCX', txt: 'TEXT', md: 'MARKDOWN', csv: 'CSV',
+        };
+        return typeMap[ext || ''] || 'TEXT';
+    };
+
+    const handleGenerate = async () => {
+        if (!textContent.trim() && !uploadedFile) {
+            toast({ title: '오류', description: '내용을 입력하거나 파일을 첨부해주세요.', variant: 'destructive' });
+            return;
+        }
+        setGenerationStatus('generating');
+        setGenerationStartTime(new Date());
+        setProgress(0);
         try {
-            const [presResponse, creditsResponse] = await Promise.all([
-                presentationsApi.list(),
-                creditsApi.balance(),
-            ]);
-            setPresentations(presResponse.data.data);
-            setCredits(creditsResponse.data.available);
-        } catch (error) {
-            console.error('Failed to fetch data:', error);
-        } finally {
-            setLoading(false);
+            const content = uploadedFile ? `File: ${uploadedFile.name}` : textContent;
+            const response = await generationApi.start({
+                sourceType: getSourceType(),
+                content,
+                slideCount,
+                language,
+                templateId: selectedTemplateId,
+                options: {
+                    includeImages,
+                    includeCharts,
+                    style: 'professional',
+                    tone: 'informative',
+                    purpose: selectedPurpose.id,
+                },
+            });
+            setJobId(response.data.jobId);
+            pollJobStatus(response.data.jobId, response.data.presentationId);
+        } catch (error: any) {
+            toast({
+                title: '생성 실패',
+                description: error.response?.data?.message || '프레젠테이션 생성에 실패했습니다.',
+                variant: 'destructive',
+            });
+            setGenerationStatus('failed');
         }
     };
 
-    const handleLogout = async () => {
+    const handleCancelGeneration = async () => {
+        if (!jobId) return;
         try {
-            await authApi.logout();
-        } catch (error) {
-            console.error('Failed to end session:', error);
-        } finally {
-            clearAuth();
-            router.push('/');
+            await generationApi.cancel(jobId);
+            setGenerationStatus('idle');
+            toast({ title: '생성 취소됨', description: '프레젠테이션 생성을 취소했습니다.' });
+        } catch (error: any) {
+            toast({
+                title: '취소 실패',
+                description: error.response?.data?.message || '생성 작업을 취소할 수 없습니다.',
+                variant: 'destructive',
+            });
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('ko-KR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
+    const pollJobStatus = (jobId: string, presentationId: string) => {
+        const poll = async () => {
+            try {
+                const response = await generationApi.status(jobId);
+                const { status: jobStatus, progress: jobProgress } = response.data;
+                setProgress(jobProgress);
+                if (jobStatus === 'COMPLETED') {
+                    setGenerationStatus('completed');
+                    toast({ title: '생성 완료', description: '프레젠테이션이 생성되었습니다!' });
+                    setTimeout(() => router.push(`/editor/${presentationId}`), 1000);
+                } else if (jobStatus === 'FAILED') {
+                    setGenerationStatus('failed');
+                    toast({ title: '생성 실패', description: '프레젠테이션 생성에 실패했습니다.', variant: 'destructive' });
+                } else if (jobStatus === 'CANCELLED') {
+                    setGenerationStatus('idle');
+                } else {
+                    setTimeout(poll, 2000);
+                }
+            } catch {
+                toast({ title: '오류', description: '상태 확인에 실패했습니다.', variant: 'destructive' });
+                setGenerationStatus('failed');
+            }
+        };
+        poll();
     };
 
-    if (!hasHydrated || !isAuthenticated || loading) {
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleGenerate();
+        }
+    };
+
+    if (!hasHydrated || !isAuthenticated) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
@@ -88,129 +202,219 @@ export default function DashboardPage() {
         );
     }
 
+    // Generation in progress: full-width progress view
+    if (generationStatus === 'generating' || generationStatus === 'completed') {
+        return (
+            <AppShell>
+                <div className="container mx-auto px-6 py-16 max-w-3xl">
+                    <GenerationProgress
+                        currentStep=""
+                        progress={progress}
+                        status={generationStatus}
+                        onCancel={handleCancelGeneration}
+                        estimatedTime={slideCount * 3}
+                        startTime={generationStartTime || undefined}
+                    />
+                </div>
+            </AppShell>
+        );
+    }
+
+    const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <header className="bg-white border-b">
-                <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                    <Link href="/dashboard" className="flex items-center gap-2">
-                        <Sparkles className="h-6 w-6 text-purple-600" />
-                        <span className="text-xl font-bold">JaSlide</span>
-                    </Link>
+        <AppShell>
+            <div {...getRootProps()} className="container mx-auto px-6 py-16 max-w-4xl">
+                <input {...getInputProps()} />
 
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-lg">
-                            <Wallet className="h-4 w-4 text-purple-600" />
-                            <span className="font-medium text-purple-600">{credits} 크레딧</span>
-                        </div>
+                {/* Hero */}
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">JaSlide AI 슬라이드</h1>
+                    <p className="text-gray-500">누구나 전문가처럼 덱을 만들 수 있도록.</p>
+                </div>
 
-                        <div className="relative group">
-                            <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100">
-                                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                                    <span className="text-purple-600 font-medium">
-                                        {user?.name?.[0] || user?.email?.[0] || 'U'}
-                                    </span>
-                                </div>
-                                <MoreVertical className="h-4 w-4 text-gray-500" />
+                {/* Purpose tabs */}
+                <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+                    {PURPOSE_OPTIONS.map((purpose) => (
+                        <button
+                            key={purpose.id}
+                            onClick={() => {
+                                setSelectedPurpose(purpose);
+                                if (purpose.recommendedSlideCount) setSlideCount(purpose.recommendedSlideCount);
+                            }}
+                            className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
+                                selectedPurpose.id === purpose.id
+                                    ? 'bg-gray-900 text-white border-gray-900'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            }`}
+                        >
+                            {purpose.title}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Prompt box */}
+                <div className="bg-white rounded-2xl border shadow-sm p-4 mb-3">
+                    <textarea
+                        ref={inputRef}
+                        value={textContent}
+                        onChange={(e) => setTextContent(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="발표 주제와 요구 사항을 입력하세요..."
+                        rows={3}
+                        className="w-full resize-none focus:outline-none text-gray-900 placeholder:text-gray-400"
+                    />
+                    <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={openFilePicker}
+                                title="파일 첨부 (PDF, DOCX, TXT, MD, CSV)"
+                                className="p-2 rounded-full border text-gray-500 hover:bg-gray-50"
+                            >
+                                <Plus className="h-4 w-4" />
                             </button>
-
-                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                                <Link href="/settings" className="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 text-gray-700">
-                                    <Settings className="h-4 w-4" />
-                                    설정
-                                </Link>
+                            <div className="relative">
                                 <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-50 text-red-600"
+                                    onClick={() => setShowOptions((v) => !v)}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm text-gray-600 hover:bg-gray-50"
                                 >
-                                    <LogOut className="h-4 w-4" />
-                                    로그아웃
+                                    <Settings2 className="h-4 w-4" />
+                                    {slideCount}장 · {language === 'ko' ? '한국어' : 'English'}
                                 </button>
+                                {showOptions && (
+                                    <div className="absolute left-0 bottom-full mb-2 w-72 bg-white rounded-xl border shadow-lg p-4 space-y-4 z-10">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                슬라이드 수: {slideCount}장
+                                            </label>
+                                            <input
+                                                type="range" min={3} max={30} value={slideCount}
+                                                onChange={(e) => setSlideCount(Number(e.target.value))}
+                                                className="w-full accent-purple-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">언어</label>
+                                            <div className="flex gap-2">
+                                                {(['ko', 'en'] as const).map((lang) => (
+                                                    <button
+                                                        key={lang}
+                                                        onClick={() => setLanguage(lang)}
+                                                        className={`px-3 py-1.5 rounded-lg text-sm border ${
+                                                            language === lang
+                                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                                : 'bg-white text-gray-600 border-gray-200'
+                                                        }`}
+                                                    >
+                                                        {lang === 'ko' ? '한국어' : 'English'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="checkbox" checked={includeImages}
+                                                    onChange={(e) => setIncludeImages(e.target.checked)}
+                                                    className="rounded accent-purple-600"
+                                                />
+                                                이미지 포함
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="checkbox" checked={includeCharts}
+                                                    onChange={(e) => setIncludeCharts(e.target.checked)}
+                                                    className="rounded accent-purple-600"
+                                                />
+                                                차트 포함
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
+                        <button
+                            onClick={handleGenerate}
+                            disabled={!textContent.trim() && !uploadedFile}
+                            className="p-2.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40"
+                            title="생성 시작"
+                        >
+                            <Send className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
-            </header>
 
-            {/* Main */}
-            <main className="container mx-auto px-4 py-8">
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">내 프레젠테이션</h1>
-                        <p className="text-gray-500 mt-1">
-                            {presentations.length}개의 프레젠테이션
-                        </p>
-                    </div>
-
-                    <Link href="/create">
-                        <Button className="bg-purple-600 hover:bg-purple-700">
-                            <Plus className="h-4 w-4 mr-2" />
-                            새 프레젠테이션
-                        </Button>
-                    </Link>
+                {/* Attached file / selected template chips */}
+                <div className="flex flex-wrap gap-2 mb-12 min-h-[28px]">
+                    {uploadedFile && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm">
+                            <FileText className="h-3.5 w-3.5" />
+                            {uploadedFile.name}
+                            <button onClick={() => setUploadedFile(null)}>
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </span>
+                    )}
+                    {selectedTemplate && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                            템플릿: {selectedTemplate.name}
+                            <button onClick={() => setSelectedTemplateId(null)}>
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </span>
+                    )}
                 </div>
 
-                {presentations.length === 0 ? (
-                    <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed">
-                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                            프레젠테이션이 없습니다
-                        </h3>
-                        <p className="text-gray-500 mb-6">
-                            첫 번째 프레젠테이션을 만들어보세요
-                        </p>
-                        <Link href="/create">
-                            <Button className="bg-purple-600 hover:bg-purple-700">
-                                <Plus className="h-4 w-4 mr-2" />
-                                새 프레젠테이션 만들기
-                            </Button>
-                        </Link>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {presentations.map((pres) => (
-                            <Link
-                                key={pres.id}
-                                href={`/editor/${pres.id}`}
-                                className="bg-white rounded-xl border hover:shadow-lg transition-shadow overflow-hidden"
-                            >
-                                <div className="aspect-video bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                                    <FileText className="h-12 w-12 text-purple-300" />
-                                </div>
-                                <div className="p-4">
-                                    <h3 className="font-medium text-gray-900 truncate">
-                                        {pres.title}
-                                    </h3>
-                                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                                        <span>{pres._count.slides} 슬라이드</span>
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="h-3 w-3" />
-                                            {formatDate(pres.updatedAt)}
-                                        </span>
+                {/* Template gallery */}
+                <section>
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">템플릿</h2>
+                    {loadingTemplates ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                        </div>
+                    ) : templates.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-8">사용 가능한 템플릿이 없습니다.</p>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {templates.map((template) => (
+                                <button
+                                    key={template.id}
+                                    type="button"
+                                    onClick={() =>
+                                        setSelectedTemplateId(template.id === selectedTemplateId ? null : template.id)
+                                    }
+                                    className={`relative text-left rounded-xl overflow-hidden border-2 transition-all ${
+                                        selectedTemplateId === template.id
+                                            ? 'border-purple-600 ring-2 ring-purple-200'
+                                            : 'border-gray-200 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div
+                                        className="h-24 flex items-center justify-center text-3xl"
+                                        style={{
+                                            background:
+                                                template.config?.backgrounds?.value ||
+                                                template.config?.colors?.background ||
+                                                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        }}
+                                    >
+                                        <span style={{ color: template.config?.colors?.primary || '#ffffff' }}>Aa</span>
                                     </div>
-                                    <div className="mt-2">
-                                        <span
-                                            className={`inline-flex px-2 py-1 text-xs rounded-full ${pres.status === 'COMPLETED'
-                                                ? 'bg-green-100 text-green-700'
-                                                : pres.status === 'GENERATING'
-                                                    ? 'bg-yellow-100 text-yellow-700'
-                                                    : pres.status === 'FAILED'
-                                                        ? 'bg-red-100 text-red-700'
-                                                        : 'bg-gray-100 text-gray-700'
-                                                }`}
-                                        >
-                                            {pres.status === 'COMPLETED' && '완료'}
-                                            {pres.status === 'GENERATING' && '생성 중'}
-                                            {pres.status === 'FAILED' && '실패'}
-                                            {pres.status === 'DRAFT' && '초안'}
-                                        </span>
+                                    <div className="p-3 bg-white">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{template.name}</p>
+                                        <p className="text-xs text-gray-500 truncate">{template.category}</p>
                                     </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                )}
-            </main>
-        </div>
+                                    {selectedTemplateId === template.id && (
+                                        <div className="absolute top-2 right-2 w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center">
+                                            <Check className="h-3 w-3 text-white" />
+                                        </div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </section>
+            </div>
+        </AppShell>
     );
 }
