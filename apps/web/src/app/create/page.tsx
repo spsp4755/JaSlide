@@ -206,12 +206,21 @@ export default function CreatePage() {
         }
     };
 
-    const handleCancelGeneration = () => {
-        // TODO: Implement actual cancellation via API
-        setGenerationStatus('failed');
-        setLoading(false);
-        setStep(3);
-        toast({ title: '생성 취소됨', description: '프레젠테이션 생성이 취소되었습니다.' });
+    const handleCancelGeneration = async () => {
+        if (!jobId) return;
+        try {
+            await generationApi.cancel(jobId);
+            setGenerationStatus('failed');
+            setLoading(false);
+            setStep(3);
+            toast({ title: '생성 취소됨', description: '프레젠테이션 생성을 취소했습니다.' });
+        } catch (error: any) {
+            toast({
+                title: '취소 실패',
+                description: error.response?.data?.message || '생성 작업을 취소할 수 없습니다.',
+                variant: 'destructive',
+            });
+        }
     };
 
     const pollJobStatus = async (jobId: string, presentationId: string) => {
@@ -231,6 +240,9 @@ export default function CreatePage() {
                 } else if (jobStatus === 'FAILED') {
                     setGenerationStatus('failed');
                     toast({ title: '생성 실패', description: '프레젠테이션 생성에 실패했습니다.', variant: 'destructive' });
+                    setLoading(false);
+                } else if (jobStatus === 'CANCELLED') {
+                    setGenerationStatus('failed');
                     setLoading(false);
                 } else {
                     setTimeout(poll, 2000);

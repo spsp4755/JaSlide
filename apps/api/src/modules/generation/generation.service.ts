@@ -7,6 +7,8 @@ import { CREDIT_COSTS } from '@jaslide/shared';
 import type { Prisma } from '@prisma/client';
 import { QueueService } from '../queue/queue.service';
 
+class GenerationCancelledError extends Error { }
+
 @Injectable()
 export class GenerationService implements OnModuleInit {
     private readonly logger = new Logger(GenerationService.name);
@@ -109,6 +111,20 @@ export class GenerationService implements OnModuleInit {
         };
     }
 
+    async cancelGeneration(jobId: string, userId: string) {
+        const job = await this.prisma.generationJob.findFirst({ where: { id: jobId, userId } });
+        if (!job) throw new BadRequestException('Job not found');
+        if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+            throw new BadRequestException('Completed jobs cannot be cancelled');
+        }
+
+        await this.prisma.generationJob.update({
+            where: { id: jobId },
+            data: { status: 'CANCELLED' },
+        });
+        return { success: true };
+    }
+
     async processGeneration(jobId: string) {
         const job = await this.prisma.generationJob.findUnique({
             where: { id: jobId },
@@ -164,6 +180,7 @@ export class GenerationService implements OnModuleInit {
             }
 
             await this.updateJobStatus(jobId, 'APPLYING_DESIGN', 85);
+            await this.assertNotCancelled(jobId);
 
             // Update presentation with title and create slides
             await this.prisma.$transaction([
@@ -197,6 +214,7 @@ export class GenerationService implements OnModuleInit {
 
             await this.updateJobStatus(jobId, 'COMPLETED', 100);
         } catch (error) {
+            if (error instanceof GenerationCancelledError) return;
             this.logger.error('Generation failed', error);
 
             await this.prisma.generationJob.update({
@@ -215,10 +233,19 @@ export class GenerationService implements OnModuleInit {
     }
 
     private async updateJobStatus(jobId: string, status: string, progress: number) {
-        await this.prisma.generationJob.update({
-            where: { id: jobId },
+        const result = await this.prisma.generationJob.updateMany({
+            where: { id: jobId, status: { not: 'CANCELLED' } },
             data: { status: status as any, progress },
         });
+        if (result.count === 0) throw new GenerationCancelledError();
+    }
+
+    private async assertNotCancelled(jobId: string) {
+        const job = await this.prisma.generationJob.findUnique({
+            where: { id: jobId },
+            select: { status: true },
+        });
+        if (!job || job.status === 'CANCELLED') throw new GenerationCancelledError();
     }
 
     async aiEdit(userId: string, dto: AIEditDto) {

@@ -24,6 +24,12 @@ export class GenerationController {
         return this.generationService.getJobStatus(jobId, user.id);
     }
 
+    @Post(':jobId/cancel')
+    @ApiOperation({ summary: 'Cancel presentation generation' })
+    async cancelGeneration(@CurrentUser() user: any, @Param('jobId') jobId: string) {
+        return this.generationService.cancelGeneration(jobId, user.id);
+    }
+
     @Post('edit')
     @ApiOperation({ summary: 'Apply AI edit to slide' })
     async aiEdit(@CurrentUser() user: any, @Body() dto: AIEditDto) {
