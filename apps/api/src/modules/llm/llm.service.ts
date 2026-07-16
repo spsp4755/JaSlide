@@ -325,17 +325,32 @@ Return JSON with "layout" field only.`;
         if (!this.isRecord(value) || !this.isText(value.heading)) {
             throw new Error('Slide content requires a non-empty heading');
         }
+        const allowedFields = new Set(['heading', 'subheading', 'body', 'bullets']);
+        if (Object.keys(value).some((field) => !allowedFields.has(field))
+            || (value.subheading !== undefined && !this.isText(value.subheading))
+            || (value.body !== undefined && !this.isText(value.body))) {
+            throw new Error('Invalid slide content field');
+        }
+
+        let bullets: { text: string; level: number }[] | undefined;
         if (value.bullets !== undefined) {
             if (!Array.isArray(value.bullets) || value.bullets.length > 5) {
                 throw new Error('Slide content allows at most five bullets');
             }
-            for (const bullet of value.bullets) {
+            bullets = value.bullets.map((bullet) => {
                 if (!this.isRecord(bullet) || !this.isText(bullet.text) || (bullet.level !== 0 && bullet.level !== 1)) {
                     throw new Error('Invalid bullet level or text');
                 }
-            }
+                return { text: bullet.text, level: bullet.level };
+            });
         }
-        return value as SlideContent;
+
+        return {
+            heading: value.heading,
+            ...(value.subheading !== undefined ? { subheading: value.subheading } : {}),
+            ...(value.body !== undefined ? { body: value.body } : {}),
+            ...(bullets !== undefined ? { bullets } : {}),
+        };
     }
 
     private isRecord(value: unknown): value is Record<string, unknown> {

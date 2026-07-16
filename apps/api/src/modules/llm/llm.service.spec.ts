@@ -72,4 +72,14 @@ describe('LlmService contracts', () => {
         })).rejects.toThrow('bullet level');
         expect(create).toHaveBeenCalledTimes(2);
     });
+
+    it('rejects extra or malformed optional slide content fields after one repair', async () => {
+        const invalid = { heading: '실행 계획', body: 123, internalNotes: 'do not persist' };
+        const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid)]);
+
+        await expect(service.generateSlideContent({
+            title: '실행 계획', type: 'CONTENT', keyPoints: ['분석'], language: 'ko',
+        })).rejects.toThrow('Invalid slide content field');
+        expect(create).toHaveBeenCalledTimes(2);
+    });
 });
