@@ -52,6 +52,7 @@ def test_extracts_only_deterministic_style_tokens_and_prefers_east_asian_font():
     assert tokens == {
         "colors": {"background": "#112233", "primary": "#445566"},
         "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
+        "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1"></div>',
     }
     assert KOREAN_TEXT not in str(tokens)
 
@@ -86,6 +87,7 @@ def test_extract_style_upload_returns_only_config_tokens():
         "config": {
             "colors": {"background": "#112233", "primary": "#445566"},
             "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
+            "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1"></div>',
         }
     }
 

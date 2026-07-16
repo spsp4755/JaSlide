@@ -29,6 +29,35 @@ def _font_name(run):
     return east_asian.get("typeface") if east_asian is not None else run.font.name
 
 
+def _html_layout(slide):
+    text_shapes = [
+        shape for shape in slide.shapes
+        if shape.has_text_frame and shape.text_frame.text.strip()
+    ]
+    if not text_shapes:
+        return None
+
+    def font_size(shape):
+        return max(
+            (run.font.size.pt for paragraph in shape.text_frame.paragraphs for run in paragraph.runs if run.font.size),
+            default=0,
+        )
+
+    slots = ("title", "body")
+    shapes = sorted(text_shapes, key=lambda shape: (-font_size(shape), shape.top, shape.left))[: len(slots)]
+    return "".join(
+        '<div data-jaslide-slot="{slot}" data-x="{left:g}" data-y="{top:g}" '
+        'data-w="{width:g}" data-h="{height:g}"></div>'.format(
+            slot=slots[index],
+            left=shape.left.inches,
+            top=shape.top.inches,
+            width=shape.width.inches,
+            height=shape.height.inches,
+        )
+        for index, shape in enumerate(shapes)
+    )
+
+
 def extract_template_tokens(pptx_bytes: bytes) -> dict:
     """Return deterministic color and font tokens; never expose slide text."""
     presentation = Presentation(BytesIO(pptx_bytes))
@@ -61,4 +90,9 @@ def extract_template_tokens(pptx_bytes: bytes) -> dict:
     font = _frequent(fonts)
     if font:
         typography = {"titleFont": font[0], "bodyFont": font[0]}
-    return {"colors": colors, "typography": typography}
+    config = {"colors": colors, "typography": typography}
+    if presentation.slides:
+        layout = _html_layout(presentation.slides[0])
+        if layout:
+            config["htmlTemplate"] = layout
+    return config

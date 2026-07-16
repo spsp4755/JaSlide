@@ -18,3 +18,5 @@ Each tag represents a text-box slot. Tag names and inner HTML are ignored. The s
 | `data-align` | No | `left`, `center`, or `right`. |
 
 Invalid coordinates, invalid values, and unknown slots are ignored. Any missing or invalid slot uses JaSlide's built-in PPTX layout, including the template's existing colors and Korean font settings.
+
+When importing an example PPTX, JaSlide creates this field from the first slide's largest text box (`title`) and next-largest text box (`body`). It keeps only their geometry, never the source text, notes, images, or other slide content.
