@@ -6,9 +6,10 @@ import pytest
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.oxml.xmlchemy import OxmlElement
-from pptx.util import Inches
+from pptx.util import Inches, Pt
 
 from apps.renderer.src.services.style_extractor import extract_template_tokens
 from apps.renderer.src.main import app
@@ -34,6 +35,8 @@ def _example_pptx():
     run = title.text_frame.paragraphs[0].add_run()
     run.text = KOREAN_TEXT
     run.font.name = "Fallback Font"
+    run.font.size = Pt(32)
+    title.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
     _set_east_asian_font(run, "Noto Sans KR")
 
     for left in (1, 3):
@@ -52,7 +55,7 @@ def test_extracts_only_deterministic_style_tokens_and_prefers_east_asian_font():
     assert tokens == {
         "colors": {"background": "#112233", "primary": "#445566"},
         "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
-        "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1"></div>',
+        "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1" data-font-size="32" data-align="center"></div>',
     }
     assert KOREAN_TEXT not in str(tokens)
 
@@ -87,7 +90,7 @@ def test_extract_style_upload_returns_only_config_tokens():
         "config": {
             "colors": {"background": "#112233", "primary": "#445566"},
             "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
-            "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1"></div>',
+            "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1" data-font-size="32" data-align="center"></div>',
         }
     }
 

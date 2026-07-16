@@ -5,6 +5,7 @@ from io import BytesIO
 
 from pptx import Presentation
 from pptx.enum.dml import MSO_FILL_TYPE
+from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 
 
@@ -45,17 +46,24 @@ def _html_layout(slide):
 
     slots = ("title", "body")
     shapes = sorted(text_shapes, key=lambda shape: (-font_size(shape), shape.top, shape.left))[: len(slots)]
-    return "".join(
-        '<div data-jaslide-slot="{slot}" data-x="{left:g}" data-y="{top:g}" '
-        'data-w="{width:g}" data-h="{height:g}"></div>'.format(
-            slot=slots[index],
-            left=shape.left.inches,
-            top=shape.top.inches,
-            width=shape.width.inches,
-            height=shape.height.inches,
-        )
-        for index, shape in enumerate(shapes)
-    )
+    alignments = {PP_ALIGN.LEFT: "left", PP_ALIGN.CENTER: "center", PP_ALIGN.RIGHT: "right"}
+    layout = []
+    for index, shape in enumerate(shapes):
+        attributes = [
+            f'data-jaslide-slot="{slots[index]}"',
+            f'data-x="{shape.left.inches:g}"',
+            f'data-y="{shape.top.inches:g}"',
+            f'data-w="{shape.width.inches:g}"',
+            f'data-h="{shape.height.inches:g}"',
+        ]
+        size = font_size(shape)
+        if size:
+            attributes.append(f'data-font-size="{round(size):g}"')
+        alignment = alignments.get(shape.text_frame.paragraphs[0].alignment)
+        if alignment:
+            attributes.append(f'data-align="{alignment}"')
+        layout.append(f"<div {' '.join(attributes)}></div>")
+    return "".join(layout)
 
 
 def extract_template_tokens(pptx_bytes: bytes) -> dict:
