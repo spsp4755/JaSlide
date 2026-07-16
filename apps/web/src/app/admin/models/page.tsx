@@ -131,6 +131,7 @@ export default function AdminModelsPage() {
         google: 'bg-blue-100 text-blue-800',
         azure: 'bg-sky-100 text-sky-800',
         vllm: 'bg-violet-100 text-violet-800',
+        ollama: 'bg-emerald-100 text-emerald-800',
     };
 
     return (
@@ -237,18 +238,23 @@ export default function AdminModelsPage() {
                                     <option value="google">Google</option>
                                     <option value="azure">Azure OpenAI</option>
                                     <option value="vllm">vLLM (OpenAI Compatible)</option>
+                                    <option value="ollama">Ollama (OpenAI Compatible)</option>
                                 </select>
                             </div>
-                            {(formData.provider === 'vllm' || formData.provider === 'azure') && (
+                            {(['vllm', 'ollama', 'azure'].includes(formData.provider)) && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         API URL <span className="text-red-500">*</span>
                                     </label>
                                     <input type="url" value={formData.endpoint} onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
                                         className="w-full px-3 py-2 border rounded-lg" required
-                                        placeholder={formData.provider === 'vllm' ? 'http://localhost:8000/v1' : 'https://your-resource.openai.azure.com/'} />
+                                        placeholder={formData.provider === 'vllm' ? 'http://localhost:8000/v1' : formData.provider === 'ollama' ? 'http://localhost:11434/v1' : 'https://your-resource.openai.azure.com/'} />
                                     <p className="text-xs text-gray-500 mt-1">
-                                        {formData.provider === 'vllm' ? 'vLLM 서버의 OpenAI Compatible API 엔드포인트' : 'Azure OpenAI 리소스 URL'}
+                                        {formData.provider === 'vllm'
+                                            ? 'vLLM 서버의 OpenAI Compatible API 엔드포인트'
+                                            : formData.provider === 'ollama'
+                                                ? 'Ollama의 OpenAI Compatible API 엔드포인트'
+                                                : 'Azure OpenAI 리소스 URL'}
                                     </p>
                                 </div>
                             )}
@@ -294,4 +300,3 @@ export default function AdminModelsPage() {
         </div>
     );
 }
-
