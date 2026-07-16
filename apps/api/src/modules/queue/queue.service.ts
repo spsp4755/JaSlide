@@ -41,6 +41,12 @@ export class QueueService implements OnModuleDestroy {
         });
     }
 
+    async retryGenerationJob(jobId: string) {
+        const existing = await this.generationQueue.getJob(jobId);
+        if (existing) await existing.remove();
+        await this.addGenerationJob(jobId);
+    }
+
     async ping() {
         return ((await this.generationQueue.client) as unknown as { ping: () => Promise<string> }).ping();
     }

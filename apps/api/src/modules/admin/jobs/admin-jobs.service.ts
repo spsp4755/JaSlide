@@ -61,7 +61,7 @@ export class AdminJobsService {
             where: { id },
             data: { status: 'QUEUED', error: undefined, startedAt: null, completedAt: null },
         });
-        await this.queueService.addGenerationJob(id);
+        await this.queueService.retryGenerationJob(id);
 
         return { success: true, message: 'Job queued for retry' };
     }
