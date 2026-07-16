@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any
 import io
+import zipfile
 
 from .generators.pptx_generator import PPTXGenerator
 from .generators.pdf_exporter import PDFExporter
@@ -17,6 +18,10 @@ app = FastAPI(
     description="PPTX/PDF rendering service",
     version="0.1.0",
 )
+
+MAX_PPTX_ENTRIES = 500
+MAX_PPTX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+REQUIRED_PPTX_ENTRIES = {"[Content_Types].xml", "_rels/.rels", "ppt/presentation.xml"}
 
 
 class SlideContent(BaseModel):
@@ -72,6 +77,19 @@ async def health_check():
     return {"status": "ok", "service": "jaslide-renderer"}
 
 
+def _is_safe_pptx_package(content: bytes) -> bool:
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as package:
+            entries = package.infolist()
+            return (
+                len(entries) <= MAX_PPTX_ENTRIES
+                and sum(entry.file_size for entry in entries) <= MAX_PPTX_UNCOMPRESSED_BYTES
+                and REQUIRED_PPTX_ENTRIES.issubset(package.namelist())
+            )
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile):
+        return False
+
+
 @app.post("/api/extract/style")
 async def extract_style(file: UploadFile = File(...)):
     if (
@@ -80,8 +98,11 @@ async def extract_style(file: UploadFile = File(...)):
         != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     ):
         raise HTTPException(status_code=400, detail="PPTX file required")
+    content = await file.read()
+    if not _is_safe_pptx_package(content):
+        raise HTTPException(status_code=400, detail="Invalid PPTX package")
     try:
-        config = extract_template_tokens(await file.read())
+        config = extract_template_tokens(content)
     except Exception as error:
         raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
     return {"config": config}

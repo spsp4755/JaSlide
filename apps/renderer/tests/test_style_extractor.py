@@ -1,4 +1,5 @@
 from io import BytesIO
+import zipfile
 
 from fastapi.testclient import TestClient
 import pytest
@@ -104,3 +105,50 @@ def test_extract_style_rejects_non_pptx_name_or_content(filename, content_type):
 
     assert response.status_code == 400
     assert response.json() == {"detail": "PPTX file required"}
+
+
+def _zip_package(entries):
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as package:
+        for name, content in entries.items():
+            package.writestr(name, content)
+    return buffer.getvalue()
+
+
+def test_extract_style_rejects_invalid_zip_before_parsing():
+    response = TestClient(app).post(
+        "/api/extract/style",
+        files={
+            "file": (
+                "example.pptx",
+                b"not a zip archive",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid PPTX package"}
+
+
+def test_extract_style_rejects_pptx_zip_with_expanded_content_over_limit():
+    entries = {
+        "[Content_Types].xml": b"<Types/>",
+        "_rels/.rels": b"<Relationships/>",
+        "ppt/presentation.xml": b"<p:presentation/>",
+    }
+    chunk = b"x" * (1024 * 1024 + 1)
+    entries.update({f"ppt/media/{index}.bin": chunk for index in range(100)})
+    response = TestClient(app).post(
+        "/api/extract/style",
+        files={
+            "file": (
+                "example.pptx",
+                _zip_package(entries),
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid PPTX package"}
