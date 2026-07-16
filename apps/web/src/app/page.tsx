@@ -94,7 +94,7 @@ export default function HomePage() {
                         몇 분 안에 완성된 프레젠테이션을 받아보세요.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link href="/create">
+                        <Link href="/dashboard">
                             <Button size="lg" className="bg-purple-600 hover:bg-purple-700 text-lg px-8 py-6">
                                 무료로 시작하기
                                 <ArrowRight className="ml-2 h-5 w-5" />

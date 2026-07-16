@@ -264,7 +264,7 @@ export default function DemoPage() {
                     <p className="mt-8 text-center text-gray-400">
                         이 데모는 JaSlide로 생성된 프레젠테이션의 예시입니다.
                         <br />
-                        <Link href="/create" className="text-purple-400 hover:text-purple-300">
+                        <Link href="/dashboard" className="text-purple-400 hover:text-purple-300">
                             직접 만들어보기 →
                         </Link>
                     </p>

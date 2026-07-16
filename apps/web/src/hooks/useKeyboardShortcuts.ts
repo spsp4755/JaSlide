@@ -54,7 +54,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
                         if (options.onNewPresentation) {
                             options.onNewPresentation();
                         } else {
-                            router.push('/create');
+                            router.push('/dashboard');
                         }
                     },
                     description: 'New Presentation',
