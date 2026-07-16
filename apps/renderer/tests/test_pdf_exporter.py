@@ -49,3 +49,31 @@ def test_render_pdf_returns_error_when_conversion_fails(monkeypatch):
 
     assert response.status_code == 500
     assert response.json() == {"detail": "LibreOffice is required for PDF export"}
+
+
+def test_render_preview_returns_rasterized_pptx_output(monkeypatch):
+    monkeypatch.setattr(
+        "apps.renderer.src.main.PPTXGenerator.generate", lambda _self, _presentation: b"pptx"
+    )
+    monkeypatch.setattr(
+        PDFExporter,
+        "convert_pptx_to_preview",
+        lambda _self, _pptx: b"\x89PNG\r\n\x1a\npreview",
+        raising=False,
+    )
+
+    response = TestClient(app).post(
+        "/api/render/preview",
+        json={
+            "presentation": {
+                "id": "presentation-1",
+                "title": "Preview check",
+                "slides": [
+                    {"id": "slide-1", "order": 0, "type": "TITLE", "content": {}}
+                ],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\npreview"

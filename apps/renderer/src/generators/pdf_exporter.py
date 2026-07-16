@@ -54,3 +54,25 @@ class PDFExporter:
             pdf_path = os.path.join(tmpdir, "presentation.pdf")
             with open(pdf_path, "rb") as f:
                 return f.read()
+
+    def convert_pptx_to_preview(self, pptx_buffer: bytes) -> bytes:
+        """Rasterize the first slide of a generated presentation as PNG."""
+        pdf_buffer = self.convert_pptx_to_pdf(pptx_buffer)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                pdf_path = os.path.join(tmpdir, "presentation.pdf")
+                png_base = os.path.join(tmpdir, "preview")
+                with open(pdf_path, "wb") as f:
+                    f.write(pdf_buffer)
+                subprocess.run(
+                    ["pdftoppm", "-f", "1", "-singlefile", "-png", "-r", "150", pdf_path, png_base],
+                    check=True,
+                    capture_output=True,
+                    timeout=30,
+                )
+                with open(f"{png_base}.png", "rb") as f:
+                    return f.read()
+        except FileNotFoundError as error:
+            raise RuntimeError("Poppler is required for preview rendering") from error
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError("Preview rendering timed out") from error

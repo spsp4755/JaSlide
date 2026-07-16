@@ -11,7 +11,6 @@ from pptx.oxml.ns import qn
 from pptx.enum.shapes import MSO_SHAPE
 from io import BytesIO
 from typing import Optional, Any
-from PIL import Image
 from ..services.html_template import parse_html_layout
 
 
@@ -111,19 +110,6 @@ class PPTXGenerator:
         # Save to buffer
         buffer = BytesIO()
         self.prs.save(buffer)
-        buffer.seek(0)
-        return buffer.read()
-
-    def generate_preview(self, presentation: Any, slide_index: int = 0) -> bytes:
-        """Generate preview image for a specific slide"""
-        # Generate PPTX first
-        self.generate(presentation)
-
-        # For now, return a placeholder image
-        # In production, use LibreOffice or similar to render actual slide
-        img = Image.new("RGB", (1920, 1080), color=(245, 245, 245))
-        buffer = BytesIO()
-        img.save(buffer, format="PNG")
         buffer.seek(0)
         return buffer.read()
 

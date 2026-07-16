@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-impress \
     fonts-noto-cjk \
+    poppler-utils \
     && printf '%s\n' \
       '<fontconfig><alias><family>Noto Sans KR</family><prefer><family>Noto Sans CJK KR</family></prefer></alias></fontconfig>' \
       > /etc/fonts/local.conf \
