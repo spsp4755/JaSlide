@@ -62,7 +62,7 @@ export default function AdminOrganizationsPage() {
     const planColors: Record<string, string> = {
         FREE: 'bg-gray-100 text-gray-800',
         STARTER: 'bg-blue-100 text-blue-800',
-        PROFESSIONAL: 'bg-purple-100 text-purple-800',
+        PROFESSIONAL: 'bg-gray-100 text-gray-800',
         ENTERPRISE: 'bg-orange-100 text-orange-800',
     };
 
@@ -73,7 +73,7 @@ export default function AdminOrganizationsPage() {
                     <h1 className="text-2xl font-bold text-gray-900">조직 관리</h1>
                     <p className="text-sm text-gray-500">총 {total}개 조직</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     조직 추가
                 </button>
@@ -89,7 +89,7 @@ export default function AdminOrganizationsPage() {
                             placeholder="조직 이름, 슬러그, 도메인으로 검색..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-400"
                         />
                     </div>
                     <button type="button" onClick={fetchOrganizations} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
@@ -102,7 +102,7 @@ export default function AdminOrganizationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading ? (
                     <div className="col-span-full p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : (
                     organizations.map((org) => (
@@ -113,8 +113,8 @@ export default function AdminOrganizationsPage() {
                                         {org.logo ? (
                                             <img src={org.logo} alt={org.name} className="w-12 h-12 rounded-lg object-cover" />
                                         ) : (
-                                            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                                                <Building2 className="text-purple-600" size={24} />
+                                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                                <Building2 className="text-gray-900" size={24} />
                                             </div>
                                         )}
                                         <div>

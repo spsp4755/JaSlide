@@ -119,8 +119,8 @@ export function GenerationProgress({
             <div className="text-center mb-6">
                 {status === 'generating' && (
                     <>
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
-                            <Loader2 className="h-8 w-8 text-purple-600 animate-spin" />
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                            <Loader2 className="h-8 w-8 text-gray-900 animate-spin" />
                         </div>
                         <h2 className="text-xl font-bold text-gray-900 mb-1">
                             프레젠테이션 생성 중
@@ -174,7 +174,7 @@ export function GenerationProgress({
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500 ease-out"
+                            className="h-full bg-gradient-to-r from-gray-800 to-gray-600 rounded-full transition-all duration-500 ease-out"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -194,7 +194,7 @@ export function GenerationProgress({
                             key={step.id}
                             className={`
                                 flex items-center gap-3 p-3 rounded-lg transition-all
-                                ${isActive ? 'bg-purple-50 border border-purple-200' : ''}
+                                ${isActive ? 'bg-gray-100 border border-gray-300' : ''}
                                 ${isCompleted ? 'bg-green-50' : ''}
                                 ${isError ? 'bg-red-50' : ''}
                             `}
@@ -202,7 +202,7 @@ export function GenerationProgress({
                             {/* Step indicator */}
                             <div className={`
                                 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                                ${isActive ? 'bg-purple-500' : ''}
+                                ${isActive ? 'bg-gray-800' : ''}
                                 ${isCompleted ? 'bg-green-500' : ''}
                                 ${isError ? 'bg-red-500' : ''}
                                 ${step.status === 'pending' ? 'bg-gray-200' : ''}
@@ -219,7 +219,7 @@ export function GenerationProgress({
                             <div className="flex-1 min-w-0">
                                 <p className={`
                                     text-sm font-medium
-                                    ${isActive ? 'text-purple-700' : ''}
+                                    ${isActive ? 'text-gray-700' : ''}
                                     ${isCompleted ? 'text-green-700' : ''}
                                     ${isError ? 'text-red-700' : ''}
                                     ${step.status === 'pending' ? 'text-gray-400' : ''}
@@ -227,7 +227,7 @@ export function GenerationProgress({
                                     {step.name}
                                 </p>
                                 {isActive && (
-                                    <p className="text-xs text-purple-500">{step.description}</p>
+                                    <p className="text-xs text-gray-500">{step.description}</p>
                                 )}
                             </div>
                         </div>

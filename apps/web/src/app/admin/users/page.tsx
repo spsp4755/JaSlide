@@ -72,7 +72,7 @@ export default function AdminUsersPage() {
                     <h1 className="text-2xl font-bold text-gray-900">사용자 관리</h1>
                     <p className="text-sm text-gray-500">총 {total}명의 사용자</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     사용자 추가
                 </button>
@@ -88,7 +88,7 @@ export default function AdminUsersPage() {
                             placeholder="이메일 또는 이름으로 검색..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
                         />
                     </div>
 
@@ -128,7 +128,7 @@ export default function AdminUsersPage() {
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : (
                     <table className="w-full">
@@ -153,7 +153,7 @@ export default function AdminUsersPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 text-xs rounded-full ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
+                                        <span className={`px-2 py-1 text-xs rounded-full ${user.role === 'ADMIN' ? 'bg-gray-100 text-gray-800' :
                                             user.role === 'ORG_ADMIN' ? 'bg-blue-100 text-blue-800' :
                                                 'bg-gray-100 text-gray-800'
                                             }`}>

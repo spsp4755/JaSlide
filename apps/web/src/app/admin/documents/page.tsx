@@ -92,7 +92,7 @@ export default function AdminDocumentsPage() {
             {/* Documents Table */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
-                    <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" /></div>
+                    <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" /></div>
                 ) : (
                     <table className="w-full">
                         <thead className="bg-gray-50 border-b">

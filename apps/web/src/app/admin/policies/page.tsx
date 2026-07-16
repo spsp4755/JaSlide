@@ -81,7 +81,7 @@ export default function AdminPoliciesPage() {
                     <h1 className="text-2xl font-bold text-gray-900">정책 관리</h1>
                     <p className="text-sm text-gray-500">시스템 정책 및 설정</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     정책 추가
                 </button>
@@ -89,11 +89,11 @@ export default function AdminPoliciesPage() {
 
             {/* Category Tabs */}
             <div className="flex gap-2 mb-6 flex-wrap">
-                <button onClick={() => setCategoryFilter('')} className={`px-4 py-2 rounded-lg text-sm ${!categoryFilter ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                <button onClick={() => setCategoryFilter('')} className={`px-4 py-2 rounded-lg text-sm ${!categoryFilter ? 'bg-gray-900 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
                     전체
                 </button>
                 {categories.map((cat) => (
-                    <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-4 py-2 rounded-lg text-sm capitalize ${categoryFilter === cat ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                    <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-4 py-2 rounded-lg text-sm capitalize ${categoryFilter === cat ? 'bg-gray-900 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
                         {cat}
                     </button>
                 ))}
@@ -102,7 +102,7 @@ export default function AdminPoliciesPage() {
             {/* Policies Table */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
-                    <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" /></div>
+                    <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" /></div>
                 ) : (
                     <table className="w-full">
                         <thead className="bg-gray-50 border-b">

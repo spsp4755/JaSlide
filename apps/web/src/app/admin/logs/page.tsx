@@ -119,7 +119,7 @@ export default function AdminLogsPage() {
             <div className="flex border-b mb-6">
                 <button
                     onClick={() => { setTab('audit'); setPage(1); }}
-                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'audit' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'
+                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'audit' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'
                         }`}
                 >
                     <FileText size={18} />
@@ -127,7 +127,7 @@ export default function AdminLogsPage() {
                 </button>
                 <button
                     onClick={() => { setTab('api'); setPage(1); }}
-                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'api' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'
+                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'api' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'
                         }`}
                 >
                     <Activity size={18} />
@@ -139,7 +139,7 @@ export default function AdminLogsPage() {
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : tab === 'audit' ? (
                     <table className="w-full">

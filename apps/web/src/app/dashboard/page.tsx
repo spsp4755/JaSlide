@@ -38,7 +38,8 @@ export default function HomePage() {
 
     // Options popover state
     const [showOptions, setShowOptions] = useState(false);
-    const [slideCount, setSlideCount] = useState(10);
+    // null = 자동 (목적별 추천 장수 사용), 숫자 = 사용자가 직접 선택
+    const [slideCount, setSlideCount] = useState<number | null>(null);
     const [language, setLanguage] = useState('ko');
     const [includeImages, setIncludeImages] = useState(true);
     const [includeCharts, setIncludeCharts] = useState(true);
@@ -111,6 +112,9 @@ export default function HomePage() {
         return typeMap[ext || ''] || 'TEXT';
     };
 
+    // ponytail: '자동' = 목적별 추천 장수. 콘텐츠 기반 자동 산정이 필요해지면 백엔드로 이동
+    const effectiveSlideCount = slideCount ?? selectedPurpose.recommendedSlideCount ?? 10;
+
     const handleGenerate = async () => {
         if (!textContent.trim() && !uploadedFile) {
             toast({ title: '오류', description: '내용을 입력하거나 파일을 첨부해주세요.', variant: 'destructive' });
@@ -124,7 +128,7 @@ export default function HomePage() {
             const response = await generationApi.start({
                 sourceType: getSourceType(),
                 content,
-                slideCount,
+                slideCount: effectiveSlideCount,
                 language,
                 templateId: selectedTemplateId,
                 options: {
@@ -213,7 +217,7 @@ export default function HomePage() {
                         progress={progress}
                         status={generationStatus}
                         onCancel={handleCancelGeneration}
-                        estimatedTime={slideCount * 3}
+                        estimatedTime={effectiveSlideCount * 3}
                         startTime={generationStartTime || undefined}
                     />
                 </div>
@@ -239,10 +243,7 @@ export default function HomePage() {
                     {PURPOSE_OPTIONS.map((purpose) => (
                         <button
                             key={purpose.id}
-                            onClick={() => {
-                                setSelectedPurpose(purpose);
-                                if (purpose.recommendedSlideCount) setSlideCount(purpose.recommendedSlideCount);
-                            }}
+                            onClick={() => setSelectedPurpose(purpose)}
                             className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
                                 selectedPurpose.id === purpose.id
                                     ? 'bg-foreground text-background border-foreground'
@@ -280,16 +281,27 @@ export default function HomePage() {
                                     className="flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm text-gray-600 hover:bg-gray-50"
                                 >
                                     <Settings2 className="h-4 w-4" />
-                                    {slideCount}장 · {language === 'ko' ? '한국어' : 'English'}
+                                    {slideCount === null ? '자동' : `${slideCount}장`} · {language === 'ko' ? '한국어' : 'English'}
                                 </button>
                                 {showOptions && (
                                     <div className="absolute left-0 bottom-full mb-2 w-72 bg-white rounded-xl border shadow-lg p-4 space-y-4 z-10">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                슬라이드 수: {slideCount}장
-                                            </label>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-sm font-medium text-gray-700">
+                                                    슬라이드 수{slideCount === null ? ` · 자동 (${effectiveSlideCount}장 예상)` : `: ${slideCount}장`}
+                                                </label>
+                                                <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={slideCount === null}
+                                                        onChange={(e) => setSlideCount(e.target.checked ? null : effectiveSlideCount)}
+                                                        className="rounded accent-gray-900"
+                                                    />
+                                                    자동
+                                                </label>
+                                            </div>
                                             <input
-                                                type="range" min={3} max={30} value={slideCount}
+                                                type="range" min={3} max={30} value={effectiveSlideCount}
                                                 onChange={(e) => setSlideCount(Number(e.target.value))}
                                                 className="w-full accent-foreground"
                                             />

@@ -46,21 +46,21 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     const [collapsed, setCollapsed] = useState(false);
 
     return (
-        <div className="flex min-h-screen bg-gray-100">
+        <div className="flex min-h-screen bg-background">
             {/* Sidebar */}
             <aside
                 className={`${collapsed ? 'w-16' : 'w-64'
-                    } bg-gray-900 text-white transition-all duration-300 flex flex-col`}
+                    } bg-card border-r border-border transition-all duration-300 flex flex-col`}
             >
-                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="p-4 border-b border-border flex items-center justify-between">
                     {!collapsed && (
-                        <Link href="/admin" className="text-xl font-bold">
-                            JaSlide Admin
+                        <Link href="/admin" className="text-lg font-bold font-display tracking-tight text-foreground">
+                            JaSlide <span className="text-muted-foreground font-sans text-sm font-medium">관리자</span>
                         </Link>
                     )}
                     <button
                         onClick={() => setCollapsed(!collapsed)}
-                        className="p-1 hover:bg-gray-800 rounded"
+                        className="p-1 hover:bg-secondary rounded text-muted-foreground"
                     >
                         {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
                     </button>
@@ -76,8 +76,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${isActive
-                                    ? 'bg-purple-600 text-white'
-                                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    ? 'bg-foreground text-background'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                                     }`}
                                 title={collapsed ? item.label : undefined}
                             >
@@ -88,10 +88,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-gray-800">
+                <div className="p-4 border-t border-border">
                     <Link
                         href="/dashboard"
-                        className="flex items-center gap-2 text-gray-400 hover:text-white text-sm"
+                        className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm"
                     >
                         {!collapsed && '← 메인으로 돌아가기'}
                     </Link>

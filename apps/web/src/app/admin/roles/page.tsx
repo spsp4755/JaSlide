@@ -105,7 +105,7 @@ export default function AdminRolesPage() {
                     <h1 className="text-2xl font-bold text-gray-900">권한 관리</h1>
                     <p className="text-sm text-gray-500">역할 및 권한 설정</p>
                 </div>
-                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     역할 추가
                 </button>
@@ -115,15 +115,15 @@ export default function AdminRolesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading ? (
                     <div className="col-span-full p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : (
                     roles.map((role) => (
                         <div key={role.id} className="bg-white rounded-lg shadow-sm p-6">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${role.isSystem ? 'bg-orange-100' : 'bg-purple-100'}`}>
-                                        <Shield className={role.isSystem ? 'text-orange-600' : 'text-purple-600'} size={20} />
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${role.isSystem ? 'bg-orange-100' : 'bg-gray-100'}`}>
+                                        <Shield className={role.isSystem ? 'text-orange-600' : 'text-gray-900'} size={20} />
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-gray-900">{role.name}</h3>
@@ -149,7 +149,7 @@ export default function AdminRolesPage() {
                                     <Users size={16} />
                                     <span>{role._count.users}명</span>
                                 </div>
-                                <span className="text-purple-600">{role.permissions.length}개 권한</span>
+                                <span className="text-gray-900">{role.permissions.length}개 권한</span>
                             </div>
                         </div>
                     ))
@@ -190,7 +190,7 @@ export default function AdminRolesPage() {
                                                 type="checkbox"
                                                 checked={formData.permissions.includes(perm)}
                                                 onChange={() => togglePermission(perm)}
-                                                className="rounded text-purple-600"
+                                                className="rounded text-gray-900"
                                             />
                                             <span>{perm}</span>
                                         </label>
@@ -201,7 +201,7 @@ export default function AdminRolesPage() {
                                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border rounded-lg">
                                     취소
                                 </button>
-                                <button type="submit" className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                                <button type="submit" className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                                     {editingRole ? '수정' : '추가'}
                                 </button>
                             </div>

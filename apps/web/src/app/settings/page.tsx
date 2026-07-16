@@ -156,7 +156,7 @@ export default function SettingsPage() {
         return (
             <AppShell>
                 <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 </div>
             </AppShell>
         );
@@ -172,7 +172,7 @@ export default function SettingsPage() {
                         <Button
                             onClick={handleSave}
                             disabled={saving}
-                            className="bg-purple-600 hover:bg-purple-700 min-w-[100px]"
+                            className="bg-gray-900 hover:bg-gray-700 min-w-[100px]"
                         >
                             {saving ? (
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
@@ -201,7 +201,7 @@ export default function SettingsPage() {
                                             <button
                                                 onClick={() => setActiveSection(section.id)}
                                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === section.id
-                                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium'
+                                                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-500 font-medium'
                                                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                                                     }`}
                                             >
@@ -226,7 +226,7 @@ export default function SettingsPage() {
                                     <div className="space-y-6">
                                         {/* Avatar */}
                                         <div className="flex items-center gap-4">
-                                            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center overflow-hidden">
+                                            <div className="w-20 h-20 bg-gradient-to-br from-gray-800 to-gray-600 rounded-full flex items-center justify-center overflow-hidden">
                                                 {avatarPreview || settings.avatarUrl ? (
                                                     <img
                                                         src={avatarPreview || settings.avatarUrl || ''}
@@ -270,7 +270,7 @@ export default function SettingsPage() {
                                                 type="text"
                                                 value={displayName}
                                                 onChange={(e) => setDisplayName(e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-400 focus:border-transparent outline-none transition-all"
                                                 placeholder="이름을 입력하세요"
                                             />
                                         </div>
@@ -314,16 +314,16 @@ export default function SettingsPage() {
                                                             key={theme.id}
                                                             onClick={() => setTheme(theme.id)}
                                                             className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all ${settings.theme === theme.id
-                                                                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                                                                    ? 'border-gray-900 bg-gray-100 dark:bg-gray-800'
                                                                     : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                                                                 }`}
                                                         >
                                                             <Icon className={`h-6 w-6 ${settings.theme === theme.id
-                                                                    ? 'text-purple-600 dark:text-purple-400'
+                                                                    ? 'text-gray-900 dark:text-gray-300'
                                                                     : 'text-gray-500 dark:text-gray-400'
                                                                 }`} />
                                                             <span className={`text-sm font-medium ${settings.theme === theme.id
-                                                                    ? 'text-purple-700 dark:text-purple-300'
+                                                                    ? 'text-gray-700 dark:text-gray-500'
                                                                     : 'text-gray-600 dark:text-gray-400'
                                                                 }`}>
                                                                 {theme.label}
@@ -358,7 +358,7 @@ export default function SettingsPage() {
                                                 <button
                                                     onClick={() => updateNotification(item.key, !settings.notifications[item.key])}
                                                     className={`relative w-12 h-6 rounded-full transition-colors ${settings.notifications[item.key]
-                                                            ? 'bg-purple-600'
+                                                            ? 'bg-gray-900'
                                                             : 'bg-gray-300 dark:bg-gray-600'
                                                         }`}
                                                 >
@@ -395,7 +395,7 @@ export default function SettingsPage() {
                                                 <button
                                                     onClick={() => updatePrivacy(item.key, !settings.privacy[item.key])}
                                                     className={`relative w-12 h-6 rounded-full transition-colors ${settings.privacy[item.key]
-                                                            ? 'bg-purple-600'
+                                                            ? 'bg-gray-900'
                                                             : 'bg-gray-300 dark:bg-gray-600'
                                                         }`}
                                                 >
@@ -445,7 +445,7 @@ export default function SettingsPage() {
                                             <button
                                                 onClick={toggleShortcuts}
                                                 className={`relative w-12 h-6 rounded-full transition-colors ${settings.shortcuts.enabled
-                                                        ? 'bg-purple-600'
+                                                        ? 'bg-gray-900'
                                                         : 'bg-gray-300 dark:bg-gray-600'
                                                     }`}
                                             >
@@ -501,19 +501,19 @@ export default function SettingsPage() {
                                                     key={lang.id}
                                                     onClick={() => setLanguage(lang.id)}
                                                     className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${settings.language === lang.id
-                                                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                                                            ? 'border-gray-900 bg-gray-100 dark:bg-gray-800'
                                                             : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                                                         }`}
                                                 >
                                                     <span className="text-2xl">{lang.flag}</span>
                                                     <span className={`font-medium ${settings.language === lang.id
-                                                            ? 'text-purple-700 dark:text-purple-300'
+                                                            ? 'text-gray-700 dark:text-gray-500'
                                                             : 'text-gray-700 dark:text-gray-300'
                                                         }`}>
                                                         {lang.label}
                                                     </span>
                                                     {settings.language === lang.id && (
-                                                        <Check className="h-5 w-5 text-purple-600 dark:text-purple-400 ml-auto" />
+                                                        <Check className="h-5 w-5 text-gray-900 dark:text-gray-300 ml-auto" />
                                                     )}
                                                 </button>
                                             ))}

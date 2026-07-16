@@ -57,7 +57,7 @@ export default function PresentationsPage() {
     if (!hasHydrated || !isAuthenticated || loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
         );
     }
@@ -70,14 +70,14 @@ export default function PresentationsPage() {
                         <h1 className="text-2xl font-bold text-gray-900">내 발표함</h1>
                         <div className="flex items-center gap-3 mt-1 text-gray-500">
                             <span>{presentations.length}개의 프레젠테이션</span>
-                            <span className="flex items-center gap-1 text-purple-600">
+                            <span className="flex items-center gap-1 text-gray-900">
                                 <Wallet className="h-4 w-4" />
                                 {credits} 크레딧
                             </span>
                         </div>
                     </div>
                     <Link href="/dashboard">
-                        <Button className="bg-purple-600 hover:bg-purple-700">
+                        <Button className="bg-gray-900 hover:bg-gray-700">
                             <Plus className="h-4 w-4 mr-2" />
                             새 프레젠테이션
                         </Button>
@@ -90,7 +90,7 @@ export default function PresentationsPage() {
                         <h3 className="text-lg font-medium text-gray-900 mb-2">프레젠테이션이 없습니다</h3>
                         <p className="text-gray-500 mb-6">첫 번째 프레젠테이션을 만들어보세요</p>
                         <Link href="/dashboard">
-                            <Button className="bg-purple-600 hover:bg-purple-700">
+                            <Button className="bg-gray-900 hover:bg-gray-700">
                                 <Plus className="h-4 w-4 mr-2" />
                                 새 프레젠테이션 만들기
                             </Button>
@@ -104,8 +104,8 @@ export default function PresentationsPage() {
                                 href={`/editor/${pres.id}`}
                                 className="bg-white rounded-xl border hover:shadow-lg transition-shadow overflow-hidden"
                             >
-                                <div className="aspect-video bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                                    <FileText className="h-12 w-12 text-purple-300" />
+                                <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                    <FileText className="h-12 w-12 text-gray-500" />
                                 </div>
                                 <div className="p-4">
                                     <h3 className="font-medium text-gray-900 truncate">{pres.title}</h3>

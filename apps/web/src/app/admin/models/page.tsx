@@ -24,7 +24,7 @@ interface LlmModel {
 }
 
 const defaultFormData = {
-    name: '', provider: 'openai', modelId: '', endpoint: '', apiKeyEnvVar: 'OPENAI_API_KEY',
+    name: '', provider: 'openai', modelId: '', endpoint: '', apiKey: '', apiKeyEnvVar: 'OPENAI_API_KEY',
     maxTokens: 4096, rateLimit: '', costPerToken: 0.002, isActive: true
 };
 
@@ -64,6 +64,7 @@ export default function AdminModelsPage() {
             provider: model.provider,
             modelId: model.modelId,
             endpoint: model.endpoint || '',
+            apiKey: '',
             apiKeyEnvVar: model.apiKeyEnvVar,
             maxTokens: model.maxTokens,
             rateLimit: model.rateLimit?.toString() || '',
@@ -77,10 +78,12 @@ export default function AdminModelsPage() {
         e.preventDefault();
         setSubmitting(true);
 
-        const payload = {
+        const payload: any = {
             ...formData,
             rateLimit: formData.rateLimit ? parseInt(formData.rateLimit as string) : null,
         };
+        // 빈 API 키는 보내지 않음 — 수정 시 기존 키를 지우지 않도록
+        if (!payload.apiKey) delete payload.apiKey;
 
         try {
             if (editingModel) {
@@ -165,7 +168,7 @@ export default function AdminModelsPage() {
                     <button onClick={fetchModels} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200">
                         <RefreshCw size={20} />
                     </button>
-                    <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                         <Plus size={20} />
                         모델 추가
                     </button>
@@ -176,7 +179,7 @@ export default function AdminModelsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading ? (
                     <div className="col-span-full p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : models.length === 0 ? (
                     <div className="col-span-full p-8 text-center text-gray-500">
@@ -187,8 +190,8 @@ export default function AdminModelsPage() {
                         <div key={model.id} className={`bg-white rounded-lg shadow-sm p-6 ${!model.isActive ? 'opacity-50' : ''}`}>
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                        <Cpu className="text-purple-600" size={20} />
+                                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                                        <Cpu className="text-gray-900" size={20} />
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
@@ -264,32 +267,24 @@ export default function AdminModelsPage() {
                                     <option value="ollama">Ollama (OpenAI Compatible)</option>
                                 </select>
                             </div>
-                            {(['vllm', 'ollama', 'azure'].includes(formData.provider)) && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        API URL <span className="text-red-500">*</span>
-                                    </label>
-                                    <input type="url" value={formData.endpoint} onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
-                                        className="w-full px-3 py-2 border rounded-lg" required
-                                        placeholder={formData.provider === 'vllm' ? 'http://localhost:8000/v1' : formData.provider === 'ollama' ? 'http://localhost:11434/v1' : 'https://your-resource.openai.azure.com/'} />
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        {formData.provider === 'vllm'
-                                            ? 'vLLM 서버의 OpenAI Compatible API 엔드포인트'
-                                            : formData.provider === 'ollama'
-                                                ? 'Ollama의 OpenAI Compatible API 엔드포인트'
-                                                : 'Azure OpenAI 리소스 URL'}
-                                    </p>
-                                </div>
-                            )}
+                            {/* 폐쇄망 연결 정보 — 셋 다 선택 입력: 비워두면 서버 .env 기본값 사용 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Model ID</label>
-                                <input type="text" value={formData.modelId} onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg" required placeholder="예: gpt-4o" />
+                                <label className="block text-sm font-medium text-gray-700 mb-1">API URL</label>
+                                <input type="url" value={formData.endpoint} onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                                    className="w-full px-3 py-2 border rounded-lg"
+                                    placeholder={formData.provider === 'ollama' ? 'http://<host>:11434/v1' : 'http://<host>:8000/v1'} />
+                                <p className="text-xs text-gray-500 mt-1">사내 LLM 엔드포인트. 비워두면 서버 기본 설정을 사용합니다.</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">API Key 환경변수</label>
-                                <input type="text" value={formData.apiKeyEnvVar} onChange={(e) => setFormData({ ...formData, apiKeyEnvVar: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg" placeholder="OPENAI_API_KEY" />
+                                <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                <input type="password" value={formData.apiKey} onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                                    className="w-full px-3 py-2 border rounded-lg" placeholder="키가 필요 없는 서버면 비워두세요" autoComplete="new-password" />
+                                {editingModel && <p className="text-xs text-gray-500 mt-1">비워두면 기존 키를 유지합니다.</p>}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">모델명 (Model ID)</label>
+                                <input type="text" value={formData.modelId} onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
+                                    className="w-full px-3 py-2 border rounded-lg" placeholder="예: qwen2.5:14b, gpt-4o" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -312,7 +307,7 @@ export default function AdminModelsPage() {
                                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50">
                                     취소
                                 </button>
-                                <button type="submit" disabled={submitting} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                                <button type="submit" disabled={submitting} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50">
                                     {submitting ? '저장 중...' : (editingModel ? '수정' : '추가')}
                                 </button>
                             </div>

@@ -92,7 +92,7 @@ export default function AdminOperationsPage() {
     if (loading) {
         return (
             <div className="p-6 flex items-center justify-center min-h-96">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
             </div>
         );
     }
@@ -237,7 +237,7 @@ export default function AdminOperationsPage() {
                                 onChange={(e) => setTestModelId(e.target.value)}
                                 className="flex-1 px-4 py-2 border rounded-lg"
                             />
-                            <button onClick={testModel} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                            <button onClick={testModel} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                                 테스트
                             </button>
                         </div>

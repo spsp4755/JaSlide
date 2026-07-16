@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, Min, Max, IsEnum, IsEmail, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsNumber, Min, Max, IsEnum, IsEmail, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Pagination DTO
@@ -298,6 +298,8 @@ export class AdminCreateLlmModelDto {
     rateLimit?: number;
 
     @Type(() => Number)
+    @IsNumber()
+    @Min(0)
     costPerToken: number;
 
     @IsOptional()
@@ -316,6 +318,14 @@ export class AdminUpdateLlmModelDto {
     @IsOptional()
     @IsString()
     name?: string;
+
+    @IsOptional()
+    @IsString()
+    provider?: string;
+
+    @IsOptional()
+    @IsString()
+    modelId?: string;
 
     @IsOptional()
     @IsString()
@@ -341,6 +351,8 @@ export class AdminUpdateLlmModelDto {
 
     @IsOptional()
     @Type(() => Number)
+    @IsNumber()
+    @Min(0)
     costPerToken?: number;
 
     @IsOptional()

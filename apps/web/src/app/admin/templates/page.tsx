@@ -406,7 +406,7 @@ export default function AdminTemplatesPage() {
                                 setPptxImportForm({ name: '', description: '', category: 'CUSTOM', file: null });
                                 setShowPptxImportModal(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 border border-purple-600 text-purple-700 rounded-lg hover:bg-purple-50"
+                            className="flex items-center gap-2 px-4 py-2 border border-gray-900 text-gray-700 rounded-lg hover:bg-gray-100"
                         >
                             <FileText size={20} />
                             Import PPTX style
@@ -418,7 +418,7 @@ export default function AdminTemplatesPage() {
                         else if (tab === 'palettes') handleCreatePalette();
                         else handleCreateLayout();
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700"
                 >
                     <Plus size={20} />
                     {tab === 'templates' ? '템플릿 추가' : tab === 'palettes' ? '팔레트 추가' : '레이아웃 추가'}
@@ -428,15 +428,15 @@ export default function AdminTemplatesPage() {
 
             {/* Tabs */}
             <div className="flex border-b mb-6">
-                <button onClick={() => setTab('templates')} className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'templates' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'}`}>
+                <button onClick={() => setTab('templates')} className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'templates' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'}`}>
                     <FileText size={18} />
                     템플릿
                 </button>
-                <button onClick={() => setTab('palettes')} className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'palettes' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'}`}>
+                <button onClick={() => setTab('palettes')} className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'palettes' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'}`}>
                     <Palette size={18} />
                     색상 팔레트
                 </button>
-                <button onClick={() => setTab('layouts')} className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'layouts' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'}`}>
+                <button onClick={() => setTab('layouts')} className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'layouts' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'}`}>
                     <Layout size={18} />
                     레이아웃 규칙
                 </button>
@@ -445,7 +445,7 @@ export default function AdminTemplatesPage() {
             {/* Content */}
             {loading ? (
                 <div className="p-8 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                 </div>
             ) : tab === 'templates' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -453,7 +453,7 @@ export default function AdminTemplatesPage() {
                         <div className="col-span-full text-center py-12 text-gray-500">
                             <FileText size={48} className="mx-auto mb-4 opacity-50" />
                             <p>등록된 템플릿이 없습니다.</p>
-                            <button onClick={handleCreateTemplate} className="mt-4 text-purple-600 hover:underline">
+                            <button onClick={handleCreateTemplate} className="mt-4 text-gray-900 hover:underline">
                                 첫 템플릿 추가하기
                             </button>
                         </div>
@@ -514,7 +514,7 @@ export default function AdminTemplatesPage() {
                         <div className="col-span-full text-center py-12 text-gray-500">
                             <Palette size={48} className="mx-auto mb-4 opacity-50" />
                             <p>등록된 팔레트가 없습니다.</p>
-                            <button onClick={handleCreatePalette} className="mt-4 text-purple-600 hover:underline">
+                            <button onClick={handleCreatePalette} className="mt-4 text-gray-900 hover:underline">
                                 첫 팔레트 추가하기
                             </button>
                         </div>
@@ -544,7 +544,7 @@ export default function AdminTemplatesPage() {
                         <div className="text-center py-12 text-gray-500">
                             <Layout size={48} className="mx-auto mb-4 opacity-50" />
                             <p>등록된 레이아웃이 없습니다.</p>
-                            <button onClick={handleCreateLayout} className="mt-4 text-purple-600 hover:underline">
+                            <button onClick={handleCreateLayout} className="mt-4 text-gray-900 hover:underline">
                                 첫 레이아웃 추가하기
                             </button>
                         </div>
@@ -608,7 +608,7 @@ export default function AdminTemplatesPage() {
                         </div>
                         <div className="flex justify-end gap-2 border-t p-4">
                             <button onClick={() => setShowPptxImportModal(false)} disabled={importingPptx} className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
-                            <button onClick={handleImportPptx} disabled={importingPptx} className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 disabled:opacity-50">
+                            <button onClick={handleImportPptx} disabled={importingPptx} className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-white hover:bg-gray-700 disabled:opacity-50">
                                 {importingPptx && <Loader2 size={16} className="animate-spin" />} Import
                             </button>
                         </div>
@@ -633,7 +633,7 @@ export default function AdminTemplatesPage() {
                                     type="text"
                                     value={templateForm.name}
                                     onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                                     placeholder="템플릿 이름"
                                 />
                             </div>
@@ -642,7 +642,7 @@ export default function AdminTemplatesPage() {
                                 <textarea
                                     value={templateForm.description}
                                     onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                                     rows={3}
                                     placeholder="템플릿 설명"
                                 />
@@ -652,7 +652,7 @@ export default function AdminTemplatesPage() {
                                 <select
                                     value={templateForm.category}
                                     onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                                 >
                                     {CATEGORIES.map(cat => (
                                         <option key={cat} value={cat}>{cat}</option>
@@ -693,7 +693,7 @@ export default function AdminTemplatesPage() {
                                 <textarea
                                     value={templateForm.config.htmlTemplate || ''}
                                     onChange={(e) => setTemplateForm({ ...templateForm, config: { ...templateForm.config, htmlTemplate: e.target.value } })}
-                                    className="w-full px-3 py-2 border rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-gray-400"
                                     rows={5}
                                     placeholder={'<h1 data-jaslide-slot="title" data-x="0.7" data-y="0.5" data-w="11.9" data-h="0.8"></h1>'}
                                 />
@@ -714,7 +714,7 @@ export default function AdminTemplatesPage() {
                             <button onClick={() => setShowTemplateModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
                                 취소
                             </button>
-                            <button onClick={handleSaveTemplate} disabled={saving} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
+                            <button onClick={handleSaveTemplate} disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
                                 {saving && <Loader2 size={16} className="animate-spin" />}
                                 {editingTemplate ? '수정' : '생성'}
                             </button>
@@ -740,7 +740,7 @@ export default function AdminTemplatesPage() {
                                     type="text"
                                     value={paletteForm.name}
                                     onChange={(e) => setPaletteForm({ ...paletteForm, name: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                                     placeholder="팔레트 이름"
                                 />
                             </div>
@@ -778,7 +778,7 @@ export default function AdminTemplatesPage() {
                             <button onClick={() => setShowPaletteModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
                                 취소
                             </button>
-                            <button onClick={handleSavePalette} disabled={saving} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
+                            <button onClick={handleSavePalette} disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
                                 {saving && <Loader2 size={16} className="animate-spin" />}
                                 {editingPalette ? '수정' : '생성'}
                             </button>
@@ -804,7 +804,7 @@ export default function AdminTemplatesPage() {
                                     type="text"
                                     value={layoutForm.name}
                                     onChange={(e) => setLayoutForm({ ...layoutForm, name: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                                     placeholder="레이아웃 이름"
                                 />
                             </div>
@@ -813,7 +813,7 @@ export default function AdminTemplatesPage() {
                                 <select
                                     value={layoutForm.slideType}
                                     onChange={(e) => setLayoutForm({ ...layoutForm, slideType: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                                 >
                                     {SLIDE_TYPES.map(type => (
                                         <option key={type} value={type}>{type}</option>
@@ -835,7 +835,7 @@ export default function AdminTemplatesPage() {
                             <button onClick={() => setShowLayoutModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
                                 취소
                             </button>
-                            <button onClick={handleSaveLayout} disabled={saving} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
+                            <button onClick={handleSaveLayout} disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
                                 {saving && <Loader2 size={16} className="animate-spin" />}
                                 {editingLayout ? '수정' : '생성'}
                             </button>

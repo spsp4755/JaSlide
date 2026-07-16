@@ -114,7 +114,7 @@ export default function AdminPromptsPage() {
     const categoryColors: Record<string, string> = {
         generation: 'bg-blue-100 text-blue-800',
         outline: 'bg-green-100 text-green-800',
-        content: 'bg-purple-100 text-purple-800',
+        content: 'bg-gray-100 text-gray-800',
         design: 'bg-orange-100 text-orange-800',
     };
 
@@ -125,7 +125,7 @@ export default function AdminPromptsPage() {
                     <h1 className="text-2xl font-bold text-gray-900">프롬프트 관리</h1>
                     <p className="text-sm text-gray-500">프롬프트 템플릿 및 버전 관리</p>
                 </div>
-                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     프롬프트 추가
                 </button>
@@ -137,7 +137,7 @@ export default function AdminPromptsPage() {
                     <div className="p-4 border-b font-medium text-gray-900">프롬프트 목록</div>
                     {loading ? (
                         <div className="p-8 text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                         </div>
                     ) : prompts.length === 0 ? (
                         <div className="p-8 text-center text-gray-500">
@@ -149,7 +149,7 @@ export default function AdminPromptsPage() {
                                 <button
                                     key={prompt.id}
                                     onClick={() => selectPrompt(prompt.id)}
-                                    className={`w-full p-4 text-left hover:bg-gray-50 flex items-center justify-between ${selectedPrompt?.id === prompt.id ? 'bg-purple-50' : ''}`}
+                                    className={`w-full p-4 text-left hover:bg-gray-50 flex items-center justify-between ${selectedPrompt?.id === prompt.id ? 'bg-gray-100' : ''}`}
                                 >
                                     <div>
                                         <div className="font-medium text-gray-900">{prompt.name}</div>
@@ -216,7 +216,7 @@ export default function AdminPromptsPage() {
                                         }}
                                         className="w-full px-4 py-2 border rounded-lg text-sm"
                                     />
-                                    <button onClick={testPrompt} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+                                    <button onClick={testPrompt} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-gray-700">
                                         테스트 실행
                                     </button>
                                 </div>
@@ -241,7 +241,7 @@ export default function AdminPromptsPage() {
                                                 {v.isActive && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded">활성</span>}
                                             </div>
                                             {!v.isActive && (
-                                                <button onClick={() => rollbackVersion(v.version)} className="px-3 py-1 text-sm text-purple-600 hover:bg-purple-50 rounded">
+                                                <button onClick={() => rollbackVersion(v.version)} className="px-3 py-1 text-sm text-gray-900 hover:bg-gray-100 rounded">
                                                     롤백
                                                 </button>
                                             )}
@@ -302,7 +302,7 @@ export default function AdminPromptsPage() {
                                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50">
                                     취소
                                 </button>
-                                <button type="submit" disabled={submitting} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                                <button type="submit" disabled={submitting} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50">
                                     {submitting ? '저장 중...' : '추가'}
                                 </button>
                             </div>

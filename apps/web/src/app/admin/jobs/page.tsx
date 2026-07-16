@@ -118,7 +118,7 @@ export default function AdminJobsPage() {
                     ))}
                     <div className="bg-white rounded-lg p-4 shadow-sm">
                         <div className="text-sm text-gray-500">최근 24시간</div>
-                        <div className="text-2xl font-bold text-purple-600">{stats.last24Hours}</div>
+                        <div className="text-2xl font-bold text-gray-900">{stats.last24Hours}</div>
                     </div>
                 </div>
             )}
@@ -144,7 +144,7 @@ export default function AdminJobsPage() {
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : (
                     <table className="w-full">
@@ -174,7 +174,7 @@ export default function AdminJobsPage() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                            <div className="h-full bg-purple-600" style={{ width: `${job.progress}%` }} />
+                                            <div className="h-full bg-gray-900" style={{ width: `${job.progress}%` }} />
                                         </div>
                                         <div className="text-xs text-gray-500 mt-1">{job.progress}%</div>
                                     </td>

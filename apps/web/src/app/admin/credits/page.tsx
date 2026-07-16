@@ -91,7 +91,7 @@ export default function AdminCreditsPage() {
                     <h1 className="text-2xl font-bold text-gray-900">크레딧 관리</h1>
                     <p className="text-sm text-gray-500">정책 및 가격 플랜 관리</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     {tab === 'policies' ? '정책 추가' : '플랜 추가'}
                 </button>
@@ -121,7 +121,7 @@ export default function AdminCreditsPage() {
             <div className="flex border-b mb-6">
                 <button
                     onClick={() => setTab('policies')}
-                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'policies' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'
+                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'policies' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'
                         }`}
                 >
                     <CreditCard size={18} />
@@ -129,7 +129,7 @@ export default function AdminCreditsPage() {
                 </button>
                 <button
                     onClick={() => setTab('plans')}
-                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'plans' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500'
+                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'plans' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'
                         }`}
                 >
                     <DollarSign size={18} />
@@ -141,7 +141,7 @@ export default function AdminCreditsPage() {
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : tab === 'policies' ? (
                     <table className="w-full">
@@ -197,7 +197,7 @@ export default function AdminCreditsPage() {
                                     <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
                                     <span className="text-gray-500">/월</span>
                                 </div>
-                                <div className="text-sm text-purple-600 mb-4">{plan.monthlyCredits.toLocaleString()} 크레딧/월</div>
+                                <div className="text-sm text-gray-900 mb-4">{plan.monthlyCredits.toLocaleString()} 크레딧/월</div>
                                 <ul className="space-y-2 text-sm text-gray-600">
                                     {plan.features.map((feature, i) => (
                                         <li key={i}>✓ {feature}</li>

@@ -71,7 +71,7 @@ export default function AdminAlertsPage() {
 
     const channelColors: Record<string, string> = {
         EMAIL: 'bg-blue-100 text-blue-800',
-        SLACK: 'bg-purple-100 text-purple-800',
+        SLACK: 'bg-gray-100 text-gray-800',
         WEBHOOK: 'bg-green-100 text-green-800',
         SMS: 'bg-orange-100 text-orange-800',
     };
@@ -83,7 +83,7 @@ export default function AdminAlertsPage() {
                     <h1 className="text-2xl font-bold text-gray-900">알림 관리</h1>
                     <p className="text-sm text-gray-500">이벤트 알림 설정</p>
                 </div>
-                <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
                     <Plus size={20} />
                     알림 추가
                 </button>
@@ -92,14 +92,14 @@ export default function AdminAlertsPage() {
             {/* Alerts Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading ? (
-                    <div className="col-span-full p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" /></div>
+                    <div className="col-span-full p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" /></div>
                 ) : (
                     alerts.map((alert) => (
                         <div key={alert.id} className={`bg-white rounded-lg shadow-sm p-6 ${!alert.isActive ? 'opacity-50' : ''}`}>
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                        <Bell className="text-purple-600" size={20} />
+                                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                                        <Bell className="text-gray-900" size={20} />
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-gray-900">{alert.name}</h3>
@@ -166,7 +166,7 @@ export default function AdminAlertsPage() {
                             </div>
                             <div className="flex gap-3 pt-4">
                                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border rounded-lg">취소</button>
-                                <button type="submit" className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">추가</button>
+                                <button type="submit" className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">추가</button>
                             </div>
                         </form>
                     </div>

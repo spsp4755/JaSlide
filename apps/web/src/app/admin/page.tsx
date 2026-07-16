@@ -95,7 +95,7 @@ export default function AdminDashboard() {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
             </div>
         );
     }
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
                     title="총 프레젠테이션"
                     value={stats?.totalPresentations.toLocaleString() || '0'}
                     change="+23%"
-                    icon={<FileText className="h-6 w-6 text-purple-500" />}
+                    icon={<FileText className="h-6 w-6 text-gray-500" />}
                     trend="up"
                 />
                 <StatCard
