@@ -845,15 +845,15 @@ export default function AdminTemplatesPage() {
                             <div
                                 className="aspect-[16/9] rounded-lg flex items-center justify-center"
                                 style={{
-                                    background: previewTemplate.config?.backgrounds?.value || previewTemplate.config?.colors?.background || '#ffffff',
+                                    background: previewTemplate.config?.colors?.background || previewTemplate.config?.backgrounds?.value || '#ffffff',
                                     color: previewTemplate.config?.colors?.text || '#000000'
                                 }}
                             >
                                 <div className="text-center p-8">
-                                    <h1 style={{ fontFamily: previewTemplate.config?.typography?.titleFont || 'Inter', fontSize: '36px', fontWeight: 'bold', color: previewTemplate.config?.colors?.primary || '#2563eb' }}>
+                                    <h1 style={{ fontFamily: previewTemplate.config?.typography?.headingFont || previewTemplate.config?.typography?.titleFont || 'Noto Sans KR', fontSize: '36px', fontWeight: 'bold', color: previewTemplate.config?.colors?.primary || '#2563eb' }}>
                                         {previewTemplate.name}
                                     </h1>
-                                    <p style={{ fontFamily: previewTemplate.config?.typography?.bodyFont || 'Inter', fontSize: '18px', marginTop: '16px', color: previewTemplate.config?.colors?.textSecondary || '#64748b' }}>
+                                    <p style={{ fontFamily: previewTemplate.config?.typography?.bodyFont || 'Noto Sans KR', fontSize: '18px', marginTop: '16px', color: previewTemplate.config?.colors?.text || previewTemplate.config?.colors?.textSecondary || '#64748b' }}>
                                         {previewTemplate.description || '템플릿 미리보기'}
                                     </p>
                                 </div>
