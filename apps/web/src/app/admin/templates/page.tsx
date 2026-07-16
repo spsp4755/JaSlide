@@ -78,7 +78,8 @@ export default function AdminTemplatesPage() {
             colors: { primary: '#2563eb', secondary: '#64748b', accent: '#0ea5e9', background: '#ffffff', text: '#1e293b', textSecondary: '#64748b' },
             typography: { titleFont: 'Inter', bodyFont: 'Inter', titleSize: { xl: 44, lg: 36, md: 28, sm: 24, xs: 20 }, bodySize: { xl: 24, lg: 20, md: 18, sm: 16, xs: 14 }, lineHeight: 1.5 },
             layouts: { margins: { top: 40, right: 40, bottom: 40, left: 40 }, spacing: 20, contentWidth: 880, contentAlignment: 'left' },
-            backgrounds: { type: 'solid', value: '#ffffff' }
+            backgrounds: { type: 'solid', value: '#ffffff' },
+            htmlTemplate: ''
         }
     });
 
@@ -146,7 +147,8 @@ export default function AdminTemplatesPage() {
                 colors: { primary: '#2563eb', secondary: '#64748b', accent: '#0ea5e9', background: '#ffffff', text: '#1e293b', textSecondary: '#64748b' },
                 typography: { titleFont: 'Inter', bodyFont: 'Inter', titleSize: { xl: 44, lg: 36, md: 28, sm: 24, xs: 20 }, bodySize: { xl: 24, lg: 20, md: 18, sm: 16, xs: 14 }, lineHeight: 1.5 },
                 layouts: { margins: { top: 40, right: 40, bottom: 40, left: 40 }, spacing: 20, contentWidth: 880, contentAlignment: 'left' },
-                backgrounds: { type: 'solid', value: '#ffffff' }
+                backgrounds: { type: 'solid', value: '#ffffff' },
+                htmlTemplate: ''
             }
         });
         setShowTemplateModal(true);
@@ -685,6 +687,17 @@ export default function AdminTemplatesPage() {
                                         className="w-full h-10 rounded cursor-pointer"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">HTML layout (optional)</label>
+                                <textarea
+                                    value={templateForm.config.htmlTemplate || ''}
+                                    onChange={(e) => setTemplateForm({ ...templateForm, config: { ...templateForm.config, htmlTemplate: e.target.value } })}
+                                    className="w-full px-3 py-2 border rounded-lg font-mono text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    rows={5}
+                                    placeholder={'<h1 data-jaslide-slot="title" data-x="0.7" data-y="0.5" data-w="11.9" data-h="0.8"></h1>'}
+                                />
+                                <p className="mt-1 text-xs text-gray-500">Only safe data-jaslide-slot layout attributes are used in PPTX export.</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input
