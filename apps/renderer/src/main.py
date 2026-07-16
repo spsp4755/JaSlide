@@ -48,6 +48,7 @@ class TemplateConfig(BaseModel):
     typography: Optional[dict] = None
     layouts: Optional[dict] = None
     backgrounds: Optional[dict] = None
+    htmlTemplate: Optional[str] = None
 
 
 class Template(BaseModel):

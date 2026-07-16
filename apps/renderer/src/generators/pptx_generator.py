@@ -12,6 +12,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from io import BytesIO
 from typing import Optional, Any
 from PIL import Image
+from ..services.html_template import parse_html_layout
 
 
 class PPTXGenerator:
@@ -32,6 +33,8 @@ class PPTXGenerator:
     def __init__(self, template_config: Optional[Any] = None):
         self.template_config = template_config
         self.tokens = self._resolve_tokens(template_config)
+        config = self._as_dict(getattr(template_config, "config", template_config))
+        self.html_layout = parse_html_layout(config.get("htmlTemplate", ""))
         self.prs = PPTXPresentation()
         self.prs.slide_width = self.SLIDE_WIDTH
         self.prs.slide_height = self.SLIDE_HEIGHT
@@ -68,6 +71,21 @@ class PPTXGenerator:
         fill = slide.background.fill
         fill.solid()
         fill.fore_color.rgb = self.tokens["background"]
+
+    def _layout(self, slot: str, defaults: dict) -> dict:
+        return {**defaults, **self.html_layout.get(slot, {})}
+
+    @staticmethod
+    def _apply_alignment(paragraph: Any, value: Optional[str]) -> None:
+        alignments = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}
+        if value in alignments:
+            paragraph.alignment = alignments[value]
+
+    @staticmethod
+    def _add_layout_textbox(slide: Any, layout: dict) -> Any:
+        return slide.shapes.add_textbox(
+            Inches(layout["x"]), Inches(layout["y"]), Inches(layout["w"]), Inches(layout["h"])
+        )
 
     def _style_paragraph(
         self, paragraph: Any, size: int, font: str, bold: bool = False, italic: bool = False
@@ -140,23 +158,25 @@ class PPTXGenerator:
         subtitle = content.get("subheading", "")
 
         # Title
-        title_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(2.5), Inches(12.333), Inches(1.5)
-        )
+        title_layout = self._layout("title", {"x": 0.5, "y": 2.5, "w": 12.333, "h": 1.5, "fontSize": 54})
+        title_box = self._add_layout_textbox(slide, title_layout)
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], 54, self.tokens["title_font"], bold=True)
-        tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        if "align" not in title_layout:
+            tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
         # Subtitle
         if subtitle:
-            sub_box = slide.shapes.add_textbox(
-                Inches(1), Inches(4.2), Inches(11.333), Inches(0.8)
-            )
+            subtitle_layout = self._layout("subtitle", {"x": 1, "y": 4.2, "w": 11.333, "h": 0.8, "fontSize": 24})
+            sub_box = self._add_layout_textbox(slide, subtitle_layout)
             tf = sub_box.text_frame
             tf.paragraphs[0].text = subtitle
-            self._style_paragraph(tf.paragraphs[0], 24, self.tokens["body_font"])
-            tf.paragraphs[0].alignment = PP_ALIGN.CENTER  
+            self._style_paragraph(tf.paragraphs[0], subtitle_layout["fontSize"], self.tokens["body_font"])
+            self._apply_alignment(tf.paragraphs[0], subtitle_layout.get("align"))
+            if "align" not in subtitle_layout:
+                tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
     def _add_content_slide(self, slide_data: Any):
         """Add content slide with title and body"""
@@ -170,25 +190,25 @@ class PPTXGenerator:
         bullets = content.get("bullets", [])
 
         # Title
-        title_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(0.3), Inches(12.333), Inches(0.8)
-        )
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], 36, self.tokens["title_font"], bold=True)
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
 
         # Content area
         content_top = Inches(1.3)
         content_height = Inches(5.7)
 
         if body:
-            body_box = slide.shapes.add_textbox(
-                Inches(0.5), content_top, Inches(12.333), content_height
-            )
+            body_layout = self._layout("body", {"x": 0.5, "y": 1.3, "w": 12.333, "h": 5.7, "fontSize": 20})
+            body_box = self._add_layout_textbox(slide, body_layout)
             tf = body_box.text_frame
             tf.word_wrap = True
             tf.paragraphs[0].text = body
-            self._style_paragraph(tf.paragraphs[0], 20, self.tokens["body_font"])
+            self._style_paragraph(tf.paragraphs[0], body_layout["fontSize"], self.tokens["body_font"])
+            self._apply_alignment(tf.paragraphs[0], body_layout.get("align"))
 
         if bullets:
             self._add_bullets(slide, bullets, content_top, content_height)
@@ -218,9 +238,11 @@ class PPTXGenerator:
         self, slide, bullets: list, top: Inches, height: Inches
     ):
         """Add bullet points to a slide"""
-        bullet_box = slide.shapes.add_textbox(
-            Inches(0.5), top, Inches(12.333), height
+        bullet_layout = self._layout(
+            "bullets",
+            {"x": 0.5, "y": top.inches, "w": 12.333, "h": height.inches, "fontSize": 20},
         )
+        bullet_box = self._add_layout_textbox(slide, bullet_layout)
         tf = bullet_box.text_frame
         tf.word_wrap = True
 
@@ -238,7 +260,8 @@ class PPTXGenerator:
                 p = tf.add_paragraph()
 
             p.text = f"• {text}"
-            self._style_paragraph(p, 20, self.tokens["body_font"])
+            self._style_paragraph(p, bullet_layout["fontSize"], self.tokens["body_font"])
+            self._apply_alignment(p, bullet_layout.get("align"))
             p.level = level
             p.space_before = Pt(12)
 

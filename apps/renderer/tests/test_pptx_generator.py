@@ -2,7 +2,9 @@ from io import BytesIO
 from types import SimpleNamespace
 
 from pptx import Presentation
+from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
+from pptx.util import Inches, Pt
 
 from apps.renderer.src.generators.pptx_generator import PPTXGenerator
 
@@ -116,3 +118,26 @@ def test_bullets_preserve_their_text_without_prefix_artifacts():
     ]
 
     assert "\u2022 First item" in paragraphs
+
+
+def test_html_template_layout_positions_content_textboxes():
+    template = SimpleNamespace(
+        config=SimpleNamespace(
+            htmlTemplate=(
+                '<h1 data-jaslide-slot="title" data-x="1" data-y="1" data-w="9" '
+                'data-h="1" data-align="center"></h1>'
+                '<p data-jaslide-slot="body" data-x="1" data-y="2" data-w="9" '
+                'data-h="3" data-font-size="22"></p>'
+            )
+        )
+    )
+    pptx = PPTXGenerator(template).generate(
+        _presentation(_slide("CONTENT", "", {"heading": "Heading", "body": "Body"}))
+    )
+
+    shapes = Presentation(BytesIO(pptx)).slides[0].shapes
+    assert shapes[0].left == Inches(1)
+    assert shapes[0].top == Inches(1)
+    assert shapes[0].text_frame.paragraphs[0].alignment == PP_ALIGN.CENTER
+    assert shapes[1].top == Inches(2)
+    assert shapes[1].text_frame.paragraphs[0].runs[0].font.size == Pt(22)
