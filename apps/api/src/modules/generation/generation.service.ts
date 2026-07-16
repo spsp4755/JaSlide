@@ -1,20 +1,37 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { CreditsService } from '../credits/credits.service';
 import { StartGenerationDto, AIEditDto } from './dto/generation.dto';
 import { CREDIT_COSTS } from '@jaslide/shared';
 import type { Prisma } from '@prisma/client';
+import { QueueService } from '../queue/queue.service';
 
 @Injectable()
-export class GenerationService {
+export class GenerationService implements OnModuleInit {
     private readonly logger = new Logger(GenerationService.name);
 
     constructor(
         private prisma: PrismaService,
         private llmService: LlmService,
         private creditsService: CreditsService,
+        private queueService: QueueService,
     ) { }
+
+    async onModuleInit() {
+        this.queueService.registerGenerationProcessor((jobId) => this.processGeneration(jobId));
+        const queuedJobs = await this.prisma.generationJob.findMany({
+            where: { status: 'QUEUED' },
+            select: { id: true },
+        });
+        await Promise.all(queuedJobs.map(async ({ id }) => {
+            try {
+                await this.queueService.addGenerationJob(id);
+            } catch (error) {
+                this.logger.error(`Could not recover generation job ${id}`, error);
+            }
+        }));
+    }
 
     async startGeneration(userId: string, dto: StartGenerationDto) {
         // Estimate cost
@@ -57,10 +74,7 @@ export class GenerationService {
             },
         });
 
-        // Start async generation (in production, use queue)
-        this.processGeneration(job.id).catch((err) => {
-            this.logger.error(`Generation failed for job ${job.id}`, err);
-        });
+        await this.queueService.addGenerationJob(job.id);
 
         return {
             jobId: job.id,
@@ -95,12 +109,12 @@ export class GenerationService {
         };
     }
 
-    private async processGeneration(jobId: string) {
+    async processGeneration(jobId: string) {
         const job = await this.prisma.generationJob.findUnique({
             where: { id: jobId },
         });
 
-        if (!job) return;
+        if (!job || job.status === 'COMPLETED' || job.status === 'CANCELLED') return;
 
         const input = job.input as any;
 
@@ -153,6 +167,7 @@ export class GenerationService {
 
             // Update presentation with title and create slides
             await this.prisma.$transaction([
+                this.prisma.slide.deleteMany({ where: { presentationId: job.presentationId! } }),
                 this.prisma.presentation.update({
                     where: { id: job.presentationId! },
                     data: {

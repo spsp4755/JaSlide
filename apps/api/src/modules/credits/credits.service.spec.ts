@@ -33,6 +33,7 @@ describe('CreditsService', () => {
             },
             creditTransaction: {
                 create: jest.fn(),
+                findFirst: jest.fn(),
                 findMany: jest.fn(),
                 count: jest.fn(),
             },
@@ -108,6 +109,22 @@ describe('CreditsService', () => {
             expect(result).toBeDefined();
             expect(result.transaction.amount).toBe(-10);
             expect(result.newBalance).toBe(90);
+        });
+
+        it('should return the existing transaction when a generation is retried', async () => {
+            prisma.creditTransaction.findFirst.mockResolvedValue(mockTransaction);
+
+            const result = await service.deductCredits(
+                'user-123',
+                10,
+                'USAGE',
+                'AI Generation',
+                'job-123',
+            );
+
+            expect(result).toEqual({ transaction: mockTransaction, newBalance: 90 });
+            expect(prisma.user.update).not.toHaveBeenCalled();
+            expect(prisma.creditTransaction.create).not.toHaveBeenCalled();
         });
 
         it('should throw if user does not have enough credits', async () => {

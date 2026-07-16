@@ -7,9 +7,10 @@ import { DataVisualizationService } from './data-visualization.service';
 import { LlmModule } from '../llm/llm.module';
 import { CreditsModule } from '../credits/credits.module';
 import { AssetsModule } from '../assets/assets.module';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
-    imports: [LlmModule, CreditsModule, AssetsModule],
+    imports: [LlmModule, CreditsModule, AssetsModule, QueueModule],
     controllers: [GenerationController],
     providers: [
         GenerationService,

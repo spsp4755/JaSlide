@@ -39,6 +39,16 @@ export class CreditsService {
     ) {
         // Use transaction to ensure atomicity
         const result = await this.prisma.$transaction(async (tx) => {
+            if (referenceId) {
+                const existing = await tx.creditTransaction.findFirst({
+                    where: { userId, type, referenceId },
+                    orderBy: { createdAt: 'desc' },
+                });
+                if (existing) {
+                    return { transaction: existing, newBalance: existing.balance };
+                }
+            }
+
             // Get current balance
             const user = await tx.user.findUnique({
                 where: { id: userId },
