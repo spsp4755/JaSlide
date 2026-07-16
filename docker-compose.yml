@@ -51,6 +51,7 @@ services:
       KEYCLOAK_ADMIN_ROLES: ${KEYCLOAK_ADMIN_ROLES}
       CORS_ORIGIN: ${CORS_ORIGIN}
       RENDERER_URL: http://renderer:8000
+      LOCAL_STORAGE_PATH: /app/apps/api/uploads
     ports:
       - "4000:4000"
     depends_on:
@@ -58,6 +59,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - assets_data:/app/apps/api/uploads
 
   # Next.js Web
   web:
@@ -86,3 +89,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  assets_data:

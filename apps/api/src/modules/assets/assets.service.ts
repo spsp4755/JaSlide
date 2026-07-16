@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ConfigService } from '@nestjs/config';
+import { StorageService } from './storage.service';
 
 @Injectable()
 export class AssetsService {
     constructor(
         private prisma: PrismaService,
-        private configService: ConfigService,
+        private storageService: StorageService,
     ) { }
 
     async upload(
@@ -19,17 +19,19 @@ export class AssetsService {
         },
         type: 'IMAGE' | 'ICON' | 'LOGO' | 'BACKGROUND' = 'IMAGE',
     ) {
-        // In production, upload to S3 and get URL
-        // For now, simulate with local path
-        const url = `/uploads/${Date.now()}-${file.filename}`;
-        const thumbnailUrl = url; // In production, generate thumbnail
+        const uploaded = await this.storageService.upload({
+            originalname: file.filename,
+            mimetype: file.mimeType,
+            size: file.size,
+            buffer: file.buffer,
+        } as Express.Multer.File);
 
         const asset = await this.prisma.asset.create({
             data: {
                 type,
                 name: file.filename,
-                url,
-                thumbnailUrl,
+                url: uploaded.publicUrl,
+                thumbnailUrl: uploaded.publicUrl,
                 size: file.size,
                 mimeType: file.mimeType,
                 userId,
@@ -70,7 +72,9 @@ export class AssetsService {
             throw new NotFoundException('Asset not found');
         }
 
-        // In production, also delete from S3
+        if (asset.url.startsWith('/uploads/')) {
+            await this.storageService.delete(asset.url.slice('/uploads/'.length));
+        }
         await this.prisma.asset.delete({ where: { id } });
 
         return { success: true };

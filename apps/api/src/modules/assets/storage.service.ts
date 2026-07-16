@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { basename, dirname, join, resolve, sep } from 'path';
 
 export interface UploadResult {
     key: string;
@@ -17,12 +19,14 @@ export class StorageService {
     private bucket: string;
     private region: string;
     private useLocal: boolean;
+    private localDirectory: string;
 
     constructor(private configService: ConfigService) {
         const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
         const secretAccessKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY');
         this.bucket = this.configService.get<string>('S3_BUCKET') || 'jaslide-assets';
         this.region = this.configService.get<string>('AWS_REGION') || 'ap-northeast-2';
+        this.localDirectory = resolve(this.configService.get<string>('LOCAL_STORAGE_PATH') || join(process.cwd(), 'uploads'));
 
         // Use local storage if S3 credentials not available
         this.useLocal = !accessKeyId || !secretAccessKey;
@@ -42,7 +46,7 @@ export class StorageService {
         file: Express.Multer.File,
         folder: string = 'uploads',
     ): Promise<UploadResult> {
-        const key = `${folder}/${uuid()}-${file.originalname}`;
+        const key = `${folder}/${uuid()}-${basename(file.originalname)}`;
 
         if (this.useLocal) {
             // Local file storage fallback
@@ -75,8 +79,9 @@ export class StorageService {
     }
 
     private async uploadLocal(file: Express.Multer.File, key: string): Promise<UploadResult> {
-        // In production, this would save to local disk
-        // For now, return a placeholder URL
+        const destination = this.localPath(key);
+        await mkdir(dirname(destination), { recursive: true });
+        await writeFile(destination, file.buffer);
         const localUrl = `/uploads/${key}`;
 
         return {
@@ -101,7 +106,11 @@ export class StorageService {
 
     async delete(key: string): Promise<void> {
         if (this.useLocal) {
-            // Would delete from local storage
+            try {
+                await unlink(this.localPath(key));
+            } catch (error: any) {
+                if (error.code !== 'ENOENT') throw error;
+            }
             return;
         }
 
@@ -131,5 +140,13 @@ export class StorageService {
             this.logger.error('Failed to upload from URL', error);
             throw error;
         }
+    }
+
+    private localPath(key: string): string {
+        const destination = resolve(this.localDirectory, key);
+        if (!destination.startsWith(`${this.localDirectory}${sep}`)) {
+            throw new Error('Invalid storage key');
+        }
+        return destination;
     }
 }
