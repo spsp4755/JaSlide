@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AdminJobFilterDto } from '../dto';
+import { QueueService } from '../../queue/queue.service';
 
 @Injectable()
 export class AdminJobsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private queueService: QueueService,
+    ) { }
 
     async findAll(filter: AdminJobFilterDto) {
         const { page = 1, limit = 20, userId, status, startDate, endDate } = filter;
@@ -57,6 +61,7 @@ export class AdminJobsService {
             where: { id },
             data: { status: 'QUEUED', error: undefined, startedAt: null, completedAt: null },
         });
+        await this.queueService.addGenerationJob(id);
 
         return { success: true, message: 'Job queued for retry' };
     }
