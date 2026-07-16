@@ -143,6 +143,27 @@ def test_html_template_layout_positions_content_textboxes():
     assert shapes[1].text_frame.paragraphs[0].runs[0].font.size == Pt(22)
 
 
+def test_html_template_layout_styles_bullet_slide_titles():
+    template = SimpleNamespace(
+        config=SimpleNamespace(
+            htmlTemplate=(
+                '<h1 data-jaslide-slot="title" data-x="2" data-y="1" data-w="8" '
+                'data-h="1" data-font-size="26" data-align="right"></h1>'
+            )
+        )
+    )
+    pptx = PPTXGenerator(template).generate(
+        _presentation(_slide("BULLET_LIST", "Agenda", {"heading": "Agenda", "bullets": ["One"]}))
+    )
+
+    title = Presentation(BytesIO(pptx)).slides[0].shapes[0]
+    paragraph = title.text_frame.paragraphs[0]
+    assert title.left == Inches(2)
+    assert title.top == Inches(1)
+    assert paragraph.alignment == PP_ALIGN.RIGHT
+    assert paragraph.runs[0].font.size == Pt(26)
+
+
 def test_reusing_a_generator_does_not_accumulate_prior_slides():
     generator = PPTXGenerator()
     presentation = _presentation(_slide("TITLE", "One", {"heading": "One"}))

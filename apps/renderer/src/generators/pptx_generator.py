@@ -219,12 +219,12 @@ class PPTXGenerator:
         bullets = content.get("bullets", [])
 
         # Title
-        title_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(0.3), Inches(12.333), Inches(0.8)
-        )
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], 36, self.tokens["title_font"], bold=True)
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
 
         # Bullets
         self._add_bullets(slide, bullets, Inches(1.3), Inches(5.7))
@@ -271,12 +271,12 @@ class PPTXGenerator:
         bullets = content.get("bullets", [])
 
         # Title
-        title_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(0.3), Inches(12.333), Inches(0.8)
-        )
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], 36, self.tokens["title_font"], bold=True)
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
 
         # Split bullets into two columns
         mid = len(bullets) // 2
@@ -327,14 +327,15 @@ class PPTXGenerator:
         quote_text = content.get("body", content.get("heading", ""))
         
         # Quote text
-        quote_box = slide.shapes.add_textbox(
-            Inches(1.5), Inches(2.5), Inches(10.333), Inches(2)
-        )
+        body_layout = self._layout("body", {"x": 1.5, "y": 2.5, "w": 10.333, "h": 2, "fontSize": 32})
+        quote_box = self._add_layout_textbox(slide, body_layout)
         tf = quote_box.text_frame
         tf.word_wrap = True
         tf.paragraphs[0].text = f'"{quote_text}"'
-        self._style_paragraph(tf.paragraphs[0], 32, self.tokens["body_font"], italic=True)
-        tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        self._style_paragraph(tf.paragraphs[0], body_layout["fontSize"], self.tokens["body_font"], italic=True)
+        self._apply_alignment(tf.paragraphs[0], body_layout.get("align"))
+        if "align" not in body_layout:
+            tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
     def _add_section_header_slide(self, slide_data: Any):
         """Add section header slide"""
@@ -346,10 +347,11 @@ class PPTXGenerator:
         title = content.get("heading", slide_data.title or "")
 
         # Large centered title
-        title_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(3), Inches(12.333), Inches(1.5)
-        )
+        title_layout = self._layout("title", {"x": 0.5, "y": 3, "w": 12.333, "h": 1.5, "fontSize": 48})
+        title_box = self._add_layout_textbox(slide, title_layout)
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], 48, self.tokens["title_font"], bold=True)
-        tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        if "align" not in title_layout:
+            tf.paragraphs[0].alignment = PP_ALIGN.CENTER
