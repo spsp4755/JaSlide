@@ -17,10 +17,9 @@ export const isAdminRole = (role?: UserRole | string): boolean =>
 
 interface AuthState {
     user: User | null;
-    accessToken: string | null;
     isAuthenticated: boolean;
     hasHydrated: boolean;
-    setAuth: (user: User, token: string) => void;
+    setAuth: (user: User, token?: string) => void;
     clearAuth: () => void;
     updateCredits: (credits: number) => void;
     setHasHydrated: (state: boolean) => void;
@@ -30,16 +29,13 @@ export const useAuthStore = create<AuthState>()(
     persist(
         (set) => ({
             user: null,
-            accessToken: null,
             isAuthenticated: false,
             hasHydrated: false,
-            setAuth: (user, token) => {
-                localStorage.setItem('accessToken', token);
-                set({ user, accessToken: token, isAuthenticated: true });
+            setAuth: (user) => {
+                set({ user, isAuthenticated: true });
             },
             clearAuth: () => {
-                localStorage.removeItem('accessToken');
-                set({ user: null, accessToken: null, isAuthenticated: false });
+                set({ user: null, isAuthenticated: false });
             },
             updateCredits: (credits) =>
                 set((state) => ({
@@ -51,7 +47,6 @@ export const useAuthStore = create<AuthState>()(
             name: 'auth-storage',
             partialize: (state) => ({
                 user: state.user,
-                accessToken: state.accessToken,
                 isAuthenticated: state.isAuthenticated,
             }),
             onRehydrateStorage: () => (state) => {

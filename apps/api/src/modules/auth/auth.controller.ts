@@ -22,6 +22,21 @@ import { CurrentUser } from './decorators/current-user.decorator';
 export class AuthController {
     constructor(private authService: AuthService) { }
 
+    private readonly sessionCookieOptions = {
+        httpOnly: true,
+        sameSite: 'lax' as const,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+    };
+
+    private setSession(response: Response, accessToken: string) {
+        response.cookie('jaslide_session', accessToken, this.sessionCookieOptions);
+    }
+
+    private clearSession(response: Response) {
+        response.clearCookie('jaslide_session', this.sessionCookieOptions);
+    }
+
     @Post('register')
     @ApiOperation({ summary: 'Register a new user' })
     @ApiResponse({ status: 201, description: 'User registered successfully' })
@@ -35,8 +50,17 @@ export class AuthController {
     @ApiOperation({ summary: 'Login with email and password' })
     @ApiResponse({ status: 200, description: 'Login successful' })
     @ApiResponse({ status: 401, description: 'Invalid credentials' })
-    async login(@Body() dto: LoginDto): Promise<AuthResponse> {
-        return this.authService.login(dto);
+    async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response): Promise<AuthResponse> {
+        const result = await this.authService.login(dto);
+        this.setSession(response, result.accessToken);
+        return result;
+    }
+
+    @Post('logout')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @ApiOperation({ summary: 'Log out and clear the current session' })
+    logout(@Res({ passthrough: true }) response: Response) {
+        this.clearSession(response);
     }
 
     @Get('google')
@@ -58,9 +82,9 @@ export class AuthController {
             providerAccountId: req.user.id,
         });
 
-        // Redirect to frontend with token
+        this.setSession(res, result.accessToken);
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        res.redirect(`${frontendUrl}/auth/callback?token=${result.accessToken}`);
+        res.redirect(`${frontendUrl}/auth/callback`);
     }
 
     @Get('me')
