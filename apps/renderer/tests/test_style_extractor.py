@@ -10,6 +10,9 @@ from pptx.util import Inches
 from apps.renderer.src.services.style_extractor import extract_template_tokens
 
 
+KOREAN_TEXT = "한글 제목은 추출하면 안 됩니다"
+
+
 def _set_east_asian_font(run, typeface):
     r_pr = run._r.get_or_add_rPr()
     east_asian = OxmlElement("a:ea")
@@ -25,7 +28,7 @@ def _example_pptx():
 
     title = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(1))
     run = title.text_frame.paragraphs[0].add_run()
-    run.text = "한글 제목은 추출하면 안 됩니다"
+    run.text = KOREAN_TEXT
     run.font.name = "Fallback Font"
     _set_east_asian_font(run, "Noto Sans KR")
 
@@ -46,4 +49,17 @@ def test_extracts_only_deterministic_style_tokens_and_prefers_east_asian_font():
         "colors": {"background": "#112233", "primary": "#445566"},
         "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
     }
-    assert "한글 제목은 추출하면 안 됩니다" not in str(tokens)
+    assert KOREAN_TEXT not in str(tokens)
+
+
+def test_ignores_patterned_shape_fills():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(1), Inches(1))
+    shape.fill.patterned()
+    shape.fill.fore_color.rgb = RGBColor(0xAA, 0xBB, 0xCC)
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    assert extract_template_tokens(buffer.getvalue()) == {"colors": {}, "typography": {}}

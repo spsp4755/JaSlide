@@ -4,11 +4,12 @@ from collections import Counter
 from io import BytesIO
 
 from pptx import Presentation
+from pptx.enum.dml import MSO_FILL_TYPE
 from pptx.oxml.ns import qn
 
 
 def _solid_color(fill):
-    if fill.type is None:
+    if fill.type != MSO_FILL_TYPE.SOLID:
         return None
     try:
         value = str(fill.fore_color.rgb)
