@@ -1,5 +1,7 @@
 from io import BytesIO
 
+from fastapi.testclient import TestClient
+import pytest
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
@@ -8,6 +10,7 @@ from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches
 
 from apps.renderer.src.services.style_extractor import extract_template_tokens
+from apps.renderer.src.main import app
 
 
 KOREAN_TEXT = "한글 제목은 추출하면 안 됩니다"
@@ -63,3 +66,41 @@ def test_ignores_patterned_shape_fills():
     presentation.save(buffer)
 
     assert extract_template_tokens(buffer.getvalue()) == {"colors": {}, "typography": {}}
+
+
+def test_extract_style_upload_returns_only_config_tokens():
+    response = TestClient(app).post(
+        "/api/extract/style",
+        files={
+            "file": (
+                "example.pptx",
+                _example_pptx(),
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "config": {
+            "colors": {"background": "#112233", "primary": "#445566"},
+            "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type"),
+    [
+        ("example.txt", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+        ("example.pptx", "text/plain"),
+    ],
+)
+def test_extract_style_rejects_non_pptx_name_or_content(filename, content_type):
+    response = TestClient(app).post(
+        "/api/extract/style",
+        files={"file": (filename, _example_pptx(), content_type)},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "PPTX file required"}

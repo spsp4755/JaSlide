@@ -2,7 +2,7 @@
 JaSlide Renderer - PPTX/PDF generation service
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any
@@ -10,6 +10,7 @@ import io
 
 from .generators.pptx_generator import PPTXGenerator
 from .generators.pdf_exporter import PDFExporter
+from .services.style_extractor import extract_template_tokens
 
 app = FastAPI(
     title="JaSlide Renderer",
@@ -69,6 +70,21 @@ class PreviewRequest(BaseModel):
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "jaslide-renderer"}
+
+
+@app.post("/api/extract/style")
+async def extract_style(file: UploadFile = File(...)):
+    if (
+        not (file.filename or "").lower().endswith(".pptx")
+        or file.content_type
+        != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ):
+        raise HTTPException(status_code=400, detail="PPTX file required")
+    try:
+        config = extract_template_tokens(await file.read())
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
+    return {"config": config}
 
 
 @app.post("/api/render/pptx")
