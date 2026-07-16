@@ -4,6 +4,15 @@ import { LlmService } from './llm.service';
 import { PromptTemplateService } from './prompt-template.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
+const openAiConstructor = jest.fn();
+jest.mock('openai', () => ({
+    __esModule: true,
+    default: jest.fn().mockImplementation((config) => {
+        openAiConstructor(config);
+        return { chat: { completions: { create: jest.fn() } } };
+    }),
+}));
+
 const outline = {
     title: '신규 서비스 제안',
     slides: [
@@ -38,6 +47,47 @@ describe('LlmService contracts', () => {
         jest.spyOn(service as any, 'getOpenAIClient').mockResolvedValue({ client, model: 'internal-model' });
         return client.chat.completions.create;
     };
+
+    const createUnconfiguredService = async (config: Record<string, string>) => {
+        const module = await Test.createTestingModule({
+            providers: [
+                LlmService,
+                PromptTemplateService,
+                { provide: ConfigService, useValue: { get: (key: string) => config[key] } },
+                { provide: PrismaService, useValue: { llmModel: { findFirst: jest.fn().mockResolvedValue(null) } } },
+            ],
+        }).compile();
+        return module.get(LlmService);
+    };
+
+    beforeEach(() => openAiConstructor.mockClear());
+
+    it('uses the configured internal OpenAI-compatible endpoint when no database model is active', async () => {
+        const unconfiguredService = await createUnconfiguredService({
+            OPENAI_BASE_URL: 'https://llm.intranet.example/v1',
+            OPENAI_MODEL: 'company-model',
+            OPENAI_API_KEY: 'internal-placeholder',
+        });
+
+        await expect((unconfiguredService as any).getOpenAIClient()).resolves.toMatchObject({ model: 'company-model' });
+        expect(openAiConstructor).toHaveBeenCalledWith({
+            baseURL: 'https://llm.intranet.example/v1',
+            apiKey: 'internal-placeholder',
+        });
+    });
+
+    it('uses a placeholder key for an internal endpoint when OPENAI_API_KEY is omitted', async () => {
+        const unconfiguredService = await createUnconfiguredService({
+            OPENAI_BASE_URL: 'http://vllm.internal/v1',
+            OPENAI_MODEL: 'internal-model',
+        });
+
+        await expect((unconfiguredService as any).getOpenAIClient()).resolves.toMatchObject({ model: 'internal-model' });
+        expect(openAiConstructor).toHaveBeenCalledWith({
+            baseURL: 'http://vllm.internal/v1',
+            apiKey: 'not-needed',
+        });
+    });
 
     it('returns a valid Korean outline with exactly the requested slides', async () => {
         await createService([JSON.stringify(outline)]);

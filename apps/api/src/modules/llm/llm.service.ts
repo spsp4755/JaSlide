@@ -148,10 +148,15 @@ export class LlmService {
             }
         }
 
-        // Fallback to environment variable
+        // Fallback to environment variables. OPENAI_BASE_URL supports OpenAI-compatible
+        // internal endpoints when an administrator has not configured a DB model yet.
         const envApiKey = this.configService.get<string>('OPENAI_API_KEY');
-        if (envApiKey) {
-            this.cachedClient = new OpenAI({ apiKey: envApiKey });
+        const envBaseUrl = this.configService.get<string>('OPENAI_BASE_URL');
+        if (envApiKey || envBaseUrl) {
+            this.cachedClient = new OpenAI({
+                apiKey: envApiKey || 'not-needed',
+                ...(envBaseUrl ? { baseURL: envBaseUrl } : {}),
+            });
             this.cachedModel = this.configService.get<string>('OPENAI_MODEL') || 'gpt-4-turbo-preview';
             this.cacheExpiry = now + this.CACHE_TTL;
 
