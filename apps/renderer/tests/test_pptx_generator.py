@@ -2,6 +2,7 @@ from io import BytesIO
 from types import SimpleNamespace
 
 from pptx import Presentation
+from pptx.oxml.ns import qn
 
 from apps.renderer.src.generators.pptx_generator import PPTXGenerator
 
@@ -72,3 +73,24 @@ def test_two_column_slide_uses_the_shared_background_and_text_tokens():
     slide = Presentation(BytesIO(pptx)).slides[0]
     assert _rgb(slide.background.fill.fore_color) == "102030"
     assert {_rgb(run.font.color) for run in _runs(slide)} == {"DDEEFF"}
+
+
+def test_korean_runs_use_the_east_asian_font_slot():
+    pptx = PPTXGenerator().generate(
+        _presentation(_slide("CONTENT", "한글 제목", {"heading": "한글 제목", "body": "한글 본문"}))
+    )
+
+    slide = Presentation(BytesIO(pptx)).slides[0]
+    for run in _runs(slide):
+        assert run._r.rPr.find(qn("a:ea")).get("typeface") == "Noto Sans KR"
+
+
+def test_bare_template_hex_values_fall_back_to_default_tokens():
+    template = SimpleNamespace(config=SimpleNamespace(colors={"background": "123456", "text": "ABCDEF"}))
+    pptx = PPTXGenerator(template).generate(
+        _presentation(_slide("CONTENT", "제목", {"heading": "제목", "body": "본문"}))
+    )
+
+    slide = Presentation(BytesIO(pptx)).slides[0]
+    assert _rgb(slide.background.fill.fore_color) == "FFFFFF"
+    assert {_rgb(run.font.color) for run in _runs(slide)} == {"1E293B"}

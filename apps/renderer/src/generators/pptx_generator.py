@@ -6,6 +6,8 @@ from pptx import Presentation as PPTXPresentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
+from pptx.oxml.xmlchemy import OxmlElement
+from pptx.oxml.ns import qn
 from pptx.enum.shapes import MSO_SHAPE
 from io import BytesIO
 from typing import Optional, Any
@@ -44,10 +46,11 @@ class PPTXGenerator:
 
     @staticmethod
     def _rgb(value: Any, fallback: str) -> RGBColor:
-        value = value if isinstance(value, str) else fallback
-        value = value.removeprefix("#")
+        if not isinstance(value, str) or not value.startswith("#"):
+            value = fallback
+        value = value[1:]
         if len(value) != 6 or any(char not in "0123456789abcdefABCDEF" for char in value):
-            value = fallback.removeprefix("#")
+            value = fallback[1:]
         return RGBColor.from_string(value.upper())
 
     def _resolve_tokens(self, template: Any) -> dict:
@@ -71,6 +74,12 @@ class PPTXGenerator:
     ) -> None:
         for run in paragraph.runs:
             run.font.name = font
+            r_pr = run._r.get_or_add_rPr()
+            east_asian = r_pr.find(qn("a:ea"))
+            if east_asian is None:
+                east_asian = OxmlElement("a:ea")
+                r_pr.append(east_asian)
+            east_asian.set("typeface", font)
             run.font.size = Pt(size)
             run.font.bold = bold
             run.font.italic = italic
