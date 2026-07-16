@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Search, FileText, Trash2, Eye, Filter } from 'lucide-react';
 
@@ -31,13 +33,12 @@ export default function AdminDocumentsPage() {
     const fetchDocuments = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const params = new URLSearchParams({
                 page: String(page), limit: String(limit),
                 ...(search && { search }), ...(statusFilter && { status: statusFilter }),
             });
-            const res = await fetch(`${API_URL}/admin/documents?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/documents?${params}`, {
+                headers: { },
             });
             if (res.ok) {
                 const data = await res.json();
@@ -51,8 +52,7 @@ export default function AdminDocumentsPage() {
 
     const deleteDocument = async (id: string) => {
         if (!confirm('이 문서를 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/documents/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        await adminFetch(`${API_URL}/admin/documents/${id}`, { method: 'DELETE', headers: { } });
         fetchDocuments();
     };
 

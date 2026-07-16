@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { RefreshCw, Server, Database, Trash2, Play, StopCircle, CheckCircle, XCircle } from 'lucide-react';
 
@@ -32,12 +34,11 @@ export default function AdminOperationsPage() {
 
     const fetchData = async () => {
         try {
-            const token = localStorage.getItem('accessToken');
-            const headers = { Authorization: `Bearer ${token}` };
+            const headers = { };
 
             const [healthRes, queueRes] = await Promise.all([
-                fetch(`${API_URL}/admin/operations/health`, { headers }),
-                fetch(`${API_URL}/admin/operations/queue`, { headers }),
+                adminFetch(`${API_URL}/admin/operations/health`, { headers }),
+                adminFetch(`${API_URL}/admin/operations/queue`, { headers }),
             ]);
 
             if (healthRes.ok) setHealth(await healthRes.json());
@@ -48,10 +49,9 @@ export default function AdminOperationsPage() {
     };
 
     const clearCache = async (type: string) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/operations/cache/clear`, {
+        await adminFetch(`${API_URL}/admin/operations/cache/clear`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type }),
         });
         alert('캐시가 삭제되었습니다.');
@@ -59,10 +59,9 @@ export default function AdminOperationsPage() {
 
     const forceStopJobs = async () => {
         if (!confirm('처리 중인 모든 작업을 중지하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        const res = await fetch(`${API_URL}/admin/operations/jobs/force-stop`, {
+        const res = await adminFetch(`${API_URL}/admin/operations/jobs/force-stop`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { },
         });
         if (res.ok) {
             const data = await res.json();
@@ -73,10 +72,9 @@ export default function AdminOperationsPage() {
 
     const testModel = async () => {
         if (!testModelId) return;
-        const token = localStorage.getItem('accessToken');
-        const res = await fetch(`${API_URL}/admin/operations/model-test`, {
+        const res = await adminFetch(`${API_URL}/admin/operations/model-test`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ modelId: testModelId }),
         });
         if (res.ok) {

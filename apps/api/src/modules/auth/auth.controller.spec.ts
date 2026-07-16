@@ -6,6 +6,7 @@ import type { AuthService } from './auth.service';
 describe('AuthController', () => {
     const authService = {
         login: jest.fn(),
+        register: jest.fn(),
     } as unknown as jest.Mocked<AuthService>;
     const response = {
         cookie: jest.fn(),
@@ -31,7 +32,7 @@ describe('AuthController', () => {
     it('sets an HttpOnly session cookie after local login', async () => {
         authService.login.mockResolvedValue(loginResult);
 
-        await (controller as any).login(
+        const result = await (controller as any).login(
             { email: 'test@example.com', password: 'password123' },
             response,
         );
@@ -42,6 +43,24 @@ describe('AuthController', () => {
             secure: false,
             path: '/',
         });
+        expect(result).not.toHaveProperty('accessToken');
+    });
+
+    it('sets an HttpOnly session cookie after local registration', async () => {
+        authService.register.mockResolvedValue(loginResult);
+
+        const result = await (controller as any).register(
+            { email: 'test@example.com', password: 'password123', name: 'Test User' },
+            response,
+        );
+
+        expect(response.cookie).toHaveBeenCalledWith('jaslide_session', 'jwt-token', {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: false,
+            path: '/',
+        });
+        expect(result).not.toHaveProperty('accessToken');
     });
 
     it('clears the session cookie on logout', () => {

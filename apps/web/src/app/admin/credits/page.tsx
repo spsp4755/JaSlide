@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, CreditCard, DollarSign, Trash2, Edit, ToggleLeft, ToggleRight } from 'lucide-react';
 
@@ -47,18 +49,17 @@ export default function AdminCreditsPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
-            const headers = { Authorization: `Bearer ${token}` };
+            const headers = { };
 
             if (tab === 'policies') {
-                const res = await fetch(`${API_URL}/admin/credits/policies`, { headers });
+                const res = await adminFetch(`${API_URL}/admin/credits/policies`, { headers });
                 if (res.ok) setPolicies((await res.json()).data);
             } else {
-                const res = await fetch(`${API_URL}/admin/credits/plans`, { headers });
+                const res = await adminFetch(`${API_URL}/admin/credits/plans`, { headers });
                 if (res.ok) setPlans((await res.json()).data);
             }
 
-            const statsRes = await fetch(`${API_URL}/admin/credits/stats`, { headers });
+            const statsRes = await adminFetch(`${API_URL}/admin/credits/stats`, { headers });
             if (statsRes.ok) setStats(await statsRes.json());
         } finally {
             setLoading(false);
@@ -66,20 +67,18 @@ export default function AdminCreditsPage() {
     };
 
     const togglePolicy = async (id: string, isActive: boolean) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/credits/policies/${id}`, {
+        await adminFetch(`${API_URL}/admin/credits/policies/${id}`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isActive: !isActive }),
         });
         fetchData();
     };
 
     const togglePlan = async (id: string, isActive: boolean) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/credits/plans/${id}`, {
+        await adminFetch(`${API_URL}/admin/credits/plans/${id}`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isActive: !isActive }),
         });
         fetchData();

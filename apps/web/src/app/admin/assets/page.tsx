@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Search, Image, File, Video, Music, Trash2, Download, Filter } from 'lucide-react';
 
@@ -32,13 +34,12 @@ export default function AdminAssetsPage() {
     const fetchAssets = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const params = new URLSearchParams({
                 page: String(page), limit: String(limit),
                 ...(search && { search }), ...(typeFilter && { type: typeFilter }),
             });
-            const res = await fetch(`${API_URL}/admin/assets?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/assets?${params}`, {
+                headers: { },
             });
             if (res.ok) {
                 const data = await res.json();
@@ -52,8 +53,7 @@ export default function AdminAssetsPage() {
 
     const deleteAsset = async (id: string) => {
         if (!confirm('이 에셋을 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/assets/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        await adminFetch(`${API_URL}/admin/assets/${id}`, { method: 'DELETE', headers: { } });
         fetchAssets();
     };
 

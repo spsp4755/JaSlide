@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, MessageSquare, History, Play, Trash2, ChevronRight, X } from 'lucide-react';
 
@@ -36,8 +38,7 @@ export default function AdminPromptsPage() {
     const fetchPrompts = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
-            const res = await fetch(`${API_URL}/admin/prompts`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await adminFetch(`${API_URL}/admin/prompts`, { headers: { } });
             if (res.ok) setPrompts((await res.json()).data || []);
         } finally {
             setLoading(false);
@@ -45,8 +46,7 @@ export default function AdminPromptsPage() {
     };
 
     const selectPrompt = async (id: string) => {
-        const token = localStorage.getItem('accessToken');
-        const res = await fetch(`${API_URL}/admin/prompts/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await adminFetch(`${API_URL}/admin/prompts/${id}`, { headers: { } });
         if (res.ok) setSelectedPrompt(await res.json());
     };
 
@@ -58,7 +58,6 @@ export default function AdminPromptsPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
-        const token = localStorage.getItem('accessToken');
 
         const payload = {
             name: formData.name,
@@ -69,9 +68,9 @@ export default function AdminPromptsPage() {
         };
 
         try {
-            const res = await fetch(`${API_URL}/admin/prompts`, {
+            const res = await adminFetch(`${API_URL}/admin/prompts`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
             if (res.ok) {
@@ -85,18 +84,16 @@ export default function AdminPromptsPage() {
 
     const deletePrompt = async (id: string) => {
         if (!confirm('이 프롬프트를 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/prompts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        await adminFetch(`${API_URL}/admin/prompts/${id}`, { method: 'DELETE', headers: { } });
         setSelectedPrompt(null);
         fetchPrompts();
     };
 
     const testPrompt = async () => {
         if (!selectedPrompt) return;
-        const token = localStorage.getItem('accessToken');
-        const res = await fetch(`${API_URL}/admin/prompts/${selectedPrompt.id}/test`, {
+        const res = await adminFetch(`${API_URL}/admin/prompts/${selectedPrompt.id}/test`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(testInput),
         });
         if (res.ok) {
@@ -107,10 +104,9 @@ export default function AdminPromptsPage() {
 
     const rollbackVersion = async (version: number) => {
         if (!selectedPrompt) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/prompts/${selectedPrompt.id}/rollback/${version}`, {
+        await adminFetch(`${API_URL}/admin/prompts/${selectedPrompt.id}/rollback/${version}`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { },
         });
         selectPrompt(selectedPrompt.id);
     };

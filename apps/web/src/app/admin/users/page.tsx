@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, Search, Filter, MoreVertical, RefreshCw } from 'lucide-react';
 
@@ -35,7 +37,6 @@ export default function AdminUsersPage() {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const params = new URLSearchParams({
                 page: String(page),
                 limit: String(limit),
@@ -44,8 +45,8 @@ export default function AdminUsersPage() {
                 ...(statusFilter && { status: statusFilter }),
             });
 
-            const res = await fetch(`${API_URL}/admin/users?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/users?${params}`, {
+                headers: { },
             });
 
             if (res.ok) {

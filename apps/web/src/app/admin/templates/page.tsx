@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, FileText, Palette, Layout, ToggleLeft, ToggleRight, Trash2, Edit, Eye, X, Check, Loader2 } from 'lucide-react';
 
@@ -96,8 +98,7 @@ export default function AdminTemplatesPage() {
     };
 
     const getAuthHeaders = () => {
-        const token = localStorage.getItem('accessToken');
-        return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+        return { 'Content-Type': 'application/json' };
     };
 
     useEffect(() => {
@@ -109,13 +110,13 @@ export default function AdminTemplatesPage() {
         try {
             const headers = getAuthHeaders();
             if (tab === 'templates') {
-                const res = await fetch(`${API_URL}/admin/templates`, { headers });
+                const res = await adminFetch(`${API_URL}/admin/templates`, { headers });
                 if (res.ok) setTemplates((await res.json()).data || []);
             } else if (tab === 'palettes') {
-                const res = await fetch(`${API_URL}/admin/templates/palettes/list`, { headers });
+                const res = await adminFetch(`${API_URL}/admin/templates/palettes/list`, { headers });
                 if (res.ok) setPalettes((await res.json()).data || []);
             } else {
-                const res = await fetch(`${API_URL}/admin/templates/layouts/list`, { headers });
+                const res = await adminFetch(`${API_URL}/admin/templates/layouts/list`, { headers });
                 if (res.ok) setLayouts((await res.json()).data || []);
             }
         } catch (err) {
@@ -164,7 +165,7 @@ export default function AdminTemplatesPage() {
         try {
             const headers = getAuthHeaders();
             if (editingTemplate) {
-                const res = await fetch(`${API_URL}/admin/templates/${editingTemplate.id}`, {
+                const res = await adminFetch(`${API_URL}/admin/templates/${editingTemplate.id}`, {
                     method: 'PATCH',
                     headers,
                     body: JSON.stringify(templateForm)
@@ -172,7 +173,7 @@ export default function AdminTemplatesPage() {
                 if (!res.ok) throw new Error('Update failed');
                 showToast('템플릿이 수정되었습니다.');
             } else {
-                const res = await fetch(`${API_URL}/admin/templates`, {
+                const res = await adminFetch(`${API_URL}/admin/templates`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(templateForm)
@@ -191,7 +192,7 @@ export default function AdminTemplatesPage() {
 
     const handleDeleteTemplate = async (id: string) => {
         try {
-            const res = await fetch(`${API_URL}/admin/templates/${id}`, {
+            const res = await adminFetch(`${API_URL}/admin/templates/${id}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
@@ -206,7 +207,7 @@ export default function AdminTemplatesPage() {
 
     const handleToggleTemplatePublic = async (template: Template) => {
         try {
-            const res = await fetch(`${API_URL}/admin/templates/${template.id}`, {
+            const res = await adminFetch(`${API_URL}/admin/templates/${template.id}`, {
                 method: 'PATCH',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ isPublic: !template.isPublic })
@@ -244,7 +245,7 @@ export default function AdminTemplatesPage() {
                 // Note: Update endpoint may need to be added to backend
                 showToast('팔레트 수정 기능은 준비 중입니다.', 'error');
             } else {
-                const res = await fetch(`${API_URL}/admin/templates/palettes`, {
+                const res = await adminFetch(`${API_URL}/admin/templates/palettes`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(paletteForm)
@@ -263,7 +264,7 @@ export default function AdminTemplatesPage() {
 
     const handleDeletePalette = async (id: string) => {
         try {
-            const res = await fetch(`${API_URL}/admin/templates/palettes/${id}`, {
+            const res = await adminFetch(`${API_URL}/admin/templates/palettes/${id}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
@@ -301,7 +302,7 @@ export default function AdminTemplatesPage() {
                 // Note: Update endpoint may need to be added to backend
                 showToast('레이아웃 수정 기능은 준비 중입니다.', 'error');
             } else {
-                const res = await fetch(`${API_URL}/admin/templates/layouts`, {
+                const res = await adminFetch(`${API_URL}/admin/templates/layouts`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(layoutForm)
@@ -320,7 +321,7 @@ export default function AdminTemplatesPage() {
 
     const handleDeleteLayout = async (id: string) => {
         try {
-            const res = await fetch(`${API_URL}/admin/templates/layouts/${id}`, {
+            const res = await adminFetch(`${API_URL}/admin/templates/layouts/${id}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });

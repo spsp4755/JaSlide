@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, Search, Building2, MoreVertical, Users, RefreshCw } from 'lucide-react';
 
@@ -31,15 +33,14 @@ export default function AdminOrganizationsPage() {
     const fetchOrganizations = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const params = new URLSearchParams({
                 page: String(page),
                 limit: String(limit),
                 ...(search && { search }),
             });
 
-            const res = await fetch(`${API_URL}/admin/organizations?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/organizations?${params}`, {
+                headers: { },
             });
 
             if (res.ok) {

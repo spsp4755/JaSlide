@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import {
     Users,
@@ -47,13 +49,12 @@ export default function AdminDashboard() {
 
     const fetchDashboardData = async () => {
         try {
-            const token = localStorage.getItem('accessToken');
-            const headers = { Authorization: `Bearer ${token}` };
+            const headers = { };
 
             const [statsRes, activityRes, healthRes] = await Promise.all([
-                fetch(`${API_URL}/admin/dashboard/stats`, { headers }).catch(() => null),
-                fetch(`${API_URL}/admin/dashboard/activity`, { headers }).catch(() => null),
-                fetch(`${API_URL}/admin/dashboard/health`, { headers }).catch(() => null),
+                adminFetch(`${API_URL}/admin/dashboard/stats`, { headers }).catch(() => null),
+                adminFetch(`${API_URL}/admin/dashboard/activity`, { headers }).catch(() => null),
+                adminFetch(`${API_URL}/admin/dashboard/health`, { headers }).catch(() => null),
             ]);
 
             if (statsRes?.ok) {

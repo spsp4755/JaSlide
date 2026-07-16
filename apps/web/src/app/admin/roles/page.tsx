@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, Shield, Trash2, Edit, Users, CheckCircle } from 'lucide-react';
 
@@ -39,9 +41,8 @@ export default function AdminRolesPage() {
     const fetchRoles = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
-            const res = await fetch(`${API_URL}/admin/roles`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/roles`, {
+                headers: { },
             });
             if (res.ok) {
                 const data = await res.json();
@@ -66,13 +67,12 @@ export default function AdminRolesPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const token = localStorage.getItem('accessToken');
         const method = editingRole ? 'PATCH' : 'POST';
         const url = editingRole ? `${API_URL}/admin/roles/${editingRole.id}` : `${API_URL}/admin/roles`;
 
-        await fetch(url, {
+        await adminFetch(url, {
             method,
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData),
         });
 
@@ -82,10 +82,9 @@ export default function AdminRolesPage() {
 
     const deleteRole = async (id: string) => {
         if (!confirm('이 역할을 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/roles/${id}`, {
+        await adminFetch(`${API_URL}/admin/roles/${id}`, {
             method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { },
         });
         fetchRoles();
     };

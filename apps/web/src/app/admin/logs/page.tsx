@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Download, Filter, RefreshCw, FileText, Activity } from 'lucide-react';
 
@@ -44,12 +46,11 @@ export default function AdminLogsPage() {
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const params = new URLSearchParams({ page: String(page), limit: String(limit) });
             const endpoint = tab === 'audit' ? 'audit' : 'api';
 
-            const res = await fetch(`${API_URL}/admin/logs/${endpoint}?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/logs/${endpoint}?${params}`, {
+                headers: { },
             });
 
             if (res.ok) {
@@ -67,11 +68,10 @@ export default function AdminLogsPage() {
     };
 
     const exportLogs = async (format: 'json' | 'csv') => {
-        const token = localStorage.getItem('accessToken');
         const endpoint = tab === 'audit' ? 'audit' : 'api';
 
-        const res = await fetch(`${API_URL}/admin/logs/export/${endpoint}?format=${format}`, {
-            headers: { Authorization: `Bearer ${token}` },
+        const res = await adminFetch(`${API_URL}/admin/logs/export/${endpoint}?format=${format}`, {
+            headers: { },
         });
 
         if (res.ok) {

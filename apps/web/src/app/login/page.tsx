@@ -23,8 +23,8 @@ export default function LoginPage() {
 
         try {
             const response = await authApi.login({ email, password });
-            const { user, accessToken } = response.data;
-            setAuth(user, accessToken);
+            const { user } = response.data;
+            setAuth(user);
             // Role-based routing: admins go to /admin, users go to /dashboard
             if (isAdminRole(user.role)) {
                 router.push('/admin');

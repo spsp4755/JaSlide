@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, Bell, Trash2, Edit, ToggleLeft, ToggleRight } from 'lucide-react';
 
@@ -31,8 +33,7 @@ export default function AdminAlertsPage() {
     const fetchAlerts = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
-            const res = await fetch(`${API_URL}/admin/alerts`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await adminFetch(`${API_URL}/admin/alerts`, { headers: { } });
             if (res.ok) setAlerts((await res.json()).data);
         } finally {
             setLoading(false);
@@ -40,10 +41,9 @@ export default function AdminAlertsPage() {
     };
 
     const toggleAlert = async (id: string, isActive: boolean) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/alerts/${id}`, {
+        await adminFetch(`${API_URL}/admin/alerts/${id}`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isActive: !isActive }),
         });
         fetchAlerts();
@@ -51,20 +51,18 @@ export default function AdminAlertsPage() {
 
     const deleteAlert = async (id: string) => {
         if (!confirm('이 알림을 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/alerts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        await adminFetch(`${API_URL}/admin/alerts/${id}`, { method: 'DELETE', headers: { } });
         fetchAlerts();
     };
 
     const createAlert = async (e: React.FormEvent) => {
         e.preventDefault();
-        const token = localStorage.getItem('accessToken');
         let config = {};
         try { config = JSON.parse(formData.config); } catch { }
 
-        await fetch(`${API_URL}/admin/alerts`, {
+        await adminFetch(`${API_URL}/admin/alerts`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...formData, config }),
         });
         setShowModal(false);

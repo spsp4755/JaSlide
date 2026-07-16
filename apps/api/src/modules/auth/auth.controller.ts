@@ -37,12 +37,18 @@ export class AuthController {
         response.clearCookie('jaslide_session', this.sessionCookieOptions);
     }
 
+    private sessionResponse({ accessToken, ...response }: AuthResponse) {
+        return response;
+    }
+
     @Post('register')
     @ApiOperation({ summary: 'Register a new user' })
     @ApiResponse({ status: 201, description: 'User registered successfully' })
     @ApiResponse({ status: 409, description: 'User already exists' })
-    async register(@Body() dto: RegisterDto): Promise<AuthResponse> {
-        return this.authService.register(dto);
+    async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) response: Response) {
+        const result = await this.authService.register(dto);
+        this.setSession(response, result.accessToken);
+        return this.sessionResponse(result);
     }
 
     @Post('login')
@@ -50,10 +56,10 @@ export class AuthController {
     @ApiOperation({ summary: 'Login with email and password' })
     @ApiResponse({ status: 200, description: 'Login successful' })
     @ApiResponse({ status: 401, description: 'Invalid credentials' })
-    async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response): Promise<AuthResponse> {
+    async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response) {
         const result = await this.authService.login(dto);
         this.setSession(response, result.accessToken);
-        return result;
+        return this.sessionResponse(result);
     }
 
     @Post('logout')

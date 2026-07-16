@@ -36,8 +36,8 @@ export default function RegisterPage() {
 
         try {
             const response = await authApi.register({ email, password, name });
-            const { user, accessToken } = response.data;
-            setAuth(user, accessToken);
+            const { user } = response.data;
+            setAuth(user);
             router.push('/dashboard');
         } catch (err: any) {
             setError(err.response?.data?.message || '회원가입에 실패했습니다.');

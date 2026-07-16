@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, Settings, Trash2, Edit, Save } from 'lucide-react';
 
@@ -30,10 +32,9 @@ export default function AdminPoliciesPage() {
     const fetchPolicies = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const params = new URLSearchParams({ ...(categoryFilter && { category: categoryFilter }) });
-            const res = await fetch(`${API_URL}/admin/policies?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const res = await adminFetch(`${API_URL}/admin/policies?${params}`, {
+                headers: { },
             });
             if (res.ok) setPolicies((await res.json()).data);
         } finally {
@@ -47,13 +48,12 @@ export default function AdminPoliciesPage() {
     };
 
     const saveEdit = async (id: string) => {
-        const token = localStorage.getItem('accessToken');
         let value: any = editValue;
         try { value = JSON.parse(editValue); } catch { }
 
-        await fetch(`${API_URL}/admin/policies/${id}`, {
+        await adminFetch(`${API_URL}/admin/policies/${id}`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ value }),
         });
         setEditingId(null);
@@ -62,8 +62,7 @@ export default function AdminPoliciesPage() {
 
     const deletePolicy = async (id: string) => {
         if (!confirm('이 정책을 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/policies/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        await adminFetch(`${API_URL}/admin/policies/${id}`, { method: 'DELETE', headers: { } });
         fetchPolicies();
     };
 

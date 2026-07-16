@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { RefreshCw, Play, StopCircle, XCircle, Filter } from 'lucide-react';
 
@@ -38,8 +40,7 @@ export default function AdminJobsPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
-            const headers = { Authorization: `Bearer ${token}` };
+            const headers = { };
             const params = new URLSearchParams({
                 page: String(page),
                 limit: String(limit),
@@ -47,8 +48,8 @@ export default function AdminJobsPage() {
             });
 
             const [jobsRes, statsRes] = await Promise.all([
-                fetch(`${API_URL}/admin/jobs?${params}`, { headers }),
-                fetch(`${API_URL}/admin/jobs/stats`, { headers }),
+                adminFetch(`${API_URL}/admin/jobs?${params}`, { headers }),
+                adminFetch(`${API_URL}/admin/jobs/stats`, { headers }),
             ]);
 
             if (jobsRes.ok) {
@@ -66,19 +67,17 @@ export default function AdminJobsPage() {
     };
 
     const retryJob = async (id: string) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/jobs/${id}/retry`, {
+        await adminFetch(`${API_URL}/admin/jobs/${id}/retry`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { },
         });
         fetchData();
     };
 
     const cancelJob = async (id: string) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/jobs/${id}/cancel`, {
+        await adminFetch(`${API_URL}/admin/jobs/${id}/cancel`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { },
         });
         fetchData();
     };

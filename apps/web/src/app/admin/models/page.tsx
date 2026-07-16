@@ -1,5 +1,7 @@
 'use client';
 
+import { adminFetch } from '@/lib/admin-fetch';
+
 import { useEffect, useState } from 'react';
 import { Plus, Cpu, Trash2, Edit, Star, ToggleLeft, ToggleRight, RefreshCw, X } from 'lucide-react';
 
@@ -41,8 +43,7 @@ export default function AdminModelsPage() {
     const fetchModels = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
-            const res = await fetch(`${API_URL}/admin/models`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await adminFetch(`${API_URL}/admin/models`, { headers: { } });
             if (res.ok) setModels((await res.json()).data || []);
         } finally {
             setLoading(false);
@@ -74,7 +75,6 @@ export default function AdminModelsPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
-        const token = localStorage.getItem('accessToken');
 
         const payload = {
             ...formData,
@@ -83,15 +83,15 @@ export default function AdminModelsPage() {
 
         try {
             if (editingModel) {
-                await fetch(`${API_URL}/admin/models/${editingModel.id}`, {
+                await adminFetch(`${API_URL}/admin/models/${editingModel.id}`, {
                     method: 'PATCH',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
             } else {
-                await fetch(`${API_URL}/admin/models`, {
+                await adminFetch(`${API_URL}/admin/models`, {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
             }
@@ -103,19 +103,17 @@ export default function AdminModelsPage() {
     };
 
     const setDefault = async (id: string) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/models/${id}/set-default`, {
+        await adminFetch(`${API_URL}/admin/models/${id}/set-default`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { },
         });
         fetchModels();
     };
 
     const toggleActive = async (id: string, isActive: boolean) => {
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/models/${id}`, {
+        await adminFetch(`${API_URL}/admin/models/${id}`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isActive: !isActive }),
         });
         fetchModels();
@@ -123,8 +121,7 @@ export default function AdminModelsPage() {
 
     const deleteModel = async (id: string) => {
         if (!confirm('이 모델을 삭제하시겠습니까?')) return;
-        const token = localStorage.getItem('accessToken');
-        await fetch(`${API_URL}/admin/models/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        await adminFetch(`${API_URL}/admin/models/${id}`, { method: 'DELETE', headers: { } });
         fetchModels();
     };
 
