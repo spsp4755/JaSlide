@@ -1,0 +1,291 @@
+# JaSlide k8s 배포 매니페스트 (폐쇄망 + Harbor 레지스트리)
+#
+# 이미지 준비 (인터넷 되는 빌드 PC에서 — 상세는 docs/deployment.md 참고):
+#   docker build -f docker/api.Dockerfile      -t jaslide/api:0.1.0 .
+#   docker build -f docker/web.Dockerfile      -t jaslide/web:0.1.0 --build-arg NEXT_PUBLIC_API_URL=https://jaslide.internal/api .
+#   docker build -f docker/renderer.Dockerfile -t jaslide/renderer:0.1.0 .
+#   docker pull postgres:16-alpine && docker pull redis:7-alpine
+#   docker save <이미지> -o <파일>.tar   # 5개 모두 저장 후 반입
+#
+# 폐쇄망 반입 후 (podman이 있는 내부 PC에서):
+#   podman load -i jaslide-api-0.1.0.tar
+#   podman tag  jaslide/api:0.1.0  harbor.CHANGE_ME/jaslide/api:0.1.0
+#   podman push harbor.CHANGE_ME/jaslide/api:0.1.0
+#   (web, renderer, postgres:16-alpine, redis:7-alpine 동일하게 반복)
+#
+# 클러스터에서:
+#   kubectl create secret docker-registry harbor-regcred \
+#     --docker-server=harbor.CHANGE_ME --docker-username=CHANGE_ME --docker-password=CHANGE_ME
+#   kubectl apply -f jaslide-k8s.yaml
+#
+# 아래에서 CHANGE_ME 와 Ingress host 만 실제 값으로 바꾸면 됩니다.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jaslide-secrets
+type: Opaque
+stringData:
+  DATABASE_URL: postgresql://jaslide:CHANGE_ME@jaslide-db:5432/jaslide
+  POSTGRES_PASSWORD: CHANGE_ME
+  JWT_SECRET: CHANGE_ME_RANDOM_STRING
+  OPENAI_API_KEY: not-needed          # 사내 LLM이 키를 요구하면 변경
+  KEYCLOAK_CLIENT_SECRET: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaslide-config
+data:
+  REDIS_URL: redis://jaslide-redis:6379
+  RENDERER_URL: http://jaslide-renderer:8000
+  LOCAL_STORAGE_PATH: /app/apps/api/uploads
+  CORS_ORIGIN: https://jaslide.internal          # 브라우저 접속 URL
+  OPENAI_BASE_URL: http://CHANGE_ME:11434/v1     # 사내 Ollama/vLLM 엔드포인트
+  OPENAI_MODEL: CHANGE_ME                        # 예: qwen2.5:14b
+  KEYCLOAK_ISSUER: ""                            # 예: https://keycloak.internal/realms/company
+  KEYCLOAK_CLIENT_ID: jaslide
+  KEYCLOAK_REDIRECT_URI: ""                      # 예: https://jaslide.internal/api/auth/keycloak/callback
+  KEYCLOAK_ADMIN_ROLES: ""
+---
+# NestJS API (Prisma 마이그레이션은 컨테이너 시작 시 자동 적용)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaslide-api
+spec:
+  replicas: 1   # ponytail: uploads PVC가 RWO라 1로 고정. 스케일 필요 시 RWX 스토리지 또는 오브젝트 스토리지로 전환
+  selector:
+    matchLabels: { app: jaslide-api }
+  template:
+    metadata:
+      labels: { app: jaslide-api }
+    spec:
+      imagePullSecrets:
+        - name: harbor-regcred
+      containers:
+        - name: api
+          image: harbor.CHANGE_ME/jaslide/api:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 4000 }]
+          envFrom:
+            - secretRef: { name: jaslide-secrets }
+            - configMapRef: { name: jaslide-config }
+          readinessProbe:
+            httpGet: { path: /api/health/ready, port: 4000 }
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health/live, port: 4000 }
+            initialDelaySeconds: 30
+          volumeMounts:
+            - { name: uploads, mountPath: /app/apps/api/uploads }
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: uploads
+          persistentVolumeClaim: { claimName: jaslide-uploads }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaslide-uploads
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 10Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaslide-api
+spec:
+  selector: { app: jaslide-api }
+  ports: [{ port: 4000, targetPort: 4000 }]
+---
+# Next.js Web (NEXT_PUBLIC_API_URL 은 이미지 빌드 시 결정됨 — 브라우저 URL 변경 시 재빌드 필요)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaslide-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: jaslide-web }
+  template:
+    metadata:
+      labels: { app: jaslide-web }
+    spec:
+      imagePullSecrets:
+        - name: harbor-regcred
+      containers:
+        - name: web
+          image: harbor.CHANGE_ME/jaslide/web:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3000 }]
+          readinessProbe:
+            httpGet: { path: /login, port: 3000 }
+            initialDelaySeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaslide-web
+spec:
+  selector: { app: jaslide-web }
+  ports: [{ port: 3000, targetPort: 3000 }]
+---
+# Python Renderer (LibreOffice + Noto 폰트 포함, PPTX/PDF 변환)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaslide-renderer
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: jaslide-renderer }
+  template:
+    metadata:
+      labels: { app: jaslide-renderer }
+    spec:
+      imagePullSecrets:
+        - name: harbor-regcred
+      containers:
+        - name: renderer
+          image: harbor.CHANGE_ME/jaslide/renderer:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8000 }]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 2Gi }   # LibreOffice 변환 시 메모리 여유 필요
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaslide-renderer
+spec:
+  selector: { app: jaslide-renderer }
+  ports: [{ port: 8000, targetPort: 8000 }]
+---
+# Redis (생성 작업 큐)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaslide-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: jaslide-redis }
+  template:
+    metadata:
+      labels: { app: jaslide-redis }
+    spec:
+      imagePullSecrets:
+        - name: harbor-regcred
+      containers:
+        - name: redis
+          image: harbor.CHANGE_ME/jaslide/redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["--appendonly", "yes"]   # 재시작 시 큐 유실 방지
+          ports: [{ containerPort: 6379 }]
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: jaslide-redis-data }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaslide-redis-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaslide-redis
+spec:
+  selector: { app: jaslide-redis }
+  ports: [{ port: 6379 }]
+---
+# PostgreSQL (사내 공용 DB를 쓰면 이 아래 StatefulSet/Service 를 제거하고 Secret 의 DATABASE_URL 만 수정)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jaslide-db
+spec:
+  serviceName: jaslide-db
+  replicas: 1
+  selector:
+    matchLabels: { app: jaslide-db }
+  template:
+    metadata:
+      labels: { app: jaslide-db }
+    spec:
+      imagePullSecrets:
+        - name: harbor-regcred
+      containers:
+        - name: postgres
+          image: harbor.CHANGE_ME/jaslide/postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: POSTGRES_USER, value: jaslide }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: jaslide-secrets, key: POSTGRES_PASSWORD }
+            - { name: POSTGRES_DB, value: jaslide }
+          ports: [{ containerPort: 5432 }]
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "jaslide", "-d", "jaslide"]
+            initialDelaySeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 10Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaslide-db
+spec:
+  selector: { app: jaslide-db }
+  ports: [{ port: 5432 }]
+  clusterIP: None
+---
+# Ingress: /api, /uploads → API / 나머지 → Web
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaslide
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 100m   # PPTX 템플릿/파일 업로드 허용 크기
+spec:
+  rules:
+    - host: jaslide.internal   # 사내 도메인으로 변경 (web 이미지의 NEXT_PUBLIC_API_URL 과 일치해야 함)
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: { name: jaslide-api, port: { number: 4000 } }
+          - path: /uploads
+            pathType: Prefix
+            backend:
+              service: { name: jaslide-api, port: { number: 4000 } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: jaslide-web, port: { number: 3000 } }
