@@ -50,6 +50,10 @@ export class LlmService {
     private cachedModel: string | null = null;
     private cacheExpiry: number = 0;
     private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+    private readonly SLIDE_TYPES = new Set([
+        'TITLE', 'CONTENT', 'BULLET_LIST', 'TWO_COLUMN', 'IMAGE',
+        'CHART', 'QUOTE', 'COMPARISON', 'SECTION_HEADER',
+    ]);
 
     constructor(
         private configService: ConfigService,
@@ -165,26 +169,11 @@ export class LlmService {
         const prompt = this.promptTemplates.getOutlinePrompt(input);
 
         try {
-            const { client, model } = await this.getOpenAIClient();
-            const response = await client.chat.completions.create({
-                model,
-                messages: [
-                    {
-                        role: 'system',
-                        content: `You are a professional presentation consultant. Generate structured presentation outlines in JSON format. Always respond with valid JSON only, no additional text.`,
-                    },
-                    { role: 'user', content: prompt },
-                ],
-                temperature: 0.7,
-                response_format: { type: 'json_object' },
-            });
-
-            const content = response.choices[0]?.message?.content;
-            if (!content) {
-                throw new Error('No response from LLM');
-            }
-
-            return JSON.parse(content) as SlideOutline;
+            return await this.generateValidatedJson(
+                'You are a professional presentation consultant. Return valid JSON only.',
+                prompt,
+                (value) => this.validateOutline(value, input.slideCount),
+            );
         } catch (error) {
             this.logger.error('Failed to generate outline', error);
             throw error;
@@ -195,26 +184,11 @@ export class LlmService {
         const prompt = this.promptTemplates.getSlideContentPrompt(input);
 
         try {
-            const { client, model } = await this.getOpenAIClient();
-            const response = await client.chat.completions.create({
-                model,
-                messages: [
-                    {
-                        role: 'system',
-                        content: `You are a professional presentation content writer. Generate slide content in JSON format. Always respond with valid JSON only.`,
-                    },
-                    { role: 'user', content: prompt },
-                ],
-                temperature: 0.7,
-                response_format: { type: 'json_object' },
-            });
-
-            const content = response.choices[0]?.message?.content;
-            if (!content) {
-                throw new Error('No response from LLM');
-            }
-
-            return JSON.parse(content) as SlideContent;
+            return await this.generateValidatedJson(
+                'You are a professional presentation content writer. Return valid JSON only.',
+                prompt,
+                (value) => this.validateSlideContent(value),
+            );
         } catch (error) {
             this.logger.error('Failed to generate slide content', error);
             throw error;
@@ -285,5 +259,90 @@ Return JSON with "layout" field only.`;
             return 'ko';
         }
         return 'en';
+    }
+
+    private async generateValidatedJson<T>(
+        system: string,
+        prompt: string,
+        validate: (value: unknown) => T,
+    ): Promise<T> {
+        const { client, model } = await this.getOpenAIClient();
+        let responseText = '';
+        let error: unknown;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+                { role: 'system', content: system },
+                {
+                    role: 'user',
+                    content: attempt === 0
+                        ? prompt
+                        : `${prompt}\n\nThe previous response was invalid: ${responseText}\nValidation error: ${error instanceof Error ? error.message : 'invalid JSON'}. Return a corrected JSON object only.`,
+                },
+            ];
+            const response = await client.chat.completions.create({
+                model,
+                messages,
+                temperature: 0.7,
+                response_format: { type: 'json_object' },
+            });
+            responseText = response.choices[0]?.message?.content || '';
+
+            try {
+                if (!responseText) {
+                    throw new Error('No response from LLM');
+                }
+                return validate(JSON.parse(responseText));
+            } catch (caught) {
+                error = caught;
+            }
+        }
+
+        throw error instanceof Error ? error : new Error('Invalid LLM JSON response');
+    }
+
+    private validateOutline(value: unknown, slideCount: number): SlideOutline {
+        if (!this.isRecord(value) || !this.isText(value.title) || !Array.isArray(value.slides)) {
+            throw new Error('Outline must include a non-empty title and slides');
+        }
+        if (value.slides.length !== slideCount) {
+            throw new Error(`Outline expected ${slideCount} slides, received ${value.slides.length}`);
+        }
+
+        const slides = value.slides.map((slide, index) => {
+            if (!this.isRecord(slide) || slide.order !== index + 1 || !this.isText(slide.title)
+                || !this.isText(slide.type) || !this.SLIDE_TYPES.has(slide.type)
+                || !Array.isArray(slide.keyPoints) || slide.keyPoints.length < 2 || slide.keyPoints.length > 5
+                || !slide.keyPoints.every((point) => this.isText(point))) {
+                throw new Error(`Invalid outline slide at position ${index + 1}`);
+            }
+            return { order: slide.order, title: slide.title, type: slide.type, keyPoints: slide.keyPoints };
+        });
+        return { title: value.title, slides };
+    }
+
+    private validateSlideContent(value: unknown): SlideContent {
+        if (!this.isRecord(value) || !this.isText(value.heading)) {
+            throw new Error('Slide content requires a non-empty heading');
+        }
+        if (value.bullets !== undefined) {
+            if (!Array.isArray(value.bullets) || value.bullets.length > 5) {
+                throw new Error('Slide content allows at most five bullets');
+            }
+            for (const bullet of value.bullets) {
+                if (!this.isRecord(bullet) || !this.isText(bullet.text) || (bullet.level !== 0 && bullet.level !== 1)) {
+                    throw new Error('Invalid bullet level or text');
+                }
+            }
+        }
+        return value as SlideContent;
+    }
+
+    private isRecord(value: unknown): value is Record<string, unknown> {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    private isText(value: unknown): value is string {
+        return typeof value === 'string' && value.trim().length > 0;
     }
 }
