@@ -16,6 +16,12 @@ const googleStrategyProvider = process.env.GOOGLE_CLIENT_ID
     ? [require('./strategies/google.strategy').GoogleStrategy]
     : [];
 
+const requireJwtSecret = (configService: ConfigService) => {
+    const secret = configService.get<string>('JWT_SECRET')?.trim();
+    if (!secret) throw new Error('JWT_SECRET must be configured');
+    return secret;
+};
+
 @Module({
     imports: [
         UsersModule,
@@ -23,7 +29,7 @@ const googleStrategyProvider = process.env.GOOGLE_CLIENT_ID
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
-                secret: configService.get<string>('JWT_SECRET') || 'your-secret-key',
+                secret: requireJwtSecret(configService),
                 signOptions: {
                     expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '7d',
                 },

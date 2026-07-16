@@ -127,12 +127,13 @@ export class AuthController {
         }
         oidc.validateState(login.state, state);
         const identity = await oidc.completeAuthorizationCode(code, login.verifier, login.nonce);
-        const result = await this.authService.validateOAuthUser({
+        const result = await this.authService.loginWithKeycloak({
+            issuer: identity.iss as string,
+            subject: identity.sub,
             email: identity.email,
             name: identity.name,
             image: identity.picture,
-            provider: 'keycloak',
-            providerAccountId: identity.sub,
+            roles: identity.roles,
         });
 
         this.setSession(response, result.accessToken);

@@ -4,6 +4,12 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 
+const requireJwtSecret = (configService: ConfigService) => {
+    const secret = configService.get<string>('JWT_SECRET')?.trim();
+    if (!secret) throw new Error('JWT_SECRET must be configured');
+    return secret;
+};
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
     constructor(
@@ -17,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 ExtractJwt.fromAuthHeaderAsBearerToken(),
             ]),
             ignoreExpiration: false,
-            secretOrKey: configService.get<string>('JWT_SECRET') || 'your-secret-key',
+            secretOrKey: requireJwtSecret(configService),
         });
     }
 

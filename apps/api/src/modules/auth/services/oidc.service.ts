@@ -22,6 +22,7 @@ export interface KeycloakIdentity extends JWTPayload {
     email: string;
     name?: string;
     picture?: string;
+    roles: string[];
 }
 
 @Injectable()
@@ -100,7 +101,7 @@ export class OidcService {
                 throw new Error('Invalid Keycloak identity');
             }
 
-            return payload as KeycloakIdentity;
+            return { ...payload, sub: payload.sub, email: payload.email, roles: this.extractRoles(payload, config.clientId) } as KeycloakIdentity;
         } catch (error) {
             this.logger.warn('Keycloak authorization code was rejected');
             throw new UnauthorizedException('Failed to authenticate with Keycloak');
@@ -137,5 +138,19 @@ export class OidcService {
         } catch {
             throw new UnauthorizedException('Failed to connect to Keycloak');
         }
+    }
+
+    private extractRoles(payload: JWTPayload, clientId: string) {
+        const claims = payload as JWTPayload & {
+            realm_access?: { roles?: unknown };
+            resource_access?: Record<string, { roles?: unknown }>;
+        };
+        const roleList = (roles: unknown) => Array.isArray(roles)
+            ? roles.filter((role): role is string => typeof role === 'string')
+            : [];
+        return [...new Set([
+            ...roleList(claims.realm_access?.roles),
+            ...roleList(claims.resource_access?.[clientId]?.roles),
+        ])];
     }
 }

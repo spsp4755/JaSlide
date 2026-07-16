@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto, RegisterDto, AuthResponse } from './dto/auth.dto';
@@ -9,6 +10,7 @@ export class AuthService {
     constructor(
         private prisma: PrismaService,
         private jwtService: JwtService,
+        private configService: ConfigService,
     ) { }
 
     async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -201,6 +203,77 @@ export class AuthService {
             },
             accessToken: token,
         };
+    }
+
+    async loginWithKeycloak(profile: {
+        issuer: string;
+        subject: string;
+        email: string;
+        name?: string;
+        image?: string;
+        roles: string[];
+    }): Promise<AuthResponse> {
+        const provider = 'keycloak';
+        const providerAccountId = `${profile.issuer}|${profile.subject}`;
+        const linkedAccount = await this.prisma.account.findUnique({
+            where: { provider_providerAccountId: { provider, providerAccountId } },
+            include: { user: true },
+        });
+
+        let user: any;
+        if (linkedAccount) {
+            user = linkedAccount.user;
+            if (!user || user.email !== profile.email) {
+                throw new UnauthorizedException('Invalid Keycloak account');
+            }
+        } else {
+            user = await this.prisma.user.findUnique({ where: { email: profile.email } });
+            if (user) {
+                await this.prisma.account.create({
+                    data: { userId: user.id, type: 'oauth', provider, providerAccountId },
+                });
+            } else {
+                user = await this.prisma.user.create({
+                    data: {
+                        email: profile.email,
+                        name: profile.name,
+                        image: profile.image,
+                        creditsRemaining: 100,
+                        role: this.keycloakRole(profile.roles),
+                        accounts: {
+                            create: { type: 'oauth', provider, providerAccountId },
+                        },
+                    },
+                });
+            }
+        }
+
+        if (
+            user.status === 'SUSPENDED'
+            || user.status === 'INACTIVE'
+            || (user.lockedUntil && user.lockedUntil > new Date())
+        ) {
+            throw new UnauthorizedException('Account is unavailable');
+        }
+
+        return {
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                creditsRemaining: user.creditsRemaining,
+                role: user.role,
+            },
+            accessToken: this.generateToken(user.id, user.email),
+        };
+    }
+
+    private keycloakRole(roles: string[]) {
+        const adminRoles = (this.configService.get<string>('KEYCLOAK_ADMIN_ROLES') || '')
+            .split(',')
+            .map((role) => role.trim())
+            .filter(Boolean);
+        return roles.some((role) => adminRoles.includes(role)) ? 'ADMIN' : 'USER';
     }
 
     private generateToken(userId: string, email: string): string {
