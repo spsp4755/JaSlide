@@ -1,6 +1,7 @@
 'use client';
 
 import { adminFetch } from '@/lib/admin-fetch';
+import { assetUrl } from '@/lib/api';
 
 import { useEffect, useState } from 'react';
 import { Search, Image, File, Video, Music, Trash2, Download, Filter } from 'lucide-react';
@@ -102,12 +103,12 @@ export default function AdminAssetsPage() {
                             <div key={asset.id} className="bg-white rounded-lg shadow-sm overflow-hidden group">
                                 <div className="h-24 bg-gray-100 flex items-center justify-center relative">
                                     {asset.type === 'IMAGE' ? (
-                                        <img src={asset.url} alt={asset.name} className="h-full w-full object-cover" />
+                                        <img src={assetUrl(asset.url)} alt={asset.name} className="h-full w-full object-cover" />
                                     ) : (
                                         <Icon size={32} className="text-gray-400" />
                                     )}
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <a href={asset.url} target="_blank" className="p-2 bg-white rounded-full"><Download size={16} /></a>
+                                        <a href={assetUrl(asset.url)} target="_blank" className="p-2 bg-white rounded-full"><Download size={16} /></a>
                                         <button onClick={() => deleteAsset(asset.id)} className="p-2 bg-white rounded-full"><Trash2 size={16} className="text-red-500" /></button>
                                     </div>
                                 </div>

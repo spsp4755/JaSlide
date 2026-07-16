@@ -1,7 +1,14 @@
 import axios from 'axios';
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+
+export const assetUrl = (url: string) => {
+    if (!url.startsWith('/') || !apiBaseUrl.startsWith('http')) return url;
+    return `${apiBaseUrl.replace(/\/api\/?$/, '')}${url}`;
+};
+
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
+    baseURL: apiBaseUrl,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -108,15 +115,26 @@ export const exportApi = {
 
 // Assets
 export const assetsApi = {
-    upload: (file: File, type = 'IMAGE') => {
+    upload: async (file: File, type = 'IMAGE') => {
         const formData = new FormData();
         formData.append('file', file);
-        return api.post('/assets/upload', formData, {
+        const response = await api.post('/assets/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             params: { type },
         });
+        response.data.url = assetUrl(response.data.url);
+        response.data.thumbnailUrl = assetUrl(response.data.thumbnailUrl);
+        return response;
     },
-    list: (type?: string) => api.get('/assets', { params: { type } }),
+    list: async (type?: string) => {
+        const response = await api.get('/assets', { params: { type } });
+        response.data = response.data.map((asset: any) => ({
+            ...asset,
+            url: assetUrl(asset.url),
+            thumbnailUrl: assetUrl(asset.thumbnailUrl),
+        }));
+        return response;
+    },
     delete: (id: string) => api.delete(`/assets/${id}`),
     searchStock: (query: string) =>
         api.get('/assets/stock', { params: { q: query } }),
