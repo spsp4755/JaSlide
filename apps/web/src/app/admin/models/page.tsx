@@ -130,10 +130,10 @@ export default function AdminModelsPage() {
             });
             const result = await response.json();
             alert(result.success
-                ? `Model endpoint is reachable (${result.responseTime}ms)`
-                : `Model test failed: ${result.error || 'Unknown error'}`);
+                ? `모델 엔드포인트에 연결되었습니다 (${result.responseTime}ms)`
+                : `모델 연결 테스트 실패: ${result.error || '알 수 없는 오류'}`);
         } catch {
-            alert('Model test failed: Admin API is unreachable');
+            alert('모델 연결 테스트 실패: 관리자 API에 연결할 수 없습니다');
         } finally {
             setTestingModelId(null);
         }
@@ -228,7 +228,7 @@ export default function AdminModelsPage() {
                                     </button>
                                 )}
                                 <button onClick={() => testModel(model.id)} disabled={testingModelId === model.id} className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 disabled:opacity-50">
-                                    {testingModelId === model.id ? 'Testing...' : 'Test'}
+                                    {testingModelId === model.id ? '연결 확인 중...' : '연결 테스트'}
                                 </button>
                                 <button onClick={() => openEditModal(model)} className="p-2 hover:bg-gray-100 rounded-lg"><Edit size={16} className="text-gray-500" /></button>
                                 <button onClick={() => deleteModel(model.id)} className="p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} className="text-red-500" /></button>
