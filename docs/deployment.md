@@ -9,7 +9,7 @@ docker compose --env-file .env build
 docker compose --env-file .env up -d
 ```
 
-The Compose file intentionally mounts only PostgreSQL and Redis data volumes; application source is not mounted into production containers.
+The Compose file mounts PostgreSQL, Redis, and local uploaded assets as named volumes; application source is not mounted into production containers.
 The API applies committed Prisma migrations before it starts.
 
 Check readiness:
@@ -20,3 +20,5 @@ Invoke-WebRequest http://localhost:4000/api/health
 ```
 
 The renderer image includes LibreOffice and Korean Noto font fallback for PPTX-to-PDF conversion. Client devices still need the selected font installed to edit PPTX files with identical typography.
+
+After the first login, register the internal model in **Admin > Models** and run the connection test. Import example PPTX files in **Admin > Templates** before assigning them to generated presentations.

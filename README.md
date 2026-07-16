@@ -1,63 +1,43 @@
-# JaSlide - AI 기반 프레젠테이션 자동 생성 시스템
+# JaSlide
 
-AI 기반 프레젠테이션 자동 생성 시스템으로, 주제 또는 문서를 입력받아 자동으로 슬라이드를 생성하고, 실시간 편집 및 다양한 포맷으로 내보내기를 지원합니다.
+폐쇄망에서 운영할 수 있는 AI 프레젠테이션 생성 서비스입니다. 사내 OpenAI 호환 LLM, Ollama, vLLM을 사용해 내용을 만들고 HTML 레이아웃 템플릿을 적용한 PPTX/PDF를 내보냅니다.
 
 ## 주요 기능
 
-- 📝 **입력 처리**: 텍스트, DOCX, PDF, Markdown, CSV 등 다양한 입력 지원
-- 🤖 **AI 생성**: LLM 기반 자동 목차 생성 및 슬라이드 콘텐츠 구조화
-- 🎨 **디자인 엔진**: 자동 레이아웃, 템플릿, 컬러 팔레트 적용
-- ✏️ **실시간 편집**: 자연어 기반 슬라이드 편집
-- 📤 **내보내기**: PPTX, PDF, Google Slides 지원
+- 로컬 계정 로그인과 Keycloak SSO, 관리자 역할
+- PostgreSQL 사용자·발표·템플릿 관리 및 Redis 기반 생성 작업 큐
+- 사내 OpenAI 호환 LLM/Ollama/vLLM 모델 등록과 연결 테스트
+- 예시 PPTX에서 색상, 한글 글꼴, 텍스트 위치·크기·정렬 추출
+- 한국어 Noto 폰트가 포함된 PPTX/PDF/미리보기 렌더링
+- 로컬 업로드 자산의 영속 저장과 Docker 볼륨 운영
 
-## 기술 스택
+## 빠른 시작
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: NestJS, Prisma, PostgreSQL, Redis
-- **Renderer**: Python, python-pptx, FastAPI
-- **Infra**: Docker, AWS, BullMQ
-
-## 프로젝트 구조
-
-```
-jaslide/
-├── apps/
-│   ├── web/          # Next.js 프론트엔드
-│   ├── api/          # NestJS 백엔드
-│   └── renderer/     # Python PPTX 렌더러
-├── packages/
-│   ├── shared/       # 공유 타입/유틸리티
-│   ├── ui/           # 공유 UI 컴포넌트
-│   └── config/       # 공유 설정
-└── docker/           # Docker 설정
+```powershell
+Copy-Item .env.example .env
+# .env의 POSTGRES_PASSWORD, JWT_SECRET, OPENAI_BASE_URL, OPENAI_MODEL을 설정
+docker compose --env-file .env build
+docker compose --env-file .env up -d
 ```
 
-## 시작하기
+웹은 `http://localhost:3000`, API 상태 확인은 `http://localhost:4000/api/health`입니다.
 
-### 필수 요구사항
+## 사내 LLM 설정
 
-- Node.js >= 18.0.0
-- pnpm >= 8.0.0
-- Python >= 3.10
-- PostgreSQL >= 14
-- Redis >= 7
+관리자 화면에서 모델을 등록한 뒤 **연결 테스트**를 실행합니다.
 
-### 설치
+- Ollama: `http://<host>:11434/v1`
+- vLLM/OpenAI 호환 서버: `http://<host>:8000/v1`
+- 모델 ID는 사내 서버에 배포된 모델 이름을 입력합니다.
 
-```bash
-# 의존성 설치
-pnpm install
+DB 모델을 등록하지 않는 단일 서버 구성은 `.env`의 `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY`만으로도 동작합니다.
 
-# 환경 변수 설정
-cp .env.example .env.local
+## 예시 PPTX 템플릿
 
-# 데이터베이스 마이그레이션
-pnpm db:migrate
+관리자 템플릿 화면에서 PPTX를 가져오면 텍스트·이미지는 저장하지 않고 시각 토큰과 레이아웃만 추출합니다. 이후 생성된 발표에 해당 템플릿을 선택하면 PPTX/PDF 출력에 적용됩니다.
 
-# 개발 서버 시작
-pnpm dev
-```
+## 인증
 
-## 라이선스
+기본은 자체 DB 계정입니다. Keycloak을 함께 쓰려면 `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_REDIRECT_URI`를 설정합니다. Keycloak 관리자 역할은 `KEYCLOAK_ADMIN_ROLES`에 지정합니다.
 
-MIT License
+상세 배포 절차는 [docs/deployment.md](docs/deployment.md)를 참고하세요.
