@@ -1,0 +1,33 @@
+import { ServiceUnavailableException } from '@nestjs/common';
+import axios from 'axios';
+import { ExportService } from './export.service';
+
+describe('ExportService', () => {
+    const presentation = {
+        id: 'presentation-1',
+        title: 'Quarterly review',
+        slides: [],
+        template: null,
+    };
+    let service: ExportService;
+    let prisma: { presentation: { findFirst: jest.Mock } };
+
+    beforeEach(() => {
+        prisma = { presentation: { findFirst: jest.fn().mockResolvedValue(presentation) } };
+        service = new ExportService(
+            prisma as any,
+            { get: jest.fn().mockReturnValue('http://renderer.internal') } as any,
+        );
+    });
+
+    it.each([
+        ['PPTX', 'exportToPptx'],
+        ['PDF', 'exportToPdf'],
+    ] as const)('fails %s export when the renderer is unavailable', async (_format, method) => {
+        jest.spyOn(axios, 'post').mockRejectedValueOnce(new Error('connection refused'));
+
+        await expect(service[method]('presentation-1', 'user-1')).rejects.toThrow(
+            ServiceUnavailableException,
+        );
+    });
+});

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as path from 'path';
@@ -49,9 +49,8 @@ export class ExportService {
                 filename: `${presentation.title}.pptx`,
                 mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             };
-        } catch (error) {
-            // Fallback to native pptxgenjs
-            return this.generatePptxNative(presentation);
+        } catch {
+            throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
     }
 
@@ -168,9 +167,8 @@ export class ExportService {
                 filename: `${presentation.title}.pdf`,
                 mimeType: 'application/pdf',
             };
-        } catch (error) {
-            // Fallback to native pdfkit
-            return this.generatePdfNative(presentation);
+        } catch {
+            throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
     }
 

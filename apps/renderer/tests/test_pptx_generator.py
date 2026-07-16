@@ -94,3 +94,25 @@ def test_bare_template_hex_values_fall_back_to_default_tokens():
     slide = Presentation(BytesIO(pptx)).slides[0]
     assert _rgb(slide.background.fill.fore_color) == "FFFFFF"
     assert {_rgb(run.font.color) for run in _runs(slide)} == {"1E293B"}
+
+
+def test_bullets_preserve_their_text_without_prefix_artifacts():
+    pptx = PPTXGenerator().generate(
+        _presentation(
+            _slide(
+                "BULLET_LIST",
+                "Agenda",
+                {"heading": "Agenda", "bullets": [{"text": "First item", "level": 0}]},
+            )
+        )
+    )
+
+    slide = Presentation(BytesIO(pptx)).slides[0]
+    paragraphs = [
+        paragraph.text
+        for shape in slide.shapes
+        if shape.has_text_frame
+        for paragraph in shape.text_frame.paragraphs
+    ]
+
+    assert "\u2022 First item" in paragraphs
