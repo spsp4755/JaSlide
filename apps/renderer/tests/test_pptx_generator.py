@@ -141,3 +141,13 @@ def test_html_template_layout_positions_content_textboxes():
     assert shapes[0].text_frame.paragraphs[0].alignment == PP_ALIGN.CENTER
     assert shapes[1].top == Inches(2)
     assert shapes[1].text_frame.paragraphs[0].runs[0].font.size == Pt(22)
+
+
+def test_reusing_a_generator_does_not_accumulate_prior_slides():
+    generator = PPTXGenerator()
+    presentation = _presentation(_slide("TITLE", "One", {"heading": "One"}))
+
+    generator.generate(presentation)
+    second_output = generator.generate(presentation)
+
+    assert len(Presentation(BytesIO(second_output)).slides) == 1

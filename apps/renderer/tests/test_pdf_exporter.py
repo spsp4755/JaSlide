@@ -52,8 +52,10 @@ def test_render_pdf_returns_error_when_conversion_fails(monkeypatch):
 
 
 def test_render_preview_returns_rasterized_pptx_output(monkeypatch):
+    requested_indexes = []
     monkeypatch.setattr(
-        "apps.renderer.src.main.PPTXGenerator.generate", lambda _self, _presentation: b"pptx"
+        "apps.renderer.src.main.PPTXGenerator.generate",
+        lambda _self, _presentation, *indexes: requested_indexes.extend(indexes) or b"pptx",
     )
     monkeypatch.setattr(
         PDFExporter,
@@ -67,13 +69,16 @@ def test_render_preview_returns_rasterized_pptx_output(monkeypatch):
         json={
             "presentation": {
                 "id": "presentation-1",
-                "title": "Preview check",
-                "slides": [
-                    {"id": "slide-1", "order": 0, "type": "TITLE", "content": {}}
+                    "title": "Preview check",
+                    "slides": [
+                        {"id": "slide-1", "order": 0, "type": "TITLE", "content": {}},
+                        {"id": "slide-2", "order": 1, "type": "CONTENT", "content": {}},
                 ],
-            }
+            },
+            "slideIndex": 1,
         },
     )
 
     assert response.status_code == 200
     assert response.content == b"\x89PNG\r\n\x1a\npreview"
+    assert requested_indexes == [1]

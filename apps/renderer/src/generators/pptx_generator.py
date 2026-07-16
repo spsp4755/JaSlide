@@ -34,6 +34,9 @@ class PPTXGenerator:
         self.tokens = self._resolve_tokens(template_config)
         config = self._as_dict(getattr(template_config, "config", template_config))
         self.html_layout = parse_html_layout(config.get("htmlTemplate", ""))
+        self._reset_presentation()
+
+    def _reset_presentation(self) -> None:
         self.prs = PPTXPresentation()
         self.prs.slide_width = self.SLIDE_WIDTH
         self.prs.slide_height = self.SLIDE_HEIGHT
@@ -102,9 +105,15 @@ class PPTXGenerator:
             run.font.italic = italic
             run.font.color.rgb = self.tokens["text"]
 
-    def generate(self, presentation: Any) -> bytes:
+    def generate(self, presentation: Any, slide_index: Optional[int] = None) -> bytes:
         """Generate PPTX from presentation data"""
-        for slide_data in presentation.slides:
+        self._reset_presentation()
+        slides = presentation.slides
+        if slide_index is not None:
+            if slide_index < 0 or slide_index >= len(slides):
+                raise ValueError("Slide index is out of range")
+            slides = [slides[slide_index]]
+        for slide_data in slides:
             self._add_slide(slide_data)
 
         # Save to buffer

@@ -154,7 +154,7 @@ async def render_preview(request: PreviewRequest):
     """Generate preview image for a specific slide"""
     try:
         generator = PPTXGenerator(template_config=request.presentation.template)
-        pptx_buffer = generator.generate(request.presentation)
+        pptx_buffer = generator.generate(request.presentation, request.slideIndex)
         preview_buffer = PDFExporter().convert_pptx_to_preview(pptx_buffer)
 
         return StreamingResponse(
