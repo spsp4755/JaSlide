@@ -47,6 +47,7 @@ export default function HomePage() {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+    const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
     // Generation state
     const [jobId, setJobId] = useState<string | null>(null);
@@ -368,6 +369,23 @@ export default function HomePage() {
                 {/* Template gallery */}
                 <section>
                     <h2 className="text-xl font-bold text-gray-900 mb-4">템플릿</h2>
+                    {templates.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {[null, ...Array.from(new Set(templates.map((t) => t.category)))].map((cat) => (
+                                <button
+                                    key={cat ?? 'all'}
+                                    onClick={() => setCategoryFilter(cat)}
+                                    className={`px-3 py-1 rounded-full text-sm border ${
+                                        categoryFilter === cat
+                                            ? 'bg-gray-900 text-white border-gray-900'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                                    }`}
+                                >
+                                    {cat ?? '전체'}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     {loadingTemplates ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
@@ -376,7 +394,9 @@ export default function HomePage() {
                         <p className="text-sm text-gray-500 text-center py-8">사용 가능한 템플릿이 없습니다.</p>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {templates.map((template) => (
+                            {templates
+                                .filter((t) => !categoryFilter || t.category === categoryFilter)
+                                .map((template) => (
                                 <button
                                     key={template.id}
                                     type="button"
