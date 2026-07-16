@@ -5,7 +5,7 @@ PPTX Generator - Creates PowerPoint presentations using python-pptx
 from pptx import Presentation as PPTXPresentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from io import BytesIO
 from typing import Optional, Any
@@ -24,12 +24,57 @@ class PPTXGenerator:
     MARGIN_LEFT = Inches(0.5)
     MARGIN_RIGHT = Inches(0.5)
     MARGIN_BOTTOM = Inches(0.5)
+    DEFAULT_COLORS = {"background": "#FFFFFF", "text": "#1E293B"}
+    DEFAULT_FONT = "Noto Sans KR"
 
     def __init__(self, template_config: Optional[Any] = None):
         self.template_config = template_config
+        self.tokens = self._resolve_tokens(template_config)
         self.prs = PPTXPresentation()
         self.prs.slide_width = self.SLIDE_WIDTH
         self.prs.slide_height = self.SLIDE_HEIGHT
+
+    @staticmethod
+    def _as_dict(value: Any) -> dict:
+        if isinstance(value, dict):
+            return value
+        if hasattr(value, "model_dump"):
+            return value.model_dump(exclude_none=True)
+        return vars(value) if value is not None else {}
+
+    @staticmethod
+    def _rgb(value: Any, fallback: str) -> RGBColor:
+        value = value if isinstance(value, str) else fallback
+        value = value.removeprefix("#")
+        if len(value) != 6 or any(char not in "0123456789abcdefABCDEF" for char in value):
+            value = fallback.removeprefix("#")
+        return RGBColor.from_string(value.upper())
+
+    def _resolve_tokens(self, template: Any) -> dict:
+        config = self._as_dict(getattr(template, "config", template))
+        colors = self._as_dict(config.get("colors"))
+        typography = self._as_dict(config.get("typography"))
+        return {
+            "background": self._rgb(colors.get("background"), self.DEFAULT_COLORS["background"]),
+            "text": self._rgb(colors.get("text"), self.DEFAULT_COLORS["text"]),
+            "title_font": typography.get("titleFont") or self.DEFAULT_FONT,
+            "body_font": typography.get("bodyFont") or self.DEFAULT_FONT,
+        }
+
+    def _apply_background(self, slide: Any) -> None:
+        fill = slide.background.fill
+        fill.solid()
+        fill.fore_color.rgb = self.tokens["background"]
+
+    def _style_paragraph(
+        self, paragraph: Any, size: int, font: str, bold: bool = False, italic: bool = False
+    ) -> None:
+        for run in paragraph.runs:
+            run.font.name = font
+            run.font.size = Pt(size)
+            run.font.bold = bold
+            run.font.italic = italic
+            run.font.color.rgb = self.tokens["text"]
 
     def generate(self, presentation: Any) -> bytes:
         """Generate PPTX from presentation data"""
@@ -79,6 +124,7 @@ class PPTXGenerator:
         """Add title slide"""
         blank_layout = self.prs.slide_layouts[6]  # Blank layout
         slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
 
         content = slide_data.content
         title = content.get("heading", slide_data.title or "")
@@ -90,8 +136,7 @@ class PPTXGenerator:
         )
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        tf.paragraphs[0].font.size = Pt(54)
-        tf.paragraphs[0].font.bold = True
+        self._style_paragraph(tf.paragraphs[0], 54, self.tokens["title_font"], bold=True)
         tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
         # Subtitle
@@ -101,13 +146,14 @@ class PPTXGenerator:
             )
             tf = sub_box.text_frame
             tf.paragraphs[0].text = subtitle
-            tf.paragraphs[0].font.size = Pt(24)
+            self._style_paragraph(tf.paragraphs[0], 24, self.tokens["body_font"])
             tf.paragraphs[0].alignment = PP_ALIGN.CENTER  
 
     def _add_content_slide(self, slide_data: Any):
         """Add content slide with title and body"""
         blank_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
 
         content = slide_data.content
         title = content.get("heading", slide_data.title or "")
@@ -120,8 +166,7 @@ class PPTXGenerator:
         )
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        tf.paragraphs[0].font.size = Pt(36)
-        tf.paragraphs[0].font.bold = True
+        self._style_paragraph(tf.paragraphs[0], 36, self.tokens["title_font"], bold=True)
 
         # Content area
         content_top = Inches(1.3)
@@ -134,7 +179,7 @@ class PPTXGenerator:
             tf = body_box.text_frame
             tf.word_wrap = True
             tf.paragraphs[0].text = body
-            tf.paragraphs[0].font.size = Pt(20)
+            self._style_paragraph(tf.paragraphs[0], 20, self.tokens["body_font"])
 
         if bullets:
             self._add_bullets(slide, bullets, content_top, content_height)
@@ -143,6 +188,7 @@ class PPTXGenerator:
         """Add slide with bullet points"""
         blank_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
 
         content = slide_data.content
         title = content.get("heading", slide_data.title or "")
@@ -154,8 +200,7 @@ class PPTXGenerator:
         )
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        tf.paragraphs[0].font.size = Pt(36)
-        tf.paragraphs[0].font.bold = True
+        self._style_paragraph(tf.paragraphs[0], 36, self.tokens["title_font"], bold=True)
 
         # Bullets
         self._add_bullets(slide, bullets, Inches(1.3), Inches(5.7))
@@ -184,7 +229,7 @@ class PPTXGenerator:
                 p = tf.add_paragraph()
 
             p.text = f"• {text}"
-            p.font.size = Pt(20)
+            self._style_paragraph(p, 20, self.tokens["body_font"])
             p.level = level
             p.space_before = Pt(12)
 
@@ -192,6 +237,7 @@ class PPTXGenerator:
         """Add two-column slide"""
         blank_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
 
         content = slide_data.content
         title = content.get("heading", slide_data.title or "")
@@ -203,8 +249,7 @@ class PPTXGenerator:
         )
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        tf.paragraphs[0].font.size = Pt(36)
-        tf.paragraphs[0].font.bold = True
+        self._style_paragraph(tf.paragraphs[0], 36, self.tokens["title_font"], bold=True)
 
         # Split bullets into two columns
         mid = len(bullets) // 2
@@ -225,7 +270,7 @@ class PPTXGenerator:
                 else:
                     p = tf.add_paragraph()
                 p.text = f"• {text}"
-                p.font.size = Pt(18)
+                self._style_paragraph(p, 18, self.tokens["body_font"])
                 p.space_before = Pt(10)
 
         # Right column
@@ -242,13 +287,14 @@ class PPTXGenerator:
                 else:
                     p = tf.add_paragraph()
                 p.text = f"• {text}"
-                p.font.size = Pt(18)
+                self._style_paragraph(p, 18, self.tokens["body_font"])
                 p.space_before = Pt(10)
 
     def _add_quote_slide(self, slide_data: Any):
         """Add quote slide"""
         blank_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
 
         content = slide_data.content
         quote_text = content.get("body", content.get("heading", ""))
@@ -260,14 +306,14 @@ class PPTXGenerator:
         tf = quote_box.text_frame
         tf.word_wrap = True
         tf.paragraphs[0].text = f'"{quote_text}"'
-        tf.paragraphs[0].font.size = Pt(32)
-        tf.paragraphs[0].font.italic = True
+        self._style_paragraph(tf.paragraphs[0], 32, self.tokens["body_font"], italic=True)
         tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
     def _add_section_header_slide(self, slide_data: Any):
         """Add section header slide"""
         blank_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
 
         content = slide_data.content
         title = content.get("heading", slide_data.title or "")
@@ -278,6 +324,5 @@ class PPTXGenerator:
         )
         tf = title_box.text_frame
         tf.paragraphs[0].text = title
-        tf.paragraphs[0].font.size = Pt(48)
-        tf.paragraphs[0].font.bold = True
+        self._style_paragraph(tf.paragraphs[0], 48, self.tokens["title_font"], bold=True)
         tf.paragraphs[0].alignment = PP_ALIGN.CENTER
