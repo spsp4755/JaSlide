@@ -1,15 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSettingsStore, useTranslation, Theme, Language } from '@/stores/settings-store';
 import { usersApi } from '@/lib/api';
+import { AppShell } from '@/components/layout/app-shell';
 import {
-    ArrowLeft,
-    Sparkles,
     User,
     Palette,
     Bell,
@@ -156,57 +154,41 @@ export default function SettingsPage() {
 
     if (!authHydrated || !settingsHydrated || !isAuthenticated) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-            </div>
+            <AppShell>
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                </div>
+            </AppShell>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            {/* Header */}
-            <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-10">
-                <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Link
-                            href="/dashboard"
-                            className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                        >
-                            <ArrowLeft className="h-5 w-5" />
-                            <span className="hidden sm:inline">{t.settings.backToDashboard}</span>
-                        </Link>
-                    </div>
-
-                    <Link href="/dashboard" className="flex items-center gap-2">
-                        <Sparkles className="h-6 w-6 text-purple-600" />
-                        <span className="text-xl font-bold dark:text-white">JaSlide</span>
-                    </Link>
-
-                    <Button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="bg-purple-600 hover:bg-purple-700 min-w-[100px]"
-                    >
-                        {saving ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                        ) : saved ? (
-                            <>
-                                <Check className="h-4 w-4 mr-2" />
-                                {t.settings.saved}
-                            </>
-                        ) : (
-                            <>
-                                <Save className="h-4 w-4 mr-2" />
-                                {t.settings.save}
-                            </>
-                        )}
-                    </Button>
-                </div>
-            </header>
-
+        <AppShell>
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
             <div className="container mx-auto px-4 py-8">
                 <div className="max-w-5xl mx-auto">
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">{t.settings.title}</h1>
+                    <div className="flex items-center justify-between mb-8">
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.settings.title}</h1>
+                        <Button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="bg-purple-600 hover:bg-purple-700 min-w-[100px]"
+                        >
+                            {saving ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                            ) : saved ? (
+                                <>
+                                    <Check className="h-4 w-4 mr-2" />
+                                    {t.settings.saved}
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="h-4 w-4 mr-2" />
+                                    {t.settings.save}
+                                </>
+                            )}
+                        </Button>
+                    </div>
 
                     <div className="flex flex-col md:flex-row gap-8">
                         {/* Sidebar */}
@@ -543,6 +525,7 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
-        </div>
+            </div>
+        </AppShell>
     );
 }
