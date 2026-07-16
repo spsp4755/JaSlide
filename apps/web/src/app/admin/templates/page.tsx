@@ -51,6 +51,7 @@ export default function AdminTemplatesPage() {
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [showPaletteModal, setShowPaletteModal] = useState(false);
     const [showLayoutModal, setShowLayoutModal] = useState(false);
+    const [showPptxImportModal, setShowPptxImportModal] = useState(false);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
 
@@ -59,6 +60,13 @@ export default function AdminTemplatesPage() {
     const [editingPalette, setEditingPalette] = useState<ColorPalette | null>(null);
     const [editingLayout, setEditingLayout] = useState<LayoutRule | null>(null);
     const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
+    const [importingPptx, setImportingPptx] = useState(false);
+    const [pptxImportForm, setPptxImportForm] = useState({
+        name: '',
+        description: '',
+        category: 'CUSTOM',
+        file: null as File | null,
+    });
 
     // Template form
     const [templateForm, setTemplateForm] = useState({
@@ -202,6 +210,36 @@ export default function AdminTemplatesPage() {
             fetchData();
         } catch (err) {
             showToast('삭제에 실패했습니다. 사용 중인 템플릿은 삭제할 수 없습니다.', 'error');
+        }
+    };
+
+    const handleImportPptx = async () => {
+        if (!pptxImportForm.name.trim() || !pptxImportForm.file) {
+            showToast('Enter a template name and choose a PPTX file.', 'error');
+            return;
+        }
+
+        setImportingPptx(true);
+        try {
+            const formData = new FormData();
+            formData.append('name', pptxImportForm.name.trim());
+            formData.append('category', pptxImportForm.category);
+            if (pptxImportForm.description.trim()) formData.append('description', pptxImportForm.description.trim());
+            formData.append('file', pptxImportForm.file);
+
+            const res = await adminFetch(`${API_URL}/admin/templates/import-pptx`, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!res.ok) throw new Error('Import failed');
+
+            showToast('Template created from PPTX style.');
+            setShowPptxImportModal(false);
+            fetchData();
+        } catch {
+            showToast('Unable to import the PPTX template.', 'error');
+        } finally {
+            setImportingPptx(false);
         }
     };
 
@@ -359,6 +397,19 @@ export default function AdminTemplatesPage() {
                     <h1 className="text-2xl font-bold text-gray-900">템플릿 관리</h1>
                     <p className="text-sm text-gray-500">템플릿, 색상 팔레트, 레이아웃 규칙</p>
                 </div>
+                <div className="flex gap-2">
+                    {tab === 'templates' && (
+                        <button
+                            onClick={() => {
+                                setPptxImportForm({ name: '', description: '', category: 'CUSTOM', file: null });
+                                setShowPptxImportModal(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 border border-purple-600 text-purple-700 rounded-lg hover:bg-purple-50"
+                        >
+                            <FileText size={20} />
+                            Import PPTX style
+                        </button>
+                    )}
                 <button
                     onClick={() => {
                         if (tab === 'templates') handleCreateTemplate();
@@ -370,6 +421,7 @@ export default function AdminTemplatesPage() {
                     <Plus size={20} />
                     {tab === 'templates' ? '템플릿 추가' : tab === 'palettes' ? '팔레트 추가' : '레이아웃 추가'}
                 </button>
+                </div>
             </div>
 
             {/* Tabs */}
@@ -525,6 +577,40 @@ export default function AdminTemplatesPage() {
                             </tbody>
                         </table>
                     )}
+                </div>
+            )}
+
+            {showPptxImportModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+                        <div className="flex items-center justify-between border-b p-4">
+                            <h2 className="text-lg font-semibold">Import PPTX style</h2>
+                            <button onClick={() => setShowPptxImportModal(false)} className="p-1 hover:bg-gray-100 rounded" aria-label="Close import dialog"><X size={20} /></button>
+                        </div>
+                        <div className="space-y-4 p-4">
+                            <label className="block text-sm font-medium text-gray-700">Template name *
+                                <input type="text" value={pptxImportForm.name} onChange={(e) => setPptxImportForm({ ...pptxImportForm, name: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">Description
+                                <textarea value={pptxImportForm.description} onChange={(e) => setPptxImportForm({ ...pptxImportForm, description: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" rows={2} />
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">Category
+                                <select value={pptxImportForm.category} onChange={(e) => setPptxImportForm({ ...pptxImportForm, category: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2">
+                                    {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                                </select>
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">PPTX file *
+                                <input type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" onChange={(e) => setPptxImportForm({ ...pptxImportForm, file: e.target.files?.[0] || null })} className="mt-1 block w-full text-sm" />
+                            </label>
+                            <p className="text-xs text-gray-500">PPTX files up to 20 MB. Only style tokens are extracted.</p>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t p-4">
+                            <button onClick={() => setShowPptxImportModal(false)} disabled={importingPptx} className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+                            <button onClick={handleImportPptx} disabled={importingPptx} className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 disabled:opacity-50">
+                                {importingPptx && <Loader2 size={16} className="animate-spin" />} Import
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
