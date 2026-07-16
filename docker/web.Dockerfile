@@ -1,7 +1,7 @@
-FROM node:20-alpine AS base
+FROM node:22-bookworm-slim AS base
 
 # Install pnpm
-RUN npm install -g pnpm
+RUN npm install -g pnpm@11.7.0
 
 WORKDIR /app
 
@@ -25,9 +25,9 @@ RUN pnpm --filter @jaslide/shared build
 RUN pnpm --filter @jaslide/web build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:22-bookworm-slim AS production
 
-RUN npm install -g pnpm
+RUN npm install -g pnpm@11.7.0
 
 WORKDIR /app
 
