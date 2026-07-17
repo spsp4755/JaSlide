@@ -25,35 +25,34 @@ After the first login, register the internal model in **Admin > Models** and run
 
 ## Kubernetes + Harbor (closed network)
 
-Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml). Replace every `CHANGE_ME` and the Ingress host before applying.
+Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [Kustomization](../deploy/k8s/kustomization.yaml). Replace every `CHANGE_ME` and the Ingress host before applying. Kustomize places all namespaced resources in the `jaslide` namespace.
 
-**1. Build images on an internet-connected machine.** `NEXT_PUBLIC_API_URL` is baked into the web image at build time — set it to the final browser URL (the Ingress host) before building:
+**1. Build images on an internet-connected machine.** The release image defaults to relative `/api`, so it remains valid when the final Ingress hostname changes:
 
-```powershell
-docker build -f docker/api.Dockerfile      -t jaslide/api:0.1.0 .
-docker build -f docker/web.Dockerfile      -t jaslide/web:0.1.0 --build-arg NEXT_PUBLIC_API_URL=https://jaslide.internal/api .
-docker build -f docker/renderer.Dockerfile -t jaslide/renderer:0.1.0 .
-docker pull postgres:16-alpine
-docker pull redis:7-alpine
+```bash
+./scripts/release/build-amd64-images.sh v0.2.0
 ```
 
 **2. Save to tar and carry into the closed network:**
 
-```powershell
-docker save jaslide/api:0.1.0      -o jaslide-api-0.1.0.tar
-docker save jaslide/web:0.1.0      -o jaslide-web-0.1.0.tar
-docker save jaslide/renderer:0.1.0 -o jaslide-renderer-0.1.0.tar
-docker save postgres:16-alpine     -o postgres-16-alpine.tar
-docker save redis:7-alpine         -o redis-7-alpine.tar
-```
+The script produces `dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
 
 **3. Load and push to Harbor (inside the closed network):**
 
 ```bash
-podman load -i jaslide-api-0.1.0.tar
-podman tag  jaslide/api:0.1.0 harbor.example.internal/jaslide/api:0.1.0
-podman push harbor.example.internal/jaslide/api:0.1.0
-# repeat for web, renderer, postgres:16-alpine, redis:7-alpine
+shasum -a 256 -c jaslide-v0.2.0-linux-amd64-images.tar.gz.sha256
+podman load -i jaslide-v0.2.0-linux-amd64-images.tar.gz
+podman image inspect --format '{{.Architecture}}' jaslide/api:v0.2.0  # amd64
+podman tag jaslide/api:v0.2.0 harbor.example.internal/jaslide/api:v0.2.0
+podman tag jaslide/web:v0.2.0 harbor.example.internal/jaslide/web:v0.2.0
+podman tag jaslide/renderer:v0.2.0 harbor.example.internal/jaslide/renderer:v0.2.0
+podman tag jaslide/postgres:v0.2.0 harbor.example.internal/jaslide/postgres:v0.2.0
+podman tag jaslide/redis:v0.2.0 harbor.example.internal/jaslide/redis:v0.2.0
+podman push harbor.example.internal/jaslide/api:v0.2.0
+podman push harbor.example.internal/jaslide/web:v0.2.0
+podman push harbor.example.internal/jaslide/renderer:v0.2.0
+podman push harbor.example.internal/jaslide/postgres:v0.2.0
+podman push harbor.example.internal/jaslide/redis:v0.2.0
 ```
 
 Create the `jaslide` project in Harbor first, and `podman login harbor.example.internal` before pushing.
@@ -61,10 +60,10 @@ Create the `jaslide` project in Harbor first, and `podman login harbor.example.i
 **4. Deploy:**
 
 ```bash
-kubectl create secret docker-registry harbor-regcred \
+kubectl -n jaslide create secret docker-registry harbor-regcred \
   --docker-server=harbor.example.internal --docker-username=<user> --docker-password=<pass>
-kubectl apply -f deploy/k8s/jaslide-k8s.yaml
-kubectl get pods -w
+kubectl apply -k deploy/k8s
+kubectl -n jaslide get pods -w
 ```
 
-Readiness: `curl https://jaslide.internal/api/health` once the Ingress resolves. If the browser URL ever changes, rebuild and re-push only the web image with the new `NEXT_PUBLIC_API_URL`.
+Readiness: `curl https://jaslide.internal/api/health` once the Ingress resolves. The default web image uses `/api`; rebuild it only when an external API origin is deliberately configured.

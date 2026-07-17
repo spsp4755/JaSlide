@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: jaslide
+resources:
+  - namespace.yaml
+  - jaslide-k8s.yaml

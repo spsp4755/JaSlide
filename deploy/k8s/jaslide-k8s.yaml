@@ -1,22 +1,19 @@
 # JaSlide k8s 배포 매니페스트 (폐쇄망 + Harbor 레지스트리)
 #
-# 이미지 준비 (인터넷 되는 빌드 PC에서 — 상세는 docs/deployment.md 참고):
-#   docker build -f docker/api.Dockerfile      -t jaslide/api:0.1.0 .
-#   docker build -f docker/web.Dockerfile      -t jaslide/web:0.1.0 --build-arg NEXT_PUBLIC_API_URL=https://jaslide.internal/api .
-#   docker build -f docker/renderer.Dockerfile -t jaslide/renderer:0.1.0 .
-#   docker pull postgres:16-alpine && docker pull redis:7-alpine
-#   docker save <이미지> -o <파일>.tar   # 5개 모두 저장 후 반입
+# 이미지 준비 (인터넷 되는 amd64 빌드 PC에서 — 상세는 docs/deployment.md 참고):
+#   ./scripts/release/build-amd64-images.sh v0.2.0  # 기본값 /api: Ingress 도메인에 독립적
+#   # dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz 및 SHA-256 파일을 반입
 #
 # 폐쇄망 반입 후 (podman이 있는 내부 PC에서):
-#   podman load -i jaslide-api-0.1.0.tar
-#   podman tag  jaslide/api:0.1.0  harbor.CHANGE_ME/jaslide/api:0.1.0
-#   podman push harbor.CHANGE_ME/jaslide/api:0.1.0
-#   (web, renderer, postgres:16-alpine, redis:7-alpine 동일하게 반복)
+#   podman load -i jaslide-v0.2.0-linux-amd64-images.tar.gz
+#   podman tag jaslide/api:v0.2.0 harbor.CHANGE_ME/jaslide/api:v0.2.0
+#   podman push harbor.CHANGE_ME/jaslide/api:v0.2.0
+#   (web, renderer, postgres, redis도 v0.2.0 태그로 반복)
 #
 # 클러스터에서:
-#   kubectl create secret docker-registry harbor-regcred \
+#   kubectl -n jaslide create secret docker-registry harbor-regcred \
 #     --docker-server=harbor.CHANGE_ME --docker-username=CHANGE_ME --docker-password=CHANGE_ME
-#   kubectl apply -f jaslide-k8s.yaml
+#   kubectl apply -k deploy/k8s
 #
 # 아래에서 CHANGE_ME 와 Ingress host 만 실제 값으로 바꾸면 됩니다.
 apiVersion: v1
@@ -64,7 +61,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: api
-          image: harbor.CHANGE_ME/jaslide/api:0.1.0
+          image: harbor.CHANGE_ME/jaslide/api:v0.2.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 4000 }]
           envFrom:
@@ -101,7 +98,7 @@ spec:
   selector: { app: jaslide-api }
   ports: [{ port: 4000, targetPort: 4000 }]
 ---
-# Next.js Web (NEXT_PUBLIC_API_URL 은 이미지 빌드 시 결정됨 — 브라우저 URL 변경 시 재빌드 필요)
+# Next.js Web (기본값 /api는 동일 Ingress 경로를 사용하므로 브라우저 도메인 변경 시 재빌드 불필요)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -118,7 +115,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: web
-          image: harbor.CHANGE_ME/jaslide/web:0.1.0
+          image: harbor.CHANGE_ME/jaslide/web:v0.2.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 3000 }]
           readinessProbe:
@@ -153,7 +150,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: renderer
-          image: harbor.CHANGE_ME/jaslide/renderer:0.1.0
+          image: harbor.CHANGE_ME/jaslide/renderer:v0.2.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8000 }]
           readinessProbe:
@@ -188,7 +185,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: redis
-          image: harbor.CHANGE_ME/jaslide/redis:7-alpine
+          image: harbor.CHANGE_ME/jaslide/redis:v0.2.0
           imagePullPolicy: IfNotPresent
           args: ["--appendonly", "yes"]   # 재시작 시 큐 유실 방지
           ports: [{ containerPort: 6379 }]
@@ -235,7 +232,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: postgres
-          image: harbor.CHANGE_ME/jaslide/postgres:16-alpine
+          image: harbor.CHANGE_ME/jaslide/postgres:v0.2.0
           imagePullPolicy: IfNotPresent
           env:
             - { name: POSTGRES_USER, value: jaslide }
@@ -274,7 +271,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: 100m   # PPTX 템플릿/파일 업로드 허용 크기
 spec:
   rules:
-    - host: jaslide.internal   # 사내 도메인으로 변경 (web 이미지의 NEXT_PUBLIC_API_URL 과 일치해야 함)
+    - host: jaslide.internal   # 사내 도메인으로 변경
       http:
         paths:
           - path: /api

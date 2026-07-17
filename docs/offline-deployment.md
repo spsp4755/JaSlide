@@ -6,16 +6,12 @@
 
 신뢰하는 커밋과 lockfile에서 이미지를 빌드합니다. 이 단계만 네트워크 접근이 필요합니다.
 
+`linux/amd64` 이미지는 빌드 PC의 CPU와 무관하게 명시적으로 생성합니다. 웹은 기본적으로 동일 Ingress의 상대 경로 `/api`를 사용하므로 사내 도메인을 이미지에 고정하지 않습니다.
+
 ```bash
-docker build -f docker/api.Dockerfile -t jaslide/api:offline .
-docker build -f docker/web.Dockerfile -t jaslide/web:offline .
-docker build -f docker/renderer.Dockerfile -t jaslide/renderer:offline .
-docker pull postgres:16-alpine
-docker pull redis:7-alpine
-docker save -o jaslide-offline-images.tar \
-  jaslide/api:offline jaslide/web:offline jaslide/renderer:offline \
-  postgres:16-alpine redis:7-alpine
-sha256sum jaslide-offline-images.tar > jaslide-offline-images.tar.sha256
+./scripts/release/build-amd64-images.sh v0.2.0
+# dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz
+# dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz.sha256
 ```
 
 개발 또는 빌드 재현용 pnpm 저장소를 함께 전달해야 한다면, 신뢰하는 lockfile과 준비된 저장소를 사용합니다.
@@ -29,19 +25,17 @@ tar -czf jaslide-pnpm-store.tar.gz pnpm-store
 
 ## 2. 폐쇄망 반입 및 실행
 
-1. `jaslide-offline-images.tar`와 SHA-256 파일을 반입해 무결성을 확인합니다.
-2. 이미지를 로드하고 필요한 `.env`를 제공합니다. AI 서버를 사내에서 운영하는 경우 `OPENAI_BASE_URL`에 그 내부 주소를 설정합니다.
-3. 전용 Compose 파일을 **빌드 없이** 실행합니다.
+1. `jaslide-v0.2.0-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
+2. Kubernetes/Harbor 배포 환경에서는 Podman으로 로드한 뒤 Harbor에 푸시합니다. 실제 태그·푸시·`kubectl apply -k` 절차는 [Kubernetes 배포 문서](deployment.md#kubernetes--harbor-closed-network)를 따릅니다.
 
 ```bash
-sha256sum -c jaslide-offline-images.tar.sha256
-docker load -i jaslide-offline-images.tar
-docker image inspect jaslide/api:offline jaslide/web:offline jaslide/renderer:offline postgres:16-alpine redis:7-alpine
-docker compose --env-file .env -f docker-compose.offline.yml up -d --no-build
-docker compose --env-file .env -f docker-compose.offline.yml ps
+shasum -a 256 -c jaslide-v0.2.0-linux-amd64-images.tar.gz.sha256
+podman load -i jaslide-v0.2.0-linux-amd64-images.tar.gz
+podman image inspect jaslide/api:v0.2.0 jaslide/web:v0.2.0 jaslide/renderer:v0.2.0 jaslide/postgres:v0.2.0 jaslide/redis:v0.2.0
+podman image inspect --format '{{.Architecture}}' jaslide/api:v0.2.0  # amd64
 ```
 
-`docker-compose.offline.yml`에는 `build:` 항목이 없습니다. 누락된 이미지를 외부에서 받거나 Dockerfile 안에서 패키지를 설치하지 않습니다.
+`docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.2.0`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
 
 ## 3. 폐쇄망에서 소스 빌드가 필요한 경우
 
@@ -65,6 +59,6 @@ cd ../web
 
 - 로컬 LLM 엔드포인트와 모델 파일이 사내에 준비되어 있다.
 - 이미지 tarball SHA-256이 준비 환경의 값과 일치한다.
-- Docker 이미지 5개가 모두 `docker image inspect`에 존재한다.
+- Podman 이미지 5개가 모두 `podman image inspect`에 존재하고 아키텍처가 `amd64`이다.
 - `docker compose ... up -d --no-build` 중 외부 DNS/레지스트리 요청이 없다.
 - 업로드 저장소, PostgreSQL, Redis 볼륨의 백업 정책이 적용되어 있다.
