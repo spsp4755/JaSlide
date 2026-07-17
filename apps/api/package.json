@@ -90,6 +90,12 @@
             "ts"
         ],
         "rootDir": "src",
+        "modulePaths": [
+            "<rootDir>/../node_modules"
+        ],
+        "moduleNameMapper": {
+            "^@prisma/client$": "<rootDir>/../node_modules/@prisma/client/default.js"
+        },
         "testRegex": ".*\\.spec\\.ts$",
         "transform": {
             "^.+\\.(t|j)s$": "ts-jest"

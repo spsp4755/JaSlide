@@ -27,6 +27,7 @@ import { RecentWorksModule } from './modules/recent-works/recent-works.module';
 import { ColorPalettesModule } from './modules/color-palettes/color-palettes.module';
 import { FontSetsModule } from './modules/font-sets/font-sets.module';
 import { InputPromptsModule } from './modules/input-prompts/input-prompts.module';
+import { SkillsModule } from './modules/skills/skills.module';
 
 @Module({
     imports: [
@@ -73,11 +74,11 @@ import { InputPromptsModule } from './modules/input-prompts/input-prompts.module
         ColorPalettesModule,
         FontSetsModule,
         InputPromptsModule,
+        SkillsModule,
 
         // Admin module
         AdminModule,
     ],
 })
 export class AppModule { }
-
 

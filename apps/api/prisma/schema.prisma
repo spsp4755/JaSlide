@@ -51,6 +51,7 @@ model User {
   userPreference     UserPreference?
   uxState            UXState?
   autoRules          AutoRule[]
+  presentationSkills PresentationSkill[]
   lastLoginAt        DateTime?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
@@ -126,6 +127,7 @@ model Organization {
   assets        Asset[]
   colorPalettes ColorPalette[]
   fontSets      FontSet[]
+  presentationSkills PresentationSkill[]
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -152,6 +154,8 @@ model Presentation {
   userId        String
   template      Template?          @relation(fields: [templateId], references: [id])
   templateId    String?
+  skill         PresentationSkill? @relation(fields: [skillId], references: [id])
+  skillId       String?
   slides            Slide[]
   status            PresentationStatus @default(DRAFT)
   sourceType        SourceType
@@ -172,6 +176,7 @@ model Presentation {
 
   @@index([userId])
   @@index([templateId])
+  @@index([skillId])
   @@index([status])
   @@index([shareToken])
 }
@@ -241,12 +246,42 @@ model Template {
   organization   Organization?    @relation(fields: [organizationId], references: [id])
   organizationId String?
   presentations  Presentation[]
+  presentationSkills PresentationSkill[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   @@index([category])
   @@index([isPublic])
   @@index([organizationId])
+}
+
+model PresentationSkill {
+  id                    String        @id @default(cuid())
+  name                  String
+  description           String?
+  category              String
+  audience              String
+  tone                  String
+  purpose               String
+  outlineGuidance       String        @db.Text
+  recommendedSlideCount Int
+  thumbnail             String?
+  isPublic              Boolean       @default(false)
+  creator               User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId                String?
+  organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationId        String?
+  template              Template?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId            String?
+  presentations         Presentation[]
+  generationJobs        GenerationJob[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([category])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([templateId])
 }
 
 enum TemplateCategory {
@@ -302,6 +337,8 @@ model GenerationJob {
   userId         String
   presentation   Presentation?    @relation(fields: [presentationId], references: [id])
   presentationId String?          @unique
+  skill          PresentationSkill? @relation(fields: [skillId], references: [id])
+  skillId        String?
   status         GenerationStatus @default(QUEUED)
   input          Json
   output         Json?
@@ -315,6 +352,7 @@ model GenerationJob {
 
   @@index([userId])
   @@index([status])
+  @@index([skillId])
 }
 
 enum GenerationStatus {
@@ -886,4 +924,3 @@ model RecoveryLog {
   @@index([errorType])
   @@index([resolved])
 }
-

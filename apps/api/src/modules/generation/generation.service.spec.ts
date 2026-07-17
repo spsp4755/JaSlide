@@ -1,4 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
+
+jest.mock('../llm/llm.service', () => ({ LlmService: class LlmService {} }));
+jest.mock('../queue/queue.service', () => ({ QueueService: class QueueService {} }));
+
 import { GenerationService } from './generation.service';
 
 describe('GenerationService cancellation', () => {
