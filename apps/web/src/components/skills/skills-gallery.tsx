@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FileUp, LayoutTemplate, PencilLine, Plus, Sparkles, X } from 'lucide-react';
 import { skillsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -32,6 +32,8 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
     const [loading, setLoading] = useState(!preview);
     const [showCreator, setShowCreator] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const pptxInputRef = useRef<HTMLInputElement>(null);
     const [form, setForm] = useState({
         name: '', category: '기업 전략', audience: '의사결정자', tone: '명확하고 단정하게',
         purpose: '', outlineGuidance: '문제와 목표를 먼저 제시하고, 근거와 실행 계획으로 마무리합니다.', recommendedSlideCount: 10,
@@ -70,6 +72,21 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
         }
     };
 
+    const importPptxSkill = async (file: File | undefined) => {
+        if (!file) return;
+        setImporting(true);
+        try {
+            const response = await skillsApi.importPptx(file);
+            setSkills((current) => [response.data, ...current]);
+            toast({ title: 'PPTX Skill을 만들었습니다', description: '추출한 스타일을 다음 프레젠테이션에 적용할 수 있습니다.' });
+        } catch (error: any) {
+            toast({ title: 'PPTX Skill 생성 실패', description: error.response?.data?.message || '20MB 이하 PPTX인지 확인해주세요.', variant: 'destructive' });
+        } finally {
+            setImporting(false);
+            if (pptxInputRef.current) pptxInputRef.current.value = '';
+        }
+    };
+
     const actionClass = 'group min-h-[230px] rounded-2xl border border-border bg-card p-5 text-left transition hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-sm';
 
     return (
@@ -84,6 +101,7 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
             </header>
 
             <main className="mx-auto max-w-7xl px-6 py-10">
+                {!preview && <input ref={pptxInputRef} type="file" accept=".pptx" className="hidden" onChange={(event) => importPptxSkill(event.target.files?.[0])} />}
                 <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
                         <p className="mb-2 text-sm font-medium text-muted-foreground">오프라인 배포용 · 실행 패키지 없이 안전하게</p>
@@ -101,9 +119,9 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                     <h2 id="new-skill" className="mb-4 font-display text-xl font-bold">새 Skill</h2>
                     <div className="grid gap-4 md:grid-cols-3">
                         {preview ? (
-                            <Link href="/login" className={actionClass}><FileUp className="mb-8 h-7 w-7" /><h3 className="text-lg font-bold">PPTX/PDF에서 만들기</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">기존 발표자료를 올려 시각 토큰과 레이아웃 원칙을 재사용합니다.</p><span className="mt-7 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</span></Link>
+                            <Link href="/login" className={actionClass}><FileUp className="mb-8 h-7 w-7" /><h3 className="text-lg font-bold">PPTX에서 만들기</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">기존 발표자료를 올려 시각 토큰과 레이아웃 원칙을 재사용합니다.</p><span className="mt-7 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</span></Link>
                         ) : (
-                            <Link href="/dashboard?focus=1" className={actionClass}><FileUp className="mb-8 h-7 w-7" /><h3 className="text-lg font-bold">PPTX/PDF에서 만들기</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">기존 발표자료를 올려 시각 토큰과 레이아웃 원칙을 재사용합니다.</p><span className="mt-7 inline-flex text-sm font-medium underline underline-offset-4">파일 업로드로 시작</span></Link>
+                            <button type="button" disabled={importing} onClick={() => pptxInputRef.current?.click()} className={`${actionClass} disabled:cursor-wait disabled:opacity-60`}><FileUp className="mb-8 h-7 w-7" /><h3 className="text-lg font-bold">PPTX에서 만들기</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">기존 발표자료에서 색상·글꼴·레이아웃 원칙을 추출해 재사용합니다.</p><span className="mt-7 inline-flex text-sm font-medium underline underline-offset-4">{importing ? '스타일 추출 중' : 'PPTX 업로드'}</span></button>
                         )}
                         <button type="button" onClick={() => preview ? undefined : setShowCreator(true)} className={`${actionClass} ${preview ? 'cursor-default' : ''}`}><PencilLine className="mb-8 h-7 w-7" /><h3 className="text-lg font-bold">직접 만들기</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">목적, 대상, 말투, 목차 가이드를 직접 정의합니다.</p><span className="mt-7 inline-flex text-sm font-medium underline underline-offset-4">{preview ? '로그인 후 사용' : '새 Skill 작성'}</span></button>
                         <Link href={preview ? '/demo' : '/dashboard'} className={actionClass}><LayoutTemplate className="mb-8 h-7 w-7" /><h3 className="text-lg font-bold">템플릿 갤러리에서 선택</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">검증된 템플릿을 기준으로 목적에 맞는 Skill을 시작합니다.</p><span className="mt-7 inline-flex text-sm font-medium underline underline-offset-4">템플릿 보기</span></Link>
@@ -116,7 +134,7 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             {displayedSkills.map((skill) => <article key={skill.id} className="overflow-hidden rounded-2xl border border-border bg-card">
                                 <div className="h-32 bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4"><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-white/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">JaSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></div>
-                                <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div></div>
+                                <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : !skill.id.startsWith('recommended-') ? <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link> : <span className="mt-4 inline-flex text-sm text-muted-foreground">기본 Skill은 준비 중</span>}</div>
                             </article>)}
                         </div>
                     )}

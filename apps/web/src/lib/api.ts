@@ -109,6 +109,14 @@ export const skillsApi = {
         recommendedSlideCount: number;
         description?: string;
     }) => api.post('/skills', data),
+    importPptx: async (file: File, name?: string) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (name) formData.append('name', name);
+        return api.post('/skills/import-pptx', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
 };
 
 // Credits

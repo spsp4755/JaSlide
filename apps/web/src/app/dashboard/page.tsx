@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';
-import { generationApi, templatesApi } from '@/lib/api';
+import { generationApi, skillsApi, templatesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { GenerationProgress } from '@/components/generation-progress';
 import { PURPOSE_OPTIONS, PurposeOption } from '@/components/purpose-onboarding';
@@ -23,6 +23,13 @@ interface Template {
         colors?: { primary?: string; background?: string; text?: string };
         backgrounds?: { value?: string };
     };
+}
+
+interface Skill {
+    id: string;
+    name: string;
+    templateId?: string;
+    recommendedSlideCount: number;
 }
 
 export default function HomePage() {
@@ -50,6 +57,8 @@ export default function HomePage() {
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
     const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+    const [skills, setSkills] = useState<Skill[]>([]);
+    const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
 
     // Generation state
     const [jobId, setJobId] = useState<string | null>(null);
@@ -64,19 +73,22 @@ export default function HomePage() {
 
     useEffect(() => {
         if (searchParams.get('focus')) inputRef.current?.focus();
+        setSelectedSkillId(searchParams.get('skillId'));
     }, [searchParams]);
 
     useEffect(() => {
         (async () => {
             setLoadingTemplates(true);
             try {
-                const [apiRes, defaultsRes] = await Promise.all([
+                const [apiRes, defaultsRes, skillsRes] = await Promise.all([
                     templatesApi.list().catch(() => ({ data: [] })),
                     templatesApi.defaults().catch(() => ({ data: [] })),
+                    skillsApi.list().catch(() => ({ data: [] })),
                 ]);
                 const apiTemplates = Array.isArray(apiRes.data) ? apiRes.data : [];
                 const defaultTemplates = Array.isArray(defaultsRes.data) ? defaultsRes.data : [];
                 setTemplates([...defaultTemplates, ...apiTemplates]);
+                setSkills(Array.isArray(skillsRes.data) ? skillsRes.data : []);
             } catch (err) {
                 console.error('Failed to fetch templates:', err);
             } finally {
@@ -137,6 +149,7 @@ export default function HomePage() {
                 slideCount: effectiveSlideCount,
                 language,
                 templateId: selectedTemplateId,
+                skillId: selectedSkillId,
                 options: {
                     includeImages,
                     includeCharts,
@@ -232,6 +245,7 @@ export default function HomePage() {
     }
 
     const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+    const selectedSkill = skills.find((skill) => skill.id === selectedSkillId);
 
     return (
         <AppShell>
@@ -392,14 +406,22 @@ export default function HomePage() {
                                 </button>
                             </span>
                         )}
-                    {selectedTemplate && (
+                        {selectedTemplate && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                             템플릿: {selectedTemplate.name}
                             <button onClick={() => setSelectedTemplateId(null)}>
                                 <X className="h-3.5 w-3.5" />
                             </button>
                         </span>
-                    )}
+                        )}
+                        {selectedSkill && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-secondary text-foreground rounded-full text-sm">
+                                Skill: {selectedSkill.name}
+                                <button onClick={() => setSelectedSkillId(null)} aria-label="선택한 Skill 해제">
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            </span>
+                        )}
                 </div>
 
                 {/* Template gallery */}

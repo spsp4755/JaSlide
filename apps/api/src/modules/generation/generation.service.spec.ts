@@ -7,9 +7,16 @@ import { GenerationService } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
+        presentationSkill: {
+            findFirst: jest.fn(),
+        },
+        presentation: {
+            create: jest.fn(),
+        },
         generationJob: {
             findFirst: jest.fn(),
             update: jest.fn(),
+            create: jest.fn(),
         },
     };
     const service = new GenerationService(prisma as any, {} as any, {} as any, {} as any);
@@ -33,5 +40,39 @@ describe('GenerationService cancellation', () => {
 
         await expect(service.cancelGeneration('job-1', 'user-1')).rejects.toBeInstanceOf(BadRequestException);
         expect(prisma.generationJob.update).not.toHaveBeenCalled();
+    });
+
+    it('applies an owned Skill guidance and its linked template to a generation job', async () => {
+        const credits = { checkBalance: jest.fn().mockResolvedValue(true) };
+        const queue = { addGenerationJob: jest.fn().mockResolvedValue(undefined) };
+        const skillService = new GenerationService(prisma as any, {} as any, credits as any, queue as any);
+        prisma.presentationSkill.findFirst.mockResolvedValue({
+            id: 'skill-1',
+            templateId: 'template-from-skill',
+            outlineGuidance: '문제, 근거, 실행 계획 순서로 작성',
+        });
+        prisma.presentation.create.mockResolvedValue({ id: 'presentation-1' });
+        prisma.generationJob.create.mockResolvedValue({ id: 'job-1' });
+
+        await expect(skillService.startGeneration('user-1', {
+            sourceType: 'TEXT' as any,
+            content: '2026년 사업 계획',
+            slideCount: 10,
+            skillId: 'skill-1',
+        })).resolves.toMatchObject({ jobId: 'job-1', presentationId: 'presentation-1' });
+
+        expect(prisma.presentationSkill.findFirst).toHaveBeenCalledWith({
+            where: { id: 'skill-1', OR: [{ isPublic: true }, { userId: 'user-1' }] },
+            select: { id: true, templateId: true, outlineGuidance: true },
+        });
+        expect(prisma.presentation.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ templateId: 'template-from-skill', skillId: 'skill-1' }),
+        }));
+        expect(prisma.generationJob.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ skillId: 'skill-1', input: expect.objectContaining({
+                templateId: 'template-from-skill',
+                skillGuidance: '문제, 근거, 실행 계획 순서로 작성',
+            }) }),
+        }));
     });
 });

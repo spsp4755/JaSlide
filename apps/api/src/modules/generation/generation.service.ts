@@ -45,6 +45,17 @@ export class GenerationService implements OnModuleInit {
             throw new BadRequestException('Insufficient credits');
         }
 
+        const skill = dto.skillId
+            ? await this.prisma.presentationSkill.findFirst({
+                where: { id: dto.skillId, OR: [{ isPublic: true }, { userId }] },
+                select: { id: true, templateId: true, outlineGuidance: true },
+            })
+            : null;
+        if (dto.skillId && !skill) {
+            throw new BadRequestException('Skill not found');
+        }
+        const templateId = dto.templateId ?? skill?.templateId;
+
         // Create presentation
         const presentation = await this.prisma.presentation.create({
             data: {
@@ -52,7 +63,8 @@ export class GenerationService implements OnModuleInit {
                 userId,
                 sourceType: dto.sourceType,
                 sourceContent: dto.content,
-                templateId: dto.templateId,
+                templateId,
+                skillId: skill?.id,
                 status: 'GENERATING',
             },
         });
@@ -68,9 +80,11 @@ export class GenerationService implements OnModuleInit {
                     content: dto.content,
                     slideCount: dto.slideCount,
                     language: dto.language || 'ko',
-                    templateId: dto.templateId,
+                    templateId,
+                    skillGuidance: skill?.outlineGuidance,
                     options: dto.options,
                 } as Prisma.InputJsonValue,
+                skillId: skill?.id,
                 progress: 0,
                 creditsCost: estimatedCost,
             },
@@ -133,17 +147,20 @@ export class GenerationService implements OnModuleInit {
         if (!job || job.status === 'COMPLETED' || job.status === 'CANCELLED') return;
 
         const input = job.input as any;
+        const guidedContent = input.skillGuidance
+            ? `${input.content}\n\n[작성 Skill 가이드]\n${input.skillGuidance}`
+            : input.content;
 
         try {
             // Update status: Generating outline
             await this.updateJobStatus(jobId, 'GENERATING_OUTLINE', 10);
 
             // Detect language if not specified
-            const language = input.language || (await this.llmService.detectLanguage(input.content));
+            const language = input.language || (await this.llmService.detectLanguage(guidedContent));
 
             // Generate outline
             const outline = await this.llmService.generateOutline({
-                content: input.content,
+                content: guidedContent,
                 slideCount: input.slideCount,
                 language,
                 style: input.options?.style,

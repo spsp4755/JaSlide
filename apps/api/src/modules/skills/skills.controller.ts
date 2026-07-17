@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateSkillDto } from './dto/skill.dto';
@@ -17,5 +19,16 @@ export class SkillsController {
     @Post()
     create(@CurrentUser() user: { id: string; organizationId?: string }, @Body() dto: CreateSkillDto) {
         return this.skillsService.create(user, dto);
+    }
+
+    @Post('import-pptx')
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+    importPptx(
+        @CurrentUser() user: { id: string; organizationId?: string },
+        @UploadedFile() file: Express.Multer.File,
+        @Body('name') name?: string,
+    ) {
+        return this.skillsService.importPptx(user, file, name);
     }
 }

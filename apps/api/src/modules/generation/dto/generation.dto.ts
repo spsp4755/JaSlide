@@ -68,6 +68,11 @@ export class StartGenerationDto {
     @IsOptional()
     templateId?: string;
 
+    @ApiPropertyOptional({ description: '선택한 발표 Skill ID' })
+    @IsString()
+    @IsOptional()
+    skillId?: string;
+
     @ApiPropertyOptional({ type: GenerationOptionsDto })
     @IsObject()
     @IsOptional()
