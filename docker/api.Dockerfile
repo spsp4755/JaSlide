@@ -19,7 +19,7 @@ COPY packages ./packages
 COPY apps/api ./apps/api
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --trust-lockfile
 
 # Generate Prisma client
 WORKDIR /app/apps/api

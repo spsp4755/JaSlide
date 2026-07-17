@@ -11,8 +11,8 @@
 ## Global Constraints
 
 - No web, external image search, cloud model, remote font, or remote Skill-package fetch is permitted.
-- Accept source files only as PDF, DOCX, XLSX/CSV, TXT, and Markdown; reject URLs and ZIP Skill packages.
-- PPTX/PDF may only create a visual reference Skill; do not treat their content as a generation source.
+- Accept source files only as PDF, DOCX, XLSX/CSV, TXT, Markdown, and explicitly content-mode PPTX; reject URLs and ZIP Skill packages.
+- PPTX has two explicit modes: content source records slide locators; Skill/template reference extracts visual tokens only.
 - All uploaded files, chunks, citations, Skills, and templates must be owner/organization scoped.
 - Skill records are data only: no executable code, tool invocation, or package import.
 - Build the web with local bundled fonts; the egress-disabled build must not request Google Fonts.

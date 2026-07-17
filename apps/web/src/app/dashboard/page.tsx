@@ -35,6 +35,7 @@ export default function HomePage() {
     const [textContent, setTextContent] = useState('');
     const [selectedPurpose, setSelectedPurpose] = useState<PurposeOption>(PURPOSE_OPTIONS[0]);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [pptxMode, setPptxMode] = useState<'content' | 'skill'>('content');
 
     // Options popover state
     const [showOptions, setShowOptions] = useState(false);
@@ -93,6 +94,8 @@ export default function HomePage() {
         accept: {
             'application/pdf': ['.pdf'],
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
             'text/plain': ['.txt'],
             'text/markdown': ['.md'],
             'text/csv': ['.csv'],
@@ -102,15 +105,6 @@ export default function HomePage() {
         noClick: true,
         noKeyboard: true,
     });
-
-    const getSourceType = () => {
-        if (!uploadedFile) return 'TEXT';
-        const ext = uploadedFile.name.split('.').pop()?.toLowerCase();
-        const typeMap: Record<string, string> = {
-            pdf: 'PDF', docx: 'DOCX', doc: 'DOCX', txt: 'TEXT', md: 'MARKDOWN', csv: 'CSV',
-        };
-        return typeMap[ext || ''] || 'TEXT';
-    };
 
     // ponytail: '자동' = 목적별 추천 장수. 콘텐츠 기반 자동 산정이 필요해지면 백엔드로 이동
     const effectiveSlideCount = slideCount ?? selectedPurpose.recommendedSlideCount ?? 10;
@@ -124,9 +118,21 @@ export default function HomePage() {
         setGenerationStartTime(new Date());
         setProgress(0);
         try {
-            const content = uploadedFile ? `File: ${uploadedFile.name}` : textContent;
+            if (uploadedFile?.name.toLowerCase().endsWith('.pptx') && pptxMode === 'skill') {
+                toast({
+                    title: 'Skill 등록은 다음 단계입니다',
+                    description: '현재는 PPTX 내용을 생성에 사용하는 기능을 지원합니다. 스타일 기반 Skill 등록은 Skills 화면에서 이어서 제공합니다.',
+                });
+                setGenerationStatus('idle');
+                return;
+            }
+            const extracted = uploadedFile ? await generationApi.extractSource(uploadedFile) : null;
+            const content = extracted
+                ? extracted.data.chunks.map((chunk: { locator: string; content: string }) => `[${chunk.locator}]\n${chunk.content}`).join('\n\n')
+                : textContent;
             const response = await generationApi.start({
-                sourceType: getSourceType(),
+                // Uploaded files are converted to cited plain text before the generation job is queued.
+                sourceType: 'TEXT',
                 content,
                 slideCount: effectiveSlideCount,
                 language,
@@ -270,7 +276,7 @@ export default function HomePage() {
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={openFilePicker}
-                                title="파일 첨부 (PDF, DOCX, TXT, MD, CSV)"
+                                title="파일 첨부 (PDF, DOCX, XLSX, PPTX, TXT, MD, CSV)"
                                 className="p-2 rounded-full border text-gray-500 hover:bg-gray-50"
                             >
                                 <Plus className="h-4 w-4" />
@@ -359,7 +365,7 @@ export default function HomePage() {
 
                 {/* Attached file / selected template chips */}
                 <div className="flex flex-wrap gap-2 mb-12 min-h-[28px]">
-                    {uploadedFile && (
+                        {uploadedFile && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-secondary text-foreground rounded-full text-sm">
                             <FileText className="h-3.5 w-3.5" />
                             {uploadedFile.name}
@@ -367,7 +373,25 @@ export default function HomePage() {
                                 <X className="h-3.5 w-3.5" />
                             </button>
                         </span>
-                    )}
+                        )}
+                        {uploadedFile?.name.toLowerCase().endsWith('.pptx') && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-secondary p-1 text-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => setPptxMode('content')}
+                                    className={`rounded-full px-2.5 py-1 ${pptxMode === 'content' ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}
+                                >
+                                    내용으로 사용
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPptxMode('skill')}
+                                    className={`rounded-full px-2.5 py-1 ${pptxMode === 'skill' ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}
+                                >
+                                    Skill/템플릿으로 등록
+                                </button>
+                            </span>
+                        )}
                     {selectedTemplate && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                             템플릿: {selectedTemplate.name}

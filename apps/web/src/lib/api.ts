@@ -73,6 +73,13 @@ export const slidesApi = {
 
 // Generation
 export const generationApi = {
+    extractSource: async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post('/generation/source/extract', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
     start: (data: any) => api.post('/generation/start', data),
     status: (jobId: string) => api.get(`/generation/${jobId}/status`),
     cancel: (jobId: string) => api.post(`/generation/${jobId}/cancel`),
@@ -86,6 +93,22 @@ export const templatesApi = {
         api.get('/templates', { params: { category } }),
     defaults: () => api.get('/templates/defaults'),
     get: (id: string) => api.get(`/templates/${id}`),
+};
+
+// Presentation skills are data-only guidance; they never load executable packages.
+export const skillsApi = {
+    list: (category?: string) =>
+        api.get('/skills', { params: { category } }),
+    create: (data: {
+        name: string;
+        category: string;
+        audience: string;
+        tone: string;
+        purpose: string;
+        outlineGuidance: string;
+        recommendedSlideCount: number;
+        description?: string;
+    }) => api.post('/skills', data),
 };
 
 // Credits

@@ -21,7 +21,7 @@ COPY apps/web ./apps/web
 COPY apps/api/src/assets/fonts ./apps/api/src/assets/fonts
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --trust-lockfile
 
 # Build shared packages
 RUN pnpm --filter @jaslide/shared build

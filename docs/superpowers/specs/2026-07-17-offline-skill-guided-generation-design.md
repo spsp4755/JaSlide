@@ -8,7 +8,7 @@ Make JaSlide generate editable Korean PPTX/PDF decks from user-uploaded files on
 
 This is an air-gapped product. The API, worker, renderer, browser, and LLM may communicate only with configured internal services. No web search, external image search, cloud model, CDN font, or remote Skill-package fetch is permitted.
 
-The first release accepts PDF, DOCX, XLSX/CSV, TXT, and Markdown as presentation source files. Existing PPTX and PDF files may create a visual template Skill, but their contents are not used as source material for a new deck. Importing `.zip` Skill packages is explicitly out of scope.
+The first release accepts PDF, DOCX, XLSX/CSV, TXT, Markdown, and PPTX as presentation source files. A PPTX upload explicitly chooses one mode: **content source** extracts text, notes, table/chart descriptions, and slide-number locators for a new deck; **Skill/template reference** extracts only visual tokens. Importing `.zip` Skill packages is explicitly out of scope.
 
 ## User flow
 
@@ -31,7 +31,7 @@ Required fields:
 - optional `templateId`
 - optional `thumbnail` asset URL
 
-The direct-create form collects these fields. The “create from presentation” action uploads only a PPTX or PDF as a visual reference: PPTX reuses the existing safe style-extraction endpoint; PDF is stored only as a thumbnail/reference asset. Neither path extracts or stores source text as Skill instructions.
+The direct-create form collects these fields. The “create from presentation” action uploads only a PPTX or PDF as a visual reference: PPTX reuses the existing safe style-extraction endpoint; PDF is stored only as a thumbnail/reference asset. Neither path extracts or stores source text as Skill instructions. The same PPTX may instead be explicitly uploaded in content-source mode, which records slide-number locators and never changes the original file.
 
 Seeded Skills cover only the categories the product needs for its first gallery: business strategy, executive reporting, B2B sales, education, technical review, and marketing. Users can filter all Skills, their organization’s Skills, and category chips. There is no ZIP import/export or shared-code Skill format.
 

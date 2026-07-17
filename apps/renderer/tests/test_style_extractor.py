@@ -95,6 +95,25 @@ def test_extract_style_upload_returns_only_config_tokens():
     }
 
 
+def test_extract_content_returns_text_by_slide_without_style_tokens():
+    response = TestClient(app).post(
+        "/api/extract/content",
+        files={
+            "file": (
+                "example.pptx",
+                _example_pptx(),
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "content": KOREAN_TEXT,
+        "slides": [{"number": 1, "title": KOREAN_TEXT, "content": KOREAN_TEXT}],
+    }
+
+
 @pytest.mark.parametrize(
     ("filename", "content_type"),
     [

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Any
 import io
 import zipfile
+from pptx import Presentation as PptxPresentation
 
 from .generators.pptx_generator import PPTXGenerator
 from .generators.pdf_exporter import PDFExporter
@@ -91,6 +92,30 @@ def _is_safe_pptx_package(content: bytes) -> bool:
         return False
 
 
+def _extract_pptx_content(content: bytes) -> dict:
+    """Return only editable text grouped by slide; never retain media or formatting."""
+    presentation = PptxPresentation(io.BytesIO(content))
+    slides = []
+    for number, slide in enumerate(presentation.slides, start=1):
+        text_parts = []
+        for shape in slide.shapes:
+            if getattr(shape, "has_text_frame", False):
+                value = shape.text.strip()
+                if value:
+                    text_parts.append(value)
+            elif getattr(shape, "has_table", False):
+                rows = [" | ".join(cell.text.strip() for cell in row.cells if cell.text.strip()) for row in shape.table.rows]
+                text_parts.extend(row for row in rows if row)
+        slide_text = "\n".join(text_parts).strip()
+        if slide_text:
+            slides.append({
+                "number": number,
+                "title": text_parts[0].split("\n", 1)[0],
+                "content": slide_text,
+            })
+    return {"content": "\n\n".join(slide["content"] for slide in slides), "slides": slides}
+
+
 @app.post("/api/extract/style")
 async def extract_style(file: UploadFile = File(...)):
     if (
@@ -107,6 +132,26 @@ async def extract_style(file: UploadFile = File(...)):
     except Exception as error:
         raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
     return {"config": config}
+
+
+@app.post("/api/extract/content")
+async def extract_content(file: UploadFile = File(...)):
+    if (
+        not (file.filename or "").lower().endswith(".pptx")
+        or file.content_type
+        != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ):
+        raise HTTPException(status_code=400, detail="PPTX file required")
+    content = await file.read()
+    if not _is_safe_pptx_package(content):
+        raise HTTPException(status_code=400, detail="Invalid PPTX package")
+    try:
+        extracted = _extract_pptx_content(content)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
+    if not extracted["slides"]:
+        raise HTTPException(status_code=400, detail="PPTX has no extractable content")
+    return extracted
 
 
 @app.post("/api/render/pptx")

@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore, isAdminRole } from '@/stores/auth-store';
 import { authApi } from '@/lib/api';
-import { Plus, Home, FolderOpen, Settings, Shield, LogOut, Sparkles } from 'lucide-react';
+import { Plus, Home, FolderOpen, Settings, Shield, LogOut, Sparkles, BookOpen } from 'lucide-react';
 
 const NAV_ITEMS = [
     { href: '/dashboard', label: '홈', icon: Home },
+    { href: '/skills', label: 'Skills', icon: BookOpen },
     { href: '/presentations', label: '내 발표함', icon: FolderOpen },
     { href: '/settings', label: '설정', icon: Settings },
 ];
