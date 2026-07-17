@@ -57,14 +57,15 @@ async function main() {
     // ============================================
     // Users
     // ============================================
-    const hashedPassword = await bcrypt.hash('password123', 10);
+    const adminPassword = await bcrypt.hash('admin123', 10);
+    const userPassword = await bcrypt.hash('password123', 10);
 
     const users = await Promise.all([
         prisma.user.create({
             data: {
                 email: 'admin@jaslide.com',
                 name: '김관리자',
-                password: hashedPassword,
+                password: adminPassword,
                 role: UserRole.ADMIN,
                 status: UserStatus.ACTIVE,
                 creditsRemaining: 10000,
@@ -75,7 +76,7 @@ async function main() {
             data: {
                 email: 'jihye.kim@samsung.com',
                 name: '김지혜',
-                password: hashedPassword,
+                password: userPassword,
                 role: UserRole.ORG_ADMIN,
                 status: UserStatus.ACTIVE,
                 creditsRemaining: 500,
@@ -87,7 +88,7 @@ async function main() {
             data: {
                 email: 'minho.park@naver.com',
                 name: '박민호',
-                password: hashedPassword,
+                password: userPassword,
                 role: UserRole.USER,
                 status: UserStatus.ACTIVE,
                 creditsRemaining: 150,
@@ -98,7 +99,7 @@ async function main() {
             data: {
                 email: 'soyeon.lee@kakao.com',
                 name: '이소연',
-                password: hashedPassword,
+                password: userPassword,
                 role: UserRole.USER,
                 status: UserStatus.ACTIVE,
                 creditsRemaining: 200,
@@ -109,7 +110,7 @@ async function main() {
             data: {
                 email: 'youngho.choi@gmail.com',
                 name: '최영호',
-                password: hashedPassword,
+                password: userPassword,
                 role: UserRole.USER,
                 status: UserStatus.ACTIVE,
                 creditsRemaining: 80,
