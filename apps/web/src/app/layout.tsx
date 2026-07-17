@@ -1,17 +1,14 @@
 import type { Metadata } from 'next';
-import { IBM_Plex_Sans_KR, Noto_Serif_KR } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { Providers } from '@/components/providers';
 
-// ponytail: next/font self-hosts at build time — no runtime CDN, closed-network safe
-const plexSans = IBM_Plex_Sans_KR({
-    weight: ['400', '500', '600', '700'],
-    subsets: ['latin'],
+const plexSans = localFont({
+    src: '../../../api/src/assets/fonts/NotoSansKR-Regular.otf',
     variable: '--font-sans',
 });
-const serifDisplay = Noto_Serif_KR({
-    weight: ['600', '700', '900'],
-    subsets: ['latin'],
+const serifDisplay = localFont({
+    src: '../../../api/src/assets/fonts/NotoSansKR-Bold.otf',
     variable: '--font-display',
 });
 
