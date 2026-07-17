@@ -29,37 +29,36 @@
 - `apps/web/src/components/generation/outline-review.tsx` owns editable approval UI.
 - `apps/web/src/app/dashboard/page.tsx` owns source upload, Skill/template selection, and navigation to outline review.
 - `apps/web/src/lib/api.ts` owns typed calls for Skills and outline drafts.
-- `apps/web/src/app/layout.tsx` and `apps/web/src/app/globals.css` own local fonts only.
+- `apps/web/src/app/layout.tsx`, `apps/web/test/local-fonts.test.js`, and `docker/web.Dockerfile` own local-font verification and build context.
 
 ### Task 1: Establish an air-gapped build baseline
 
 **Files:**
 - Modify: `apps/web/src/app/layout.tsx`
-- Create: `apps/web/src/fonts/ibm-plex-sans-kr.woff2`
-- Create: `apps/web/src/fonts/noto-serif-kr.woff2`
+- Modify: `docker/web.Dockerfile`
+- Modify: `apps/web/package.json`
 - Modify: `apps/api/package.json`
-- Modify: `apps/api/prisma/schema.prisma`
-- Test: `apps/web/src/app/layout.test.ts`
-- Test: `apps/api/src/prisma/prisma-generation.spec.ts`
+- Create: `apps/web/test/local-fonts.test.js`
 
 **Interfaces:**
-- Produces `--font-sans` and `--font-display` from local font files.
-- Produces `pnpm --filter @jaslide/api prisma:generate`, running `prisma generate --schema prisma/schema.prisma`.
+- Produces `--font-sans` and `--font-display` from `apps/api/src/assets/fonts/*.otf`, which `docker/web.Dockerfile` copies into the web build context.
+- Produces the existing `pnpm --filter @jaslide/api db:generate`, which runs `prisma generate` from the API package directory.
 
 - [ ] **Step 1: Write the failing web font test**
 
 ```ts
-import source from './layout?raw';
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'layout.tsx'), 'utf8');
 
-it('does not import fonts from the network', () => {
-  expect(source).not.toContain('next/font/google');
-  expect(source).toContain('next/font/local');
+test('layout uses local bundled fonts', () => {
+  assert.doesNotMatch(source, /next\/font\/google/);
+  assert.match(source, /next\/font\/local/);
+  assert.match(source, /NotoSansKR-Regular\.otf/);
 });
 ```
 
 - [ ] **Step 2: Run the focused test to verify it fails**
 
-Run: `pnpm --filter @jaslide/web test -- layout.test.ts`
+Run: `node --test apps/web/test/local-fonts.test.js`
 Expected: FAIL because `next/font/google` is currently used.
 
 - [ ] **Step 3: Switch to local fonts and add the Prisma generation script**
@@ -67,23 +66,23 @@ Expected: FAIL because `next/font/google` is currently used.
 ```ts
 import localFont from 'next/font/local';
 
-const body = localFont({ src: './fonts/ibm-plex-sans-kr.woff2', variable: '--font-sans' });
-const display = localFont({ src: './fonts/noto-serif-kr.woff2', variable: '--font-display' });
+const body = localFont({ src: '../../api/src/assets/fonts/NotoSansKR-Regular.otf', variable: '--font-sans' });
+const display = localFont({ src: '../../api/src/assets/fonts/NotoSansKR-Bold.otf', variable: '--font-display' });
 ```
 
 ```json
-{ "scripts": { "prisma:generate": "prisma generate --schema prisma/schema.prisma" } }
+{ "scripts": { "test": "node --test ./test/*.test.js" } }
 ```
 
 - [ ] **Step 4: Verify local build prerequisites**
 
-Run: `pnpm --filter @jaslide/api prisma:generate && pnpm --filter @jaslide/web test -- layout.test.ts`
-Expected: Prisma client generated and the font test passes without a network request.
+Run: `pnpm --filter @jaslide/api db:generate && pnpm --filter @jaslide/web test && pnpm --filter @jaslide/web build`
+Expected: Prisma client generated, the local-font test passes, and the web build does not request Google Fonts.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/web/src/app/layout.tsx apps/web/src/fonts apps/api/package.json apps/web/src/app/layout.test.ts apps/api/src/prisma/prisma-generation.spec.ts
+git add apps/web/src/app/layout.tsx apps/web/test/local-fonts.test.js apps/web/package.json docker/web.Dockerfile
 git commit -m "fix: make build prerequisites air-gapped"
 ```
 
