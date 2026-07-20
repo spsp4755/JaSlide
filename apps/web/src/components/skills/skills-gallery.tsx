@@ -47,11 +47,12 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
             .finally(() => setLoading(false));
     }, [preview]);
 
+    // preview (logged-out demo) shows static examples; authenticated view uses only real, usable Skills
     const displayedSkills = useMemo(() => {
-        const all = [...skills, ...RECOMMENDED_SKILLS];
+        const all = preview ? [...skills, ...RECOMMENDED_SKILLS] : skills;
         if (selectedCategory === '전체' || selectedCategory === '추천') return all;
         return all.filter((skill) => skill.category === selectedCategory);
-    }, [selectedCategory, skills]);
+    }, [selectedCategory, skills, preview]);
 
     const createSkill = async () => {
         if (!form.name.trim() || !form.purpose.trim()) {
@@ -134,7 +135,7 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             {displayedSkills.map((skill) => <article key={skill.id} className="overflow-hidden rounded-2xl border border-border bg-card">
                                 <div className="h-32 bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4"><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-white/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">JaSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></div>
-                                <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : !skill.id.startsWith('recommended-') ? <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link> : <span className="mt-4 inline-flex text-sm text-muted-foreground">기본 Skill은 준비 중</span>}</div>
+                                <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link>}</div>
                             </article>)}
                         </div>
                     )}

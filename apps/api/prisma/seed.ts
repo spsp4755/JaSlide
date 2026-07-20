@@ -239,6 +239,96 @@ async function main() {
     ]);
 
     // ============================================
+    // Presentation Skills (seeded, public — cover the first-gallery categories)
+    // ============================================
+    await Promise.all([
+        prisma.presentationSkill.create({
+            data: {
+                name: '임원 전략 보고',
+                description: '핵심 의사결정과 실행 우선순위를 빠르게 전달합니다.',
+                category: '기업 전략',
+                audience: '경영진',
+                tone: '명확하고 단정하게',
+                purpose: '전략 보고',
+                outlineGuidance: '핵심 결론을 먼저 제시하고, 근거 데이터와 리스크, 실행 계획 순으로 전개합니다. 각 슬라이드는 하나의 의사결정 포인트만 다룹니다.',
+                recommendedSlideCount: 10,
+                isPublic: true,
+                templateId: templates[0].id,
+            },
+        }),
+        prisma.presentationSkill.create({
+            data: {
+                name: '교육 과정 안내',
+                description: '학습 목표와 과정 흐름을 이해하기 쉽게 구성합니다.',
+                category: '교육',
+                audience: '학습자',
+                tone: '친절하고 구조적으로',
+                purpose: '교육',
+                outlineGuidance: '학습 목표 제시 후 단계별 커리큘럼, 예제, 요약 순으로 구성합니다. 전문 용어는 풀어서 설명합니다.',
+                recommendedSlideCount: 12,
+                isPublic: true,
+                templateId: templates[2].id,
+            },
+        }),
+        prisma.presentationSkill.create({
+            data: {
+                name: 'B2B 제안서',
+                description: '고객 문제, 해결 방식, 도입 효과를 설득력 있게 연결합니다.',
+                category: 'B2B 영업',
+                audience: '의사결정자',
+                tone: '신뢰감 있게',
+                purpose: '제안',
+                outlineGuidance: '고객의 문제 정의, 제안 솔루션, 기대 효과, 도입 절차 순으로 전개하며 각 주장에 수치 근거를 포함합니다.',
+                recommendedSlideCount: 11,
+                isPublic: true,
+                templateId: templates[1].id,
+            },
+        }),
+        prisma.presentationSkill.create({
+            data: {
+                name: '데이터 & KPI 리뷰',
+                description: '지표 변화와 다음 액션을 한눈에 읽히도록 정리합니다.',
+                category: '데이터 & KPI',
+                audience: '운영 리더',
+                tone: '간결하고 근거 중심으로',
+                purpose: '성과 리뷰',
+                outlineGuidance: '기간별 핵심 지표 변화, 원인 분석, 다음 액션 순으로 구성합니다. 슬라이드마다 하나의 지표만 강조합니다.',
+                recommendedSlideCount: 9,
+                isPublic: true,
+                templateId: templates[4].id,
+            },
+        }),
+        prisma.presentationSkill.create({
+            data: {
+                name: '기술 검토 보고',
+                description: '아키텍처와 트레이드오프를 근거와 함께 설명합니다.',
+                category: '기술 검토',
+                audience: '엔지니어링 리더',
+                tone: '정확하고 근거 중심으로',
+                purpose: '기술 검토',
+                outlineGuidance: '문제 정의, 검토한 대안, 선택 근거, 트레이드오프, 롤아웃 계획 순으로 구성합니다.',
+                recommendedSlideCount: 10,
+                isPublic: true,
+                templateId: templates[5].id,
+            },
+        }),
+        prisma.presentationSkill.create({
+            data: {
+                name: '마케팅 캠페인 제안',
+                description: '캠페인 컨셉과 기대 성과를 설득력 있게 전달합니다.',
+                category: '마케팅',
+                audience: '마케팅 의사결정자',
+                tone: '설득력 있고 생동감 있게',
+                purpose: '캠페인 제안',
+                outlineGuidance: '시장 배경, 캠페인 컨셉, 채널 전략, 예산과 기대 성과 순으로 구성합니다.',
+                recommendedSlideCount: 8,
+                isPublic: true,
+                templateId: templates[3].id,
+            },
+        }),
+    ]);
+
+    // ============================================
     // Presentations & Slides
     // ============================================
     const presentations = await Promise.all([

@@ -121,7 +121,32 @@ export default function HomePage() {
     // ponytail: '자동' = 목적별 추천 장수. 콘텐츠 기반 자동 산정이 필요해지면 백엔드로 이동
     const effectiveSlideCount = slideCount ?? selectedPurpose.recommendedSlideCount ?? 10;
 
+    const handleImportSkill = async () => {
+        if (!uploadedFile) return;
+        setGenerationStatus('generating');
+        try {
+            const response = await skillsApi.importPptx(uploadedFile);
+            const skill = response.data;
+            setSkills((prev) => [...prev, skill]);
+            setSelectedSkillId(skill.id);
+            setUploadedFile(null);
+            setPptxMode('content');
+            toast({ title: 'Skill 등록 완료', description: `"${skill.name}" Skill이 생성되어 선택되었습니다.` });
+        } catch (error: any) {
+            toast({
+                title: 'Skill 등록 실패',
+                description: error.response?.data?.message || 'PPTX에서 Skill을 만들지 못했습니다.',
+                variant: 'destructive',
+            });
+        } finally {
+            setGenerationStatus('idle');
+        }
+    };
+
     const handleGenerate = async () => {
+        if (uploadedFile?.name.toLowerCase().endsWith('.pptx') && pptxMode === 'skill') {
+            return handleImportSkill();
+        }
         if (!textContent.trim() && !uploadedFile) {
             toast({ title: '오류', description: '내용을 입력하거나 파일을 첨부해주세요.', variant: 'destructive' });
             return;
@@ -130,14 +155,6 @@ export default function HomePage() {
         setGenerationStartTime(new Date());
         setProgress(0);
         try {
-            if (uploadedFile?.name.toLowerCase().endsWith('.pptx') && pptxMode === 'skill') {
-                toast({
-                    title: 'Skill 등록은 다음 단계입니다',
-                    description: '현재는 PPTX 내용을 생성에 사용하는 기능을 지원합니다. 스타일 기반 Skill 등록은 Skills 화면에서 이어서 제공합니다.',
-                });
-                setGenerationStatus('idle');
-                return;
-            }
             const extracted = uploadedFile ? await generationApi.extractSource(uploadedFile) : null;
             const content = extracted
                 ? extracted.data.chunks.map((chunk: { locator: string; content: string }) => `[${chunk.locator}]\n${chunk.content}`).join('\n\n')

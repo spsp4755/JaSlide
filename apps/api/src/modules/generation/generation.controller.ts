@@ -28,7 +28,7 @@ export class GenerationController {
     @Post('start')
     @ApiOperation({ summary: 'Start presentation generation' })
     async startGeneration(@CurrentUser() user: any, @Body() dto: StartGenerationDto) {
-        return this.generationService.startGeneration(user.id, dto);
+        return this.generationService.startGeneration(user, dto);
     }
 
     @Get(':jobId/status')

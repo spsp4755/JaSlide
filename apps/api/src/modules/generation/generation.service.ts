@@ -35,7 +35,8 @@ export class GenerationService implements OnModuleInit {
         }));
     }
 
-    async startGeneration(userId: string, dto: StartGenerationDto) {
+    async startGeneration(user: { id: string; organizationId?: string | null }, dto: StartGenerationDto) {
+        const userId = user.id;
         // Estimate cost
         const estimatedCost = dto.slideCount * CREDIT_COSTS.SLIDE_BASIC;
 
@@ -47,7 +48,14 @@ export class GenerationService implements OnModuleInit {
 
         const skill = dto.skillId
             ? await this.prisma.presentationSkill.findFirst({
-                where: { id: dto.skillId, OR: [{ isPublic: true }, { userId }] },
+                where: {
+                    id: dto.skillId,
+                    OR: [
+                        { isPublic: true },
+                        { userId },
+                        ...(user.organizationId ? [{ organizationId: user.organizationId }] : []),
+                    ],
+                },
                 select: { id: true, templateId: true, outlineGuidance: true },
             })
             : null;
