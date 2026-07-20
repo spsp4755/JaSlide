@@ -4,9 +4,13 @@ import {
     IsInt,
     IsEnum,
     IsObject,
+    IsArray,
+    ValidateNested,
+    ArrayMinSize,
     Min,
     Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum SourceType {
@@ -36,6 +40,72 @@ export class GenerationOptionsDto {
     @IsString()
     @IsOptional()
     tone?: string;
+}
+
+export class OutlineSlideDto {
+    @ApiProperty({ example: 1 })
+    @IsInt()
+    order: number;
+
+    @ApiProperty({ example: '시장 개요' })
+    @IsString()
+    title: string;
+
+    @ApiProperty({ example: 'CONTENT' })
+    @IsString()
+    type: string;
+
+    @ApiProperty({ type: [String], example: ['핵심 요점 1', '핵심 요점 2'] })
+    @IsArray()
+    @IsString({ each: true })
+    keyPoints: string[];
+}
+
+export class OutlineDto {
+    @ApiProperty({ example: '2026년 사업 계획' })
+    @IsString()
+    title: string;
+
+    @ApiProperty({ type: [OutlineSlideDto] })
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => OutlineSlideDto)
+    slides: OutlineSlideDto[];
+}
+
+// Outline-only request: generates an editable outline without creating any job.
+export class GenerateOutlineDto {
+    @ApiProperty({ enum: SourceType, example: SourceType.TEXT })
+    @IsEnum(SourceType)
+    @IsOptional()
+    sourceType?: SourceType;
+
+    @ApiProperty({ example: 'Content to generate an outline from...' })
+    @IsString()
+    content: string;
+
+    @ApiPropertyOptional({ example: 10, minimum: 3, maximum: 30 })
+    @IsInt()
+    @Min(3)
+    @Max(30)
+    @IsOptional()
+    slideCount?: number;
+
+    @ApiPropertyOptional({ example: 'ko' })
+    @IsString()
+    @IsOptional()
+    language?: string;
+
+    @ApiPropertyOptional({ description: '선택한 발표 Skill ID' })
+    @IsString()
+    @IsOptional()
+    skillId?: string;
+
+    @ApiPropertyOptional({ type: GenerationOptionsDto })
+    @IsObject()
+    @IsOptional()
+    options?: GenerationOptionsDto;
 }
 
 export class StartGenerationDto {
@@ -77,6 +147,12 @@ export class StartGenerationDto {
     @IsObject()
     @IsOptional()
     options?: GenerationOptionsDto;
+
+    @ApiPropertyOptional({ type: OutlineDto, description: '검토·수정한 아웃라인. 있으면 아웃라인 생성 단계를 건너뜁니다.' })
+    @ValidateNested()
+    @Type(() => OutlineDto)
+    @IsOptional()
+    outline?: OutlineDto;
 }
 
 export class AIEditDto {

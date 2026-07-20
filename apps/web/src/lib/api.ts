@@ -80,6 +80,7 @@ export const generationApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
     },
+    outline: (data: any) => api.post('/generation/outline', data),
     start: (data: any) => api.post('/generation/start', data),
     status: (jobId: string) => api.get(`/generation/${jobId}/status`),
     cancel: (jobId: string) => api.post(`/generation/${jobId}/cancel`),

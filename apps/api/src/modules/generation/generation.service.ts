@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/c
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { CreditsService } from '../credits/credits.service';
-import { StartGenerationDto, AIEditDto } from './dto/generation.dto';
+import { StartGenerationDto, AIEditDto, GenerateOutlineDto } from './dto/generation.dto';
 import { CREDIT_COSTS } from '@jaslide/shared';
 import type { Prisma } from '@prisma/client';
 import { QueueService } from '../queue/queue.service';
@@ -35,10 +35,55 @@ export class GenerationService implements OnModuleInit {
         }));
     }
 
+    private async resolveSkill(user: { id: string; organizationId?: string | null }, skillId?: string) {
+        if (!skillId) return null;
+        const skill = await this.prisma.presentationSkill.findFirst({
+            where: {
+                id: skillId,
+                OR: [
+                    { isPublic: true },
+                    { userId: user.id },
+                    ...(user.organizationId ? [{ organizationId: user.organizationId }] : []),
+                ],
+            },
+            select: { id: true, templateId: true, outlineGuidance: true },
+        });
+        if (!skill) {
+            throw new BadRequestException('Skill not found');
+        }
+        return skill;
+    }
+
+    // Reused outline generation shared by the outline endpoint and (implicitly) the pipeline.
+    async generateOutline(user: { id: string; organizationId?: string | null }, dto: GenerateOutlineDto) {
+        if (!dto.content?.trim()) {
+            throw new BadRequestException('Content is required');
+        }
+        const skill = await this.resolveSkill(user, dto.skillId);
+        const guidedContent = skill?.outlineGuidance
+            ? `${dto.content}\n\n[작성 Skill 가이드]\n${skill.outlineGuidance}`
+            : dto.content;
+        const language = dto.language || (await this.llmService.detectLanguage(guidedContent));
+        return this.llmService.generateOutline({
+            content: guidedContent,
+            slideCount: dto.slideCount ?? 10,
+            language,
+            style: dto.options?.style,
+        });
+    }
+
     async startGeneration(user: { id: string; organizationId?: string | null }, dto: StartGenerationDto) {
         const userId = user.id;
+
+        // An edited outline reflects the user's final choices; reject it up front
+        // rather than failing mid-job during content generation.
+        const approvedOutline = dto.outline
+            ? this.llmService.validateClientOutline(dto.outline)
+            : null;
+        const effectiveSlideCount = approvedOutline?.slides.length ?? dto.slideCount;
+
         // Estimate cost
-        const estimatedCost = dto.slideCount * CREDIT_COSTS.SLIDE_BASIC;
+        const estimatedCost = effectiveSlideCount * CREDIT_COSTS.SLIDE_BASIC;
 
         // Check credits
         const hasCredits = await this.creditsService.checkBalance(userId, estimatedCost);
@@ -46,22 +91,7 @@ export class GenerationService implements OnModuleInit {
             throw new BadRequestException('Insufficient credits');
         }
 
-        const skill = dto.skillId
-            ? await this.prisma.presentationSkill.findFirst({
-                where: {
-                    id: dto.skillId,
-                    OR: [
-                        { isPublic: true },
-                        { userId },
-                        ...(user.organizationId ? [{ organizationId: user.organizationId }] : []),
-                    ],
-                },
-                select: { id: true, templateId: true, outlineGuidance: true },
-            })
-            : null;
-        if (dto.skillId && !skill) {
-            throw new BadRequestException('Skill not found');
-        }
+        const skill = await this.resolveSkill(user, dto.skillId);
         const templateId = dto.templateId ?? skill?.templateId;
 
         // Create presentation
@@ -86,11 +116,12 @@ export class GenerationService implements OnModuleInit {
                 input: {
                     sourceType: dto.sourceType,
                     content: dto.content,
-                    slideCount: dto.slideCount,
+                    slideCount: effectiveSlideCount,
                     language: dto.language || 'ko',
                     templateId,
                     skillGuidance: skill?.outlineGuidance,
                     options: dto.options,
+                    outline: approvedOutline ?? undefined,
                 } as Prisma.InputJsonValue,
                 skillId: skill?.id,
                 progress: 0,
@@ -166,13 +197,15 @@ export class GenerationService implements OnModuleInit {
             // Detect language if not specified
             const language = input.language || (await this.llmService.detectLanguage(guidedContent));
 
-            // Generate outline
-            const outline = await this.llmService.generateOutline({
-                content: guidedContent,
-                slideCount: input.slideCount,
-                language,
-                style: input.options?.style,
-            });
+            // Use the user-approved outline when present; otherwise generate one.
+            const outline = input.outline
+                ? this.llmService.validateClientOutline(input.outline)
+                : await this.llmService.generateOutline({
+                    content: guidedContent,
+                    slideCount: input.slideCount,
+                    language,
+                    style: input.options?.style,
+                });
 
             await this.updateJobStatus(jobId, 'GENERATING_CONTENT', 30);
 

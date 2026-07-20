@@ -10,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { GenerationProgress } from '@/components/generation-progress';
 import { PURPOSE_OPTIONS, PurposeOption } from '@/components/purpose-onboarding';
 import {
-    Plus, Send, Settings2, X, FileText, Check, Loader2,
+    Plus, Send, Settings2, X, FileText, Check, Loader2, ArrowUp, ArrowDown, Trash2,
 } from 'lucide-react';
 
 interface Template {
@@ -30,6 +30,18 @@ interface Skill {
     name: string;
     templateId?: string;
     recommendedSlideCount: number;
+}
+
+interface OutlineSlide {
+    order: number;
+    title: string;
+    type: string;
+    keyPoints: string[];
+}
+
+interface Outline {
+    title: string;
+    slides: OutlineSlide[];
 }
 
 export default function HomePage() {
@@ -65,6 +77,11 @@ export default function HomePage() {
     const [progress, setProgress] = useState(0);
     const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'completed' | 'failed'>('idle');
     const [generationStartTime, setGenerationStartTime] = useState<Date | null>(null);
+
+    // Outline review state
+    const [outlineLoading, setOutlineLoading] = useState(false);
+    const [outline, setOutline] = useState<Outline | null>(null);
+    const [pendingContent, setPendingContent] = useState('');
 
     useEffect(() => {
         if (!hasHydrated) return;
@@ -151,19 +168,64 @@ export default function HomePage() {
             toast({ title: '오류', description: '내용을 입력하거나 파일을 첨부해주세요.', variant: 'destructive' });
             return;
         }
-        setGenerationStatus('generating');
-        setGenerationStartTime(new Date());
-        setProgress(0);
+        setOutlineLoading(true);
         try {
             const extracted = uploadedFile ? await generationApi.extractSource(uploadedFile) : null;
             const content = extracted
                 ? extracted.data.chunks.map((chunk: { locator: string; content: string }) => `[${chunk.locator}]\n${chunk.content}`).join('\n\n')
                 : textContent;
-            const response = await generationApi.start({
-                // Uploaded files are converted to cited plain text before the generation job is queued.
+            setPendingContent(content);
+            const response = await generationApi.outline({
                 sourceType: 'TEXT',
                 content,
                 slideCount: effectiveSlideCount,
+                language,
+                skillId: selectedSkillId,
+                options: {
+                    includeImages,
+                    includeCharts,
+                    style: 'professional',
+                    tone: 'informative',
+                    purpose: selectedPurpose.id,
+                },
+            });
+            setOutline(response.data);
+        } catch (error: any) {
+            toast({
+                title: '아웃라인 생성 실패',
+                description: error.response?.data?.message || '아웃라인을 만들지 못했습니다.',
+                variant: 'destructive',
+            });
+        } finally {
+            setOutlineLoading(false);
+        }
+    };
+
+    const handleApproveOutline = async () => {
+        if (!outline) return;
+        // Renumber order and drop empty titles / key points before submitting.
+        const slides = outline.slides
+            .map((slide, index) => ({
+                ...slide,
+                order: index + 1,
+                title: slide.title.trim(),
+                keyPoints: slide.keyPoints.map((point) => point.trim()).filter(Boolean),
+            }))
+            .filter((slide) => slide.title && slide.keyPoints.length > 0);
+        if (slides.length === 0) {
+            toast({ title: '오류', description: '제목과 요점이 있는 슬라이드가 최소 하나는 필요합니다.', variant: 'destructive' });
+            return;
+        }
+        const cleaned = { title: outline.title.trim() || '새 프레젠테이션', slides };
+
+        setGenerationStatus('generating');
+        setGenerationStartTime(new Date());
+        setProgress(0);
+        try {
+            const response = await generationApi.start({
+                sourceType: 'TEXT',
+                content: pendingContent,
+                slideCount: slides.length,
                 language,
                 templateId: selectedTemplateId,
                 skillId: selectedSkillId,
@@ -174,7 +236,9 @@ export default function HomePage() {
                     tone: 'informative',
                     purpose: selectedPurpose.id,
                 },
+                outline: cleaned,
             });
+            setOutline(null);
             setJobId(response.data.jobId);
             pollJobStatus(response.data.jobId, response.data.presentationId);
         } catch (error: any) {
@@ -186,6 +250,30 @@ export default function HomePage() {
             setGenerationStatus('failed');
         }
     };
+
+    // Outline edit helpers — operate on the draft under review.
+    const editSlide = (index: number, patch: Partial<OutlineSlide>) =>
+        setOutline((prev) => prev && ({ ...prev, slides: prev.slides.map((s, i) => i === index ? { ...s, ...patch } : s) }));
+    const moveSlide = (index: number, delta: number) =>
+        setOutline((prev) => {
+            if (!prev) return prev;
+            const target = index + delta;
+            if (target < 0 || target >= prev.slides.length) return prev;
+            const slides = [...prev.slides];
+            [slides[index], slides[target]] = [slides[target], slides[index]];
+            return { ...prev, slides };
+        });
+    const removeSlide = (index: number) =>
+        setOutline((prev) => prev && ({ ...prev, slides: prev.slides.filter((_, i) => i !== index) }));
+    const editKeyPoint = (slideIndex: number, pointIndex: number, value: string) =>
+        setOutline((prev) => prev && ({ ...prev, slides: prev.slides.map((s, i) => i === slideIndex
+            ? { ...s, keyPoints: s.keyPoints.map((p, j) => j === pointIndex ? value : p) } : s) }));
+    const removeKeyPoint = (slideIndex: number, pointIndex: number) =>
+        setOutline((prev) => prev && ({ ...prev, slides: prev.slides.map((s, i) => i === slideIndex
+            ? { ...s, keyPoints: s.keyPoints.filter((_, j) => j !== pointIndex) } : s) }));
+    const addKeyPoint = (slideIndex: number) =>
+        setOutline((prev) => prev && ({ ...prev, slides: prev.slides.map((s, i) => i === slideIndex
+            ? { ...s, keyPoints: [...s.keyPoints, ''] } : s) }));
 
     const handleCancelGeneration = async () => {
         if (!jobId) return;
@@ -256,6 +344,70 @@ export default function HomePage() {
                         estimatedTime={effectiveSlideCount * 3}
                         startTime={generationStartTime || undefined}
                     />
+                </div>
+            </AppShell>
+        );
+    }
+
+    // Outline loading / review step
+    if (outlineLoading || outline) {
+        return (
+            <AppShell>
+                <div className="container mx-auto px-6 py-16 max-w-3xl">
+                    {!outline ? (
+                        <div className="flex flex-col items-center justify-center gap-4 py-24">
+                            <Loader2 className="h-8 w-8 animate-spin text-foreground" />
+                            <p className="text-muted-foreground">아웃라인 생성 중…</p>
+                        </div>
+                    ) : (
+                        <>
+                            <h2 className="font-display text-2xl font-bold text-foreground mb-1">아웃라인 검토</h2>
+                            <p className="text-sm text-muted-foreground mb-6">제목과 순서, 핵심 요점을 확인하고 수정한 뒤 생성하세요.</p>
+                            <input
+                                value={outline.title}
+                                onChange={(e) => setOutline({ ...outline, title: e.target.value })}
+                                aria-label="프레젠테이션 제목"
+                                className="w-full rounded-lg border border-border bg-card px-4 py-3 text-lg font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                            <div className="mt-4 space-y-3">
+                                {outline.slides.map((slide, i) => (
+                                    <div key={i} className="rounded-xl border border-border bg-card p-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-6 text-center text-sm text-muted-foreground">{i + 1}</span>
+                                            <input
+                                                value={slide.title}
+                                                onChange={(e) => editSlide(i, { title: e.target.value })}
+                                                aria-label={`슬라이드 ${i + 1} 제목`}
+                                                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                            />
+                                            <button type="button" onClick={() => moveSlide(i, -1)} disabled={i === 0} aria-label="위로" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                                            <button type="button" onClick={() => moveSlide(i, 1)} disabled={i === outline.slides.length - 1} aria-label="아래로" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                                            <button type="button" onClick={() => removeSlide(i)} aria-label="슬라이드 삭제" className="rounded-lg p-2 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                                        </div>
+                                        <div className="mt-3 space-y-2 pl-8">
+                                            {slide.keyPoints.map((point, j) => (
+                                                <div key={j} className="flex items-center gap-2">
+                                                    <span className="text-muted-foreground">·</span>
+                                                    <input
+                                                        value={point}
+                                                        onChange={(e) => editKeyPoint(i, j, e.target.value)}
+                                                        aria-label={`슬라이드 ${i + 1} 요점 ${j + 1}`}
+                                                        className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                                    />
+                                                    <button type="button" onClick={() => removeKeyPoint(i, j)} aria-label="요점 삭제" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary"><X className="h-3.5 w-3.5" /></button>
+                                                </div>
+                                            ))}
+                                            <button type="button" onClick={() => addKeyPoint(i)} className="text-sm text-muted-foreground hover:text-foreground">+ 요점 추가</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-6 flex justify-end gap-2">
+                                <button type="button" onClick={() => setOutline(null)} className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary">취소</button>
+                                <button type="button" onClick={handleApproveOutline} className="rounded-xl bg-foreground px-4 py-2.5 text-sm font-medium text-background hover:opacity-85">승인하고 생성</button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </AppShell>
         );

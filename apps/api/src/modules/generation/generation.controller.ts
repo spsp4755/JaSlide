@@ -2,7 +2,7 @@ import { Controller, Post, Get, Body, Param, UseGuards, UseInterceptors, Uploade
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { GenerationService } from './generation.service';
-import { StartGenerationDto, AIEditDto } from './dto/generation.dto';
+import { StartGenerationDto, AIEditDto, GenerateOutlineDto } from './dto/generation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SourceExtractionService } from './source-extraction.service';
@@ -23,6 +23,12 @@ export class GenerationController {
     @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
     async extractSource(@UploadedFile() file: Express.Multer.File) {
         return this.sourceExtractionService.extract(file);
+    }
+
+    @Post('outline')
+    @ApiOperation({ summary: 'Generate an editable outline without creating a job' })
+    async generateOutline(@CurrentUser() user: any, @Body() dto: GenerateOutlineDto) {
+        return this.generationService.generateOutline(user, dto);
     }
 
     @Post('start')

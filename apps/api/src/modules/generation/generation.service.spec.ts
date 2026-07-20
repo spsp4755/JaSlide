@@ -103,4 +103,54 @@ describe('GenerationService cancellation', () => {
             select: { id: true, templateId: true, outlineGuidance: true },
         });
     });
+
+    it('validates an edited outline and sizes the job by its slide count', async () => {
+        const llm = { validateClientOutline: jest.fn((outline) => outline) };
+        const credits = { checkBalance: jest.fn().mockResolvedValue(true) };
+        const queue = { addGenerationJob: jest.fn().mockResolvedValue(undefined) };
+        const svc = new GenerationService(prisma as any, llm as any, credits as any, queue as any);
+        prisma.presentation.create.mockResolvedValue({ id: 'presentation-3' });
+        prisma.generationJob.create.mockResolvedValue({ id: 'job-3' });
+        const outline = {
+            title: '검토된 제목',
+            slides: [
+                { order: 1, title: 'a', type: 'CONTENT', keyPoints: ['x'] },
+                { order: 2, title: 'b', type: 'CONTENT', keyPoints: ['y'] },
+            ],
+        };
+
+        await svc.startGeneration({ id: 'user-1' }, {
+            sourceType: 'TEXT' as any,
+            content: '내용',
+            slideCount: 10,
+            outline: outline as any,
+        });
+
+        expect(llm.validateClientOutline).toHaveBeenCalledWith(outline);
+        expect(prisma.generationJob.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                input: expect.objectContaining({ slideCount: 2, outline }),
+            }),
+        }));
+    });
+
+    it('generateOutline rejects empty content', async () => {
+        const svc = new GenerationService(prisma as any, {} as any, {} as any, {} as any);
+        await expect(svc.generateOutline({ id: 'user-1' }, { content: '   ' } as any))
+            .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('generateOutline detects language and delegates to the LLM', async () => {
+        const llm = {
+            detectLanguage: jest.fn().mockResolvedValue('ko'),
+            generateOutline: jest.fn().mockResolvedValue({ title: 'T', slides: [] }),
+        };
+        const svc = new GenerationService(prisma as any, llm as any, {} as any, {} as any);
+
+        await svc.generateOutline({ id: 'user-1' }, { content: '발표 내용', slideCount: 8 } as any);
+
+        expect(llm.generateOutline).toHaveBeenCalledWith(expect.objectContaining({
+            content: '발표 내용', slideCount: 8, language: 'ko',
+        }));
+    });
 });

@@ -185,6 +185,28 @@ export class LlmService {
         }
     }
 
+    // Validates a user-edited outline before content generation. Looser than the
+    // LLM validator: the user may keep a single key point per slide and any slide
+    // count, and order is renumbered here so the client need not send it perfectly.
+    validateClientOutline(value: unknown): SlideOutline {
+        if (!this.isRecord(value) || !this.isText(value.title) || !Array.isArray(value.slides)) {
+            throw new Error('Outline must include a non-empty title and slides');
+        }
+        if (value.slides.length < 1) {
+            throw new Error('Outline must include at least one slide');
+        }
+        const slides = value.slides.map((slide, index) => {
+            if (!this.isRecord(slide) || !this.isText(slide.title)
+                || !this.isText(slide.type) || !this.SLIDE_TYPES.has(slide.type)
+                || !Array.isArray(slide.keyPoints) || slide.keyPoints.length < 1 || slide.keyPoints.length > 8
+                || !slide.keyPoints.every((point) => this.isText(point))) {
+                throw new Error(`Invalid outline slide at position ${index + 1}`);
+            }
+            return { order: index + 1, title: slide.title, type: slide.type, keyPoints: slide.keyPoints };
+        });
+        return { title: value.title, slides };
+    }
+
     async generateSlideContent(input: GenerateSlideContentInput): Promise<SlideContent> {
         const prompt = this.promptTemplates.getSlideContentPrompt(input);
 
