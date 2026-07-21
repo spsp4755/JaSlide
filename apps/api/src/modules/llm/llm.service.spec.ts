@@ -113,23 +113,23 @@ describe('LlmService contracts', () => {
         expect(create).toHaveBeenCalledTimes(2);
     });
 
-    it('rejects slide content with invalid bullet levels after one repair', async () => {
-        const invalid = { heading: '실행 계획', bullets: [{ text: '첫 번째 항목', level: 2 }] };
-        const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid)]);
+    it('coerces out-of-range bullet levels to 0 instead of rejecting', async () => {
+        const reply = { heading: '실행 계획', bullets: [{ text: '첫 번째 항목', level: 2 }] };
+        const create = await createService([JSON.stringify(reply)]);
 
         await expect(service.generateSlideContent({
             title: '실행 계획', type: 'CONTENT', keyPoints: ['분석'], language: 'ko',
-        })).rejects.toThrow('bullet level');
-        expect(create).toHaveBeenCalledTimes(2);
+        })).resolves.toEqual({ heading: '실행 계획', bullets: [{ text: '첫 번째 항목', level: 0 }] });
+        expect(create).toHaveBeenCalledTimes(1);
     });
 
-    it('rejects extra or malformed optional slide content fields after one repair', async () => {
-        const invalid = { heading: '실행 계획', body: 123, internalNotes: 'do not persist' };
-        const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid)]);
+    it('drops unknown and malformed optional slide content fields', async () => {
+        const reply = { heading: '실행 계획', body: 123, internalNotes: 'do not persist' };
+        const create = await createService([JSON.stringify(reply)]);
 
         await expect(service.generateSlideContent({
             title: '실행 계획', type: 'CONTENT', keyPoints: ['분석'], language: 'ko',
-        })).rejects.toThrow('Invalid slide content field');
-        expect(create).toHaveBeenCalledTimes(2);
+        })).resolves.toEqual({ heading: '실행 계획' });
+        expect(create).toHaveBeenCalledTimes(1);
     });
 });

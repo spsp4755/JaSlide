@@ -227,7 +227,7 @@ export class LlmService {
 
         try {
             const { client, model } = await this.getOpenAIClient();
-            const response = await client.chat.completions.create({
+            const content = await this.chatJson(client, {
                 model,
                 messages: [
                     {
@@ -237,15 +237,13 @@ export class LlmService {
                     { role: 'user', content: prompt },
                 ],
                 temperature: 0.5,
-                response_format: { type: 'json_object' },
             });
 
-            const content = response.choices[0]?.message?.content;
             if (!content) {
                 throw new Error('No response from LLM');
             }
 
-            const result = JSON.parse(content);
+            const result = JSON.parse(this.extractJson(content));
             return result.content || currentContent;
         } catch (error) {
             this.logger.error('Failed to edit content', error);
@@ -261,17 +259,16 @@ Return JSON with "layout" field only.`;
 
         try {
             const { client, model } = await this.getOpenAIClient();
-            const response = await client.chat.completions.create({
+            const content = await this.chatJson(client, {
                 model,
                 messages: [
                     { role: 'system', content: 'You are a presentation design expert.' },
                     { role: 'user', content: prompt },
                 ],
                 temperature: 0.3,
-                response_format: { type: 'json_object' },
             });
 
-            const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+            const result = JSON.parse(this.extractJson(content || '{}'));
             return result.layout || 'center';
         } catch (error) {
             this.logger.error('Failed to suggest layout', error);
@@ -286,6 +283,36 @@ Return JSON with "layout" field only.`;
             return 'ko';
         }
         return 'en';
+    }
+
+    // Request JSON output, tolerating OpenAI-compatible servers that reject
+    // response_format: json_object (e.g. LM Studio wants json_schema/text).
+    private async chatJson(
+        client: OpenAI,
+        params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, 'response_format'>,
+    ): Promise<string> {
+        try {
+            const res = await client.chat.completions.create({
+                ...params,
+                response_format: { type: 'json_object' },
+            });
+            return res.choices[0]?.message?.content || '';
+        } catch (error: any) {
+            if (error?.status === 400 && /response_format/i.test(error?.message || '')) {
+                const res = await client.chat.completions.create(params);
+                return res.choices[0]?.message?.content || '';
+            }
+            throw error;
+        }
+    }
+
+    // Pull the JSON object out of a model reply that may be fenced or prose-wrapped.
+    private extractJson(text: string): string {
+        const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        const candidate = fence ? fence[1] : text;
+        const start = candidate.indexOf('{');
+        const end = candidate.lastIndexOf('}');
+        return start >= 0 && end > start ? candidate.slice(start, end + 1) : candidate.trim();
     }
 
     private async generateValidatedJson<T>(
@@ -307,19 +334,17 @@ Return JSON with "layout" field only.`;
                         : `${prompt}\n\nThe previous response was invalid: ${responseText}\nValidation error: ${error instanceof Error ? error.message : 'invalid JSON'}. Return a corrected JSON object only.`,
                 },
             ];
-            const response = await client.chat.completions.create({
+            responseText = await this.chatJson(client, {
                 model,
                 messages,
                 temperature: 0.7,
-                response_format: { type: 'json_object' },
             });
-            responseText = response.choices[0]?.message?.content || '';
 
             try {
                 if (!responseText) {
                     throw new Error('No response from LLM');
                 }
-                return validate(JSON.parse(responseText));
+                return validate(JSON.parse(this.extractJson(responseText)));
             } catch (caught) {
                 error = caught;
             }
@@ -352,30 +377,22 @@ Return JSON with "layout" field only.`;
         if (!this.isRecord(value) || !this.isText(value.heading)) {
             throw new Error('Slide content requires a non-empty heading');
         }
-        const allowedFields = new Set(['heading', 'subheading', 'body', 'bullets']);
-        if (Object.keys(value).some((field) => !allowedFields.has(field))
-            || (value.subheading !== undefined && !this.isText(value.subheading))
-            || (value.body !== undefined && !this.isText(value.body))) {
-            throw new Error('Invalid slide content field');
-        }
 
+        // ponytail: tolerant of varied local-model output — keep the known fields,
+        // ignore extras and malformed optionals instead of rejecting the whole slide.
         let bullets: { text: string; level: number }[] | undefined;
-        if (value.bullets !== undefined) {
-            if (!Array.isArray(value.bullets) || value.bullets.length > 5) {
-                throw new Error('Slide content allows at most five bullets');
-            }
-            bullets = value.bullets.map((bullet) => {
-                if (!this.isRecord(bullet) || !this.isText(bullet.text) || (bullet.level !== 0 && bullet.level !== 1)) {
-                    throw new Error('Invalid bullet level or text');
-                }
-                return { text: bullet.text, level: bullet.level };
-            });
+        if (Array.isArray(value.bullets)) {
+            const cleaned = value.bullets
+                .filter((bullet): bullet is Record<string, unknown> => this.isRecord(bullet) && this.isText(bullet.text))
+                .slice(0, 5)
+                .map((bullet) => ({ text: bullet.text as string, level: bullet.level === 1 ? 1 : 0 }));
+            if (cleaned.length > 0) bullets = cleaned;
         }
 
         return {
             heading: value.heading,
-            ...(value.subheading !== undefined ? { subheading: value.subheading } : {}),
-            ...(value.body !== undefined ? { body: value.body } : {}),
+            ...(this.isText(value.subheading) ? { subheading: value.subheading } : {}),
+            ...(this.isText(value.body) ? { body: value.body } : {}),
             ...(bullets !== undefined ? { bullets } : {}),
         };
     }
