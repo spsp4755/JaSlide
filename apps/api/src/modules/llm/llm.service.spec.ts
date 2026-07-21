@@ -241,4 +241,15 @@ describe('LlmService contracts', () => {
 
         expect(create.mock.calls[0][0]).toMatchObject({ max_tokens: 8192 });
     });
+
+    it('uses the admin-configured maxTokens for slide content instead of a hardcoded 4096', async () => {
+        const reply = { heading: 'Risk reduction', body: 'Detailed content that a low token cap would truncate.' };
+        const create = await createService([JSON.stringify(reply)]);
+
+        await service.generateSlideContent({
+            title: 'Risk reduction', type: 'CONTENT', keyPoints: ['Point'], language: 'en',
+        });
+
+        expect(create.mock.calls[0][0]).toMatchObject({ max_tokens: 8192 });
+    });
 });

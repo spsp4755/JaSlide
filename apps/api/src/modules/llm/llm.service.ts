@@ -57,6 +57,14 @@ export class LlmService {
     private cachedMaxTokens: number = 4096;
     private cacheExpiry: number = 0;
     private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    // Called by the admin models module after create/update/delete/setDefault so a
+    // changed endpoint, API key, or maxTokens takes effect immediately instead of
+    // silently continuing to use the previous config for up to CACHE_TTL.
+    invalidateClientCache(): void {
+        this.cachedClient = null;
+        this.cacheExpiry = 0;
+    }
     private readonly SLIDE_TYPES = new Set([
         'TITLE', 'CONTENT', 'BULLET_LIST', 'TWO_COLUMN', 'IMAGE',
         'CHART', 'QUOTE', 'COMPARISON', 'SECTION_HEADER',
@@ -261,11 +269,15 @@ export class LlmService {
         const prompt = this.promptTemplates.getSlideContentPrompt(input);
 
         try {
+            // Use the admin-configured model.maxTokens (via generateValidatedJson's own
+            // Math.min against it), same as outline generation — a hardcoded 4096 here
+            // silently overrode a higher admin setting and starved reasoning models that
+            // spend a lot of their budget on hidden reasoning tokens before the JSON body.
             return await this.generateValidatedJson(
                 'You are a professional presentation content writer. Return valid JSON only.',
                 prompt,
                 (value) => this.validateSlideContent(value, input.type),
-                4096,
+                Number.MAX_SAFE_INTEGER,
             );
         } catch (error) {
             this.logger.error('Failed to generate slide content', error);

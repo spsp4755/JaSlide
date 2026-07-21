@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { LlmService } from '../../llm/llm.service';
 import { AdminCreateLlmModelDto, AdminUpdateLlmModelDto, PaginationDto } from '../dto';
 
 @Injectable()
 export class AdminModelsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private llmService: LlmService) { }
 
     async findAll(filter: PaginationDto & { provider?: string }) {
         const { page = 1, limit = 20, provider } = filter;
@@ -28,7 +29,7 @@ export class AdminModelsService {
     }
 
     async create(dto: AdminCreateLlmModelDto) {
-        return this.prisma.llmModel.create({
+        const created = await this.prisma.llmModel.create({
             data: {
                 name: dto.name,
                 provider: dto.provider,
@@ -44,16 +45,21 @@ export class AdminModelsService {
                 config: dto.config || {},
             },
         });
+        this.llmService.invalidateClientCache();
+        return created;
     }
 
     async update(id: string, dto: AdminUpdateLlmModelDto) {
         const existing = await this.prisma.llmModel.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException('Model not found');
-        return this.prisma.llmModel.update({ where: { id }, data: dto });
+        const updated = await this.prisma.llmModel.update({ where: { id }, data: dto });
+        this.llmService.invalidateClientCache();
+        return updated;
     }
 
     async delete(id: string) {
         await this.prisma.llmModel.delete({ where: { id } });
+        this.llmService.invalidateClientCache();
         return { success: true };
     }
 
@@ -62,6 +68,7 @@ export class AdminModelsService {
             this.prisma.llmModel.updateMany({ where: { isDefault: true }, data: { isDefault: false } }),
             this.prisma.llmModel.update({ where: { id }, data: { isDefault: true } }),
         ]);
+        this.llmService.invalidateClientCache();
         return { success: true };
     }
 }
