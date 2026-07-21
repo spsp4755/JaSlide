@@ -4,12 +4,14 @@ import axios from 'axios';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaginationDto } from '../dto';
 import { TemplateCategory } from '@prisma/client';
+import { StorageService } from '../../assets/storage.service';
 
 @Injectable()
 export class AdminTemplatesService {
     constructor(
         private prisma: PrismaService,
         private configService: ConfigService,
+        private storage: StorageService,
     ) { }
 
     async importPptx(
@@ -35,6 +37,47 @@ export class AdminTemplatesService {
             throw new BadRequestException('Invalid renderer template config');
         }
         return this.create({ ...data, category: data.category || 'CUSTOM', config: response.data.config });
+    }
+
+    async importHtmlZip(
+        file: Express.Multer.File,
+        data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },
+    ) {
+        if (!this.isZipUpload(file)) throw new BadRequestException('ZIP file up to 20MB required');
+
+        const form = new FormData();
+        form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
+        const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
+        let response: { data?: { config?: unknown } };
+        try {
+            response = await axios.post(`${rendererUrl}/api/extract/html-template`, form, { timeout: 15000 });
+        } catch {
+            throw new BadRequestException('Failed to validate HTML template ZIP');
+        }
+        if (!this.isHtmlZipTemplateConfig(response.data?.config)) {
+            throw new BadRequestException('Invalid HTML template ZIP config');
+        }
+
+        const uploaded = await this.storage.upload(file, 'templates');
+        const config = response.data!.config as { htmlTemplate: string; archive: Record<string, unknown> };
+        return this.create({
+            ...data,
+            category: data.category || 'CUSTOM',
+            config: { htmlTemplate: config.htmlTemplate, zipTemplate: { ...config.archive, storageKey: uploaded.key } },
+        });
+    }
+
+    private isZipUpload(file: Express.Multer.File | undefined): file is Express.Multer.File {
+        return !!file && file.originalname.toLowerCase().endsWith('.zip') &&
+            ['application/zip', 'application/x-zip-compressed'].includes(file.mimetype) &&
+            file.size <= 20 * 1024 * 1024;
+    }
+
+    private isHtmlZipTemplateConfig(config: unknown): config is { htmlTemplate: string; archive: Record<string, unknown> } {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return false;
+        const value = config as Record<string, unknown>;
+        return typeof value.htmlTemplate === 'string' && value.htmlTemplate.length > 0 &&
+            !!value.archive && typeof value.archive === 'object' && !Array.isArray(value.archive);
     }
 
     private isTemplateConfig(config: unknown): config is { colors: Record<string, string>; typography: Record<string, string> } {

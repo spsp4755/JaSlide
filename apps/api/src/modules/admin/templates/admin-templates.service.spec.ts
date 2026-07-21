@@ -13,6 +13,7 @@ const pptxType = 'application/vnd.openxmlformats-officedocument.presentationml.p
 describe('AdminTemplatesService PPTX import', () => {
     const prisma = { template: { create: jest.fn() } };
     const config = { get: jest.fn().mockReturnValue('http://renderer.internal') };
+    const storage = { upload: jest.fn() };
     let service: AdminTemplatesService;
 
     const file = (overrides: Partial<Express.Multer.File> = {}) => ({
@@ -25,7 +26,7 @@ describe('AdminTemplatesService PPTX import', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        service = new AdminTemplatesService(prisma as any, config as any);
+        service = new AdminTemplatesService(prisma as any, config as any, storage as any);
     });
 
     it('forwards a PPTX to the renderer and saves its validated config', async () => {
@@ -65,5 +66,36 @@ describe('AdminTemplatesService PPTX import', () => {
         await expect(service.importPptx(file(), { name: 'Brand', category: 'CUSTOM' }))
             .rejects.toThrow('Invalid renderer template config');
         expect(prisma.template.create).not.toHaveBeenCalled();
+    });
+
+    it('stores a renderer-validated HTML ZIP and its archive metadata', async () => {
+        const archive = {
+            originalname: 'research.zip',
+            mimetype: 'application/zip',
+            size: 128,
+            buffer: Buffer.from('zip'),
+        } as Express.Multer.File;
+        const extracted = {
+            htmlTemplate: '<h1>Research</h1>',
+            archive: { manifestPath: 'deck/research/manifest.json', slides: ['deck/research/slides/01.html'] },
+        };
+        mockedAxios.post.mockResolvedValue({ data: { config: extracted } } as any);
+        storage.upload.mockResolvedValue({ key: 'templates/research.zip' });
+        prisma.template.create.mockResolvedValue({ id: 'template-zip', name: 'Research' });
+        service = new (AdminTemplatesService as any)(prisma, config, storage);
+
+        await expect((service as any).importHtmlZip(archive, { name: 'Research', category: 'CUSTOM' }))
+            .resolves.toEqual({ id: 'template-zip', name: 'Research' });
+
+        expect(storage.upload).toHaveBeenCalledWith(archive, 'templates');
+        expect(prisma.template.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                name: 'Research',
+                config: expect.objectContaining({
+                    htmlTemplate: '<h1>Research</h1>',
+                    zipTemplate: expect.objectContaining({ storageKey: 'templates/research.zip' }),
+                }),
+            }),
+        });
     });
 });

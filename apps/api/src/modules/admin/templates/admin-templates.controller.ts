@@ -43,6 +43,22 @@ export class AdminTemplatesController {
         return this.templatesService.importPptx(file, data);
     }
 
+    @Post('import-html-zip')
+    @UseInterceptors(FileInterceptor('file', {
+        limits: { fileSize: 20 * 1024 * 1024 },
+        fileFilter: (_request, file, callback) => callback(
+            null,
+            file.originalname.toLowerCase().endsWith('.zip') &&
+            ['application/zip', 'application/x-zip-compressed'].includes(file.mimetype),
+        ),
+    }))
+    async importHtmlZip(
+        @UploadedFile() file: Express.Multer.File,
+        @Body() data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },
+    ) {
+        return this.templatesService.importHtmlZip(file, data);
+    }
+
     @Patch(':id')
     async update(@Param('id') id: string, @Body() data: any) {
         return this.templatesService.update(id, data);
