@@ -52,6 +52,7 @@ export default function AdminTemplatesPage() {
     const [showPaletteModal, setShowPaletteModal] = useState(false);
     const [showLayoutModal, setShowLayoutModal] = useState(false);
     const [showPptxImportModal, setShowPptxImportModal] = useState(false);
+    const [showHtmlZipImportModal, setShowHtmlZipImportModal] = useState(false);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
 
@@ -61,7 +62,14 @@ export default function AdminTemplatesPage() {
     const [editingLayout, setEditingLayout] = useState<LayoutRule | null>(null);
     const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
     const [importingPptx, setImportingPptx] = useState(false);
+    const [importingHtmlZip, setImportingHtmlZip] = useState(false);
     const [pptxImportForm, setPptxImportForm] = useState({
+        name: '',
+        description: '',
+        category: 'CUSTOM',
+        file: null as File | null,
+    });
+    const [htmlZipImportForm, setHtmlZipImportForm] = useState({
         name: '',
         description: '',
         category: 'CUSTOM',
@@ -245,6 +253,36 @@ export default function AdminTemplatesPage() {
         }
     };
 
+    const handleImportHtmlZip = async () => {
+        if (!htmlZipImportForm.name.trim() || !htmlZipImportForm.file) {
+            showToast('Enter a template name and choose a ZIP file.', 'error');
+            return;
+        }
+
+        setImportingHtmlZip(true);
+        try {
+            const formData = new FormData();
+            formData.append('name', htmlZipImportForm.name.trim());
+            formData.append('category', htmlZipImportForm.category);
+            if (htmlZipImportForm.description.trim()) formData.append('description', htmlZipImportForm.description.trim());
+            formData.append('file', htmlZipImportForm.file);
+
+            const res = await adminFetch(`${API_URL}/admin/templates/import-html-zip`, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!res.ok) throw new Error('Import failed');
+
+            showToast('Template created from HTML ZIP.');
+            setShowHtmlZipImportModal(false);
+            fetchData();
+        } catch {
+            showToast('Unable to import the HTML ZIP template.', 'error');
+        } finally {
+            setImportingHtmlZip(false);
+        }
+    };
+
     const handleToggleTemplatePublic = async (template: Template) => {
         try {
             const res = await adminFetch(`${API_URL}/admin/templates/${template.id}`, {
@@ -401,6 +439,7 @@ export default function AdminTemplatesPage() {
                 </div>
                 <div className="flex gap-2">
                     {tab === 'templates' && (
+                        <>
                         <button
                             onClick={() => {
                                 setPptxImportForm({ name: '', description: '', category: 'CUSTOM', file: null });
@@ -411,6 +450,17 @@ export default function AdminTemplatesPage() {
                             <FileText size={20} />
                             Import PPTX style
                         </button>
+                        <button
+                            onClick={() => {
+                                setHtmlZipImportForm({ name: '', description: '', category: 'CUSTOM', file: null });
+                                setShowHtmlZipImportModal(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 border border-gray-900 text-gray-700 rounded-lg hover:bg-gray-100"
+                        >
+                            <FileText size={20} />
+                            Import HTML ZIP
+                        </button>
+                        </>
                     )}
                 <button
                     onClick={() => {
@@ -610,6 +660,40 @@ export default function AdminTemplatesPage() {
                             <button onClick={() => setShowPptxImportModal(false)} disabled={importingPptx} className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
                             <button onClick={handleImportPptx} disabled={importingPptx} className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-white hover:bg-gray-700 disabled:opacity-50">
                                 {importingPptx && <Loader2 size={16} className="animate-spin" />} Import
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showHtmlZipImportModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+                        <div className="flex items-center justify-between border-b p-4">
+                            <h2 className="text-lg font-semibold">Import HTML ZIP</h2>
+                            <button onClick={() => setShowHtmlZipImportModal(false)} className="p-1 hover:bg-gray-100 rounded" aria-label="Close import dialog"><X size={20} /></button>
+                        </div>
+                        <div className="space-y-4 p-4">
+                            <label className="block text-sm font-medium text-gray-700">Template name *
+                                <input type="text" value={htmlZipImportForm.name} onChange={(e) => setHtmlZipImportForm({ ...htmlZipImportForm, name: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">Description
+                                <textarea value={htmlZipImportForm.description} onChange={(e) => setHtmlZipImportForm({ ...htmlZipImportForm, description: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" rows={2} />
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">Category
+                                <select value={htmlZipImportForm.category} onChange={(e) => setHtmlZipImportForm({ ...htmlZipImportForm, category: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2">
+                                    {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                                </select>
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">HTML deck ZIP *
+                                <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={(e) => setHtmlZipImportForm({ ...htmlZipImportForm, file: e.target.files?.[0] || null })} className="mt-1 block w-full text-sm" />
+                            </label>
+                            <p className="text-xs text-gray-500">ZIP files up to 20 MB. The archive keeps every HTML slide and bundled asset.</p>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t p-4">
+                            <button onClick={() => setShowHtmlZipImportModal(false)} disabled={importingHtmlZip} className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+                            <button onClick={handleImportHtmlZip} disabled={importingHtmlZip} className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-white hover:bg-gray-700 disabled:opacity-50">
+                                {importingHtmlZip && <Loader2 size={16} className="animate-spin" />} Import
                             </button>
                         </div>
                     </div>
