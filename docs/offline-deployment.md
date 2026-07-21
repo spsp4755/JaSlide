@@ -9,9 +9,9 @@
 `linux/amd64` 이미지는 빌드 PC의 CPU와 무관하게 명시적으로 생성합니다. 웹은 기본적으로 동일 Ingress의 상대 경로 `/api`를 사용하므로 사내 도메인을 이미지에 고정하지 않습니다.
 
 ```bash
-./scripts/release/build-amd64-images.sh v0.2.0
-# dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz
-# dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz.sha256
+./scripts/release/build-amd64-images.sh v0.3.0
+# dist/release/jaslide-v0.3.0-linux-amd64-images.tar.gz
+# dist/release/jaslide-v0.3.0-linux-amd64-images.tar.gz.sha256
 ```
 
 개발 또는 빌드 재현용 pnpm 저장소를 함께 전달해야 한다면, 신뢰하는 lockfile과 준비된 저장소를 사용합니다.
@@ -25,17 +25,17 @@ tar -czf jaslide-pnpm-store.tar.gz pnpm-store
 
 ## 2. 폐쇄망 반입 및 실행
 
-1. `jaslide-v0.2.0-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
+1. `jaslide-v0.3.0-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
 2. Kubernetes/Harbor 배포 환경에서는 Podman으로 로드한 뒤 Harbor에 푸시합니다. 실제 태그·푸시·`kubectl apply -k` 절차는 [Kubernetes 배포 문서](deployment.md#kubernetes--harbor-closed-network)를 따릅니다.
 
 ```bash
-shasum -a 256 -c jaslide-v0.2.0-linux-amd64-images.tar.gz.sha256
-podman load -i jaslide-v0.2.0-linux-amd64-images.tar.gz
-podman image inspect jaslide/api:v0.2.0 jaslide/web:v0.2.0 jaslide/renderer:v0.2.0 jaslide/postgres:v0.2.0 jaslide/redis:v0.2.0
-podman image inspect --format '{{.Architecture}}' jaslide/api:v0.2.0  # amd64
+shasum -a 256 -c jaslide-v0.3.0-linux-amd64-images.tar.gz.sha256
+podman load -i jaslide-v0.3.0-linux-amd64-images.tar.gz
+podman image inspect jaslide/api:v0.3.0 jaslide/web:v0.3.0 jaslide/renderer:v0.3.0 jaslide/postgres:v0.3.0 jaslide/redis:v0.3.0
+podman image inspect --format '{{.Architecture}}' jaslide/api:v0.3.0  # amd64
 ```
 
-`docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.2.0`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
+`docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.3.0`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
 
 ## 3. 폐쇄망에서 소스 빌드가 필요한 경우
 

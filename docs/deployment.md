@@ -30,29 +30,29 @@ Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [Kustom
 **1. Build images on an internet-connected machine.** The release image defaults to relative `/api`, so it remains valid when the final Ingress hostname changes:
 
 ```bash
-./scripts/release/build-amd64-images.sh v0.2.0
+./scripts/release/build-amd64-images.sh v0.3.0
 ```
 
 **2. Save to tar and carry into the closed network:**
 
-The script produces `dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
+The script produces `dist/release/jaslide-v0.3.0-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
 
 **3. Load and push to Harbor (inside the closed network):**
 
 ```bash
-shasum -a 256 -c jaslide-v0.2.0-linux-amd64-images.tar.gz.sha256
-podman load -i jaslide-v0.2.0-linux-amd64-images.tar.gz
-podman image inspect --format '{{.Architecture}}' jaslide/api:v0.2.0  # amd64
-podman tag jaslide/api:v0.2.0 harbor.example.internal/jaslide/api:v0.2.0
-podman tag jaslide/web:v0.2.0 harbor.example.internal/jaslide/web:v0.2.0
-podman tag jaslide/renderer:v0.2.0 harbor.example.internal/jaslide/renderer:v0.2.0
-podman tag jaslide/postgres:v0.2.0 harbor.example.internal/jaslide/postgres:v0.2.0
-podman tag jaslide/redis:v0.2.0 harbor.example.internal/jaslide/redis:v0.2.0
-podman push harbor.example.internal/jaslide/api:v0.2.0
-podman push harbor.example.internal/jaslide/web:v0.2.0
-podman push harbor.example.internal/jaslide/renderer:v0.2.0
-podman push harbor.example.internal/jaslide/postgres:v0.2.0
-podman push harbor.example.internal/jaslide/redis:v0.2.0
+shasum -a 256 -c jaslide-v0.3.0-linux-amd64-images.tar.gz.sha256
+podman load -i jaslide-v0.3.0-linux-amd64-images.tar.gz
+podman image inspect --format '{{.Architecture}}' jaslide/api:v0.3.0  # amd64
+podman tag jaslide/api:v0.3.0 harbor.example.internal/jaslide/api:v0.3.0
+podman tag jaslide/web:v0.3.0 harbor.example.internal/jaslide/web:v0.3.0
+podman tag jaslide/renderer:v0.3.0 harbor.example.internal/jaslide/renderer:v0.3.0
+podman tag jaslide/postgres:v0.3.0 harbor.example.internal/jaslide/postgres:v0.3.0
+podman tag jaslide/redis:v0.3.0 harbor.example.internal/jaslide/redis:v0.3.0
+podman push harbor.example.internal/jaslide/api:v0.3.0
+podman push harbor.example.internal/jaslide/web:v0.3.0
+podman push harbor.example.internal/jaslide/renderer:v0.3.0
+podman push harbor.example.internal/jaslide/postgres:v0.3.0
+podman push harbor.example.internal/jaslide/redis:v0.3.0
 ```
 
 Create the `jaslide` project in Harbor first, and `podman login harbor.example.internal` before pushing.

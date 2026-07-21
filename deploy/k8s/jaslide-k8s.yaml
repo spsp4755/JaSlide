@@ -1,14 +1,14 @@
 # JaSlide k8s 배포 매니페스트 (폐쇄망 + Harbor 레지스트리)
 #
 # 이미지 준비 (인터넷 되는 amd64 빌드 PC에서 — 상세는 docs/deployment.md 참고):
-#   ./scripts/release/build-amd64-images.sh v0.2.0  # 기본값 /api: Ingress 도메인에 독립적
-#   # dist/release/jaslide-v0.2.0-linux-amd64-images.tar.gz 및 SHA-256 파일을 반입
+#   ./scripts/release/build-amd64-images.sh v0.3.0  # 기본값 /api: Ingress 도메인에 독립적
+#   # dist/release/jaslide-v0.3.0-linux-amd64-images.tar.gz 및 SHA-256 파일을 반입
 #
 # 폐쇄망 반입 후 (podman이 있는 내부 PC에서):
-#   podman load -i jaslide-v0.2.0-linux-amd64-images.tar.gz
-#   podman tag jaslide/api:v0.2.0 harbor.CHANGE_ME/jaslide/api:v0.2.0
-#   podman push harbor.CHANGE_ME/jaslide/api:v0.2.0
-#   (web, renderer, postgres, redis도 v0.2.0 태그로 반복)
+#   podman load -i jaslide-v0.3.0-linux-amd64-images.tar.gz
+#   podman tag jaslide/api:v0.3.0 harbor.CHANGE_ME/jaslide/api:v0.3.0
+#   podman push harbor.CHANGE_ME/jaslide/api:v0.3.0
+#   (web, renderer, postgres, redis도 v0.3.0 태그로 반복)
 #
 # 클러스터에서:
 #   kubectl -n jaslide create secret docker-registry harbor-regcred \
@@ -61,7 +61,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: api
-          image: harbor.CHANGE_ME/jaslide/api:v0.2.0
+          image: harbor.CHANGE_ME/jaslide/api:v0.3.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 4000 }]
           envFrom:
@@ -115,7 +115,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: web
-          image: harbor.CHANGE_ME/jaslide/web:v0.2.0
+          image: harbor.CHANGE_ME/jaslide/web:v0.3.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 3000 }]
           readinessProbe:
@@ -150,7 +150,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: renderer
-          image: harbor.CHANGE_ME/jaslide/renderer:v0.2.0
+          image: harbor.CHANGE_ME/jaslide/renderer:v0.3.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8000 }]
           readinessProbe:
@@ -185,7 +185,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: redis
-          image: harbor.CHANGE_ME/jaslide/redis:v0.2.0
+          image: harbor.CHANGE_ME/jaslide/redis:v0.3.0
           imagePullPolicy: IfNotPresent
           args: ["--appendonly", "yes"]   # 재시작 시 큐 유실 방지
           ports: [{ containerPort: 6379 }]
@@ -232,7 +232,7 @@ spec:
         - name: harbor-regcred
       containers:
         - name: postgres
-          image: harbor.CHANGE_ME/jaslide/postgres:v0.2.0
+          image: harbor.CHANGE_ME/jaslide/postgres:v0.3.0
           imagePullPolicy: IfNotPresent
           env:
             - { name: POSTGRES_USER, value: jaslide }
