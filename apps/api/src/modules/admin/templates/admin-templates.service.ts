@@ -130,13 +130,14 @@ export class AdminTemplatesService {
         return template;
     }
 
-    async create(data: { name: string; description?: string; category: string; config: any; isPublic?: boolean; organizationId?: string }) {
+    async create(data: { name: string; description?: string; category: string; config: any; isPublic?: boolean | string; organizationId?: string }) {
         const createData: any = {
             name: data.name,
             description: data.description,
             category: data.category as TemplateCategory,
             config: data.config,
-            isPublic: data.isPublic,
+            // multipart/form-data always sends string values (e.g. "true"), never a real boolean.
+            isPublic: typeof data.isPublic === 'string' ? data.isPublic === 'true' : !!data.isPublic,
         };
         if (data.organizationId) {
             createData.organization = { connect: { id: data.organizationId } };

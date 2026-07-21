@@ -10,6 +10,9 @@ export interface GenerateOutlineInput {
     language: string;
     style?: string;
     templateSlides?: string[];
+    // Batch continuation context (internal — set by generateOutline's own batching loop).
+    priorSlideTitles?: string[];
+    usedTemplateIndexes?: number[];
 }
 
 export interface SlideOutline {
@@ -177,14 +180,50 @@ export class LlmService {
         );
     }
 
+    // Requesting many slides in one completion routinely overruns the model's configured
+    // max_tokens (worse for Korean output, which tokenizes less efficiently), truncating the
+    // JSON mid-response and failing outline generation entirely. Batch large requests instead.
+    private static readonly OUTLINE_BATCH_SIZE = 6;
+
     async generateOutline(input: GenerateOutlineInput): Promise<SlideOutline> {
-        const prompt = this.promptTemplates.getOutlinePrompt(input);
+        if (input.slideCount <= LlmService.OUTLINE_BATCH_SIZE) {
+            return this.generateOutlineBatch(input, input.slideCount);
+        }
+
+        let title = '';
+        const slides: SlideOutline['slides'] = [];
+        const usedTemplateIndexes: number[] = [];
+        let remaining = input.slideCount;
+
+        while (remaining > 0) {
+            const batchSize = Math.min(remaining, LlmService.OUTLINE_BATCH_SIZE);
+            const batch = await this.generateOutlineBatch(
+                {
+                    ...input,
+                    priorSlideTitles: slides.map((slide) => slide.title),
+                    usedTemplateIndexes,
+                },
+                batchSize,
+            );
+            if (!title) title = batch.title;
+            for (const slide of batch.slides) {
+                slides.push({ ...slide, order: slides.length + 1 });
+                if (Number.isInteger(slide.templateIndex)) usedTemplateIndexes.push(slide.templateIndex as number);
+            }
+            remaining -= batchSize;
+        }
+
+        return { title, slides };
+    }
+
+    private async generateOutlineBatch(input: GenerateOutlineInput, batchSize: number): Promise<SlideOutline> {
+        const prompt = this.promptTemplates.getOutlinePrompt({ ...input, slideCount: batchSize });
 
         try {
             return await this.generateValidatedJson(
                 'You are a professional presentation consultant. Return valid JSON only.',
                 prompt,
-                (value) => this.validateOutline(value, input.slideCount, input.templateSlides?.length ?? 0),
+                (value) => this.validateOutline(value, batchSize, input.templateSlides?.length ?? 0),
                 Number.MAX_SAFE_INTEGER,
             );
         } catch (error) {

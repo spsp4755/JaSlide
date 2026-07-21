@@ -122,7 +122,14 @@ def parse_html_objects(template: str) -> list[dict]:
 
 
 def extract_html_template_style(template: str) -> tuple[dict[str, str], dict[str, dict]]:
-    """Extract safe visual tokens from common absolute-positioned HTML decks."""
+    """Extract safe visual tokens from an HTML deck.
+
+    Decks authored with JaSlide's own data-object markup get precise
+    title/body font and layout detection. Real-world uploads (Genspark
+    exports, arbitrary CSS-class decks) rarely carry those markers, so
+    color and font tokens also fall back to any inline-styled element
+    and to raw `<style>` block declarations, instead of yielding nothing.
+    """
     if not isinstance(template, str):
         return {}, {}
     parser = _StyleParser()
@@ -130,10 +137,24 @@ def extract_html_template_style(template: str) -> tuple[dict[str, str], dict[str
     parser.close()
     variables = dict(re.findall(r"(--[\w-]+)\s*:\s*([^;}]+)", template))
     styles = [_resolve_variables(_style_values(item["style"]), variables) for item in parser.items]
-    background = next((_color(style.get("background", "")) for style in styles if _color(style.get("background", ""))), None)
-    text = next((_color(style.get("color", "")) for style in styles if _color(style.get("color", ""))), None)
-    textboxes = [(item, style) for item, style in zip(parser.items, styles) if item.get("data-object-type") == "textbox"]
+
+    def _first_color(prop: str) -> str | None:
+        found = next((_color(style.get(prop, "")) for style in styles if _color(style.get(prop, ""))), None)
+        if found:
+            return found
+        # No inline-styled element carries it — scan raw CSS text (e.g. a <style> block rule).
+        match = re.search(rf"{prop}\s*:\s*(#[0-9a-fA-F]{{6}})", template)
+        return match.group(1).upper() if match else None
+
+    background = _first_color("background") or _first_color("background-color")
+    text = _first_color("color")
+
+    marked_textboxes = [(item, style) for item, style in zip(parser.items, styles) if item.get("data-object-type") == "textbox"]
+    # Fall back to any inline-styled element carrying a font-size when nothing is marked.
+    sized_elements = [(item, style) for item, style in zip(parser.items, styles) if _pixels(style.get("font-size"))]
+    textboxes = marked_textboxes or sized_elements
     title = max(textboxes, key=lambda item: _pixels(item[1].get("font-size")), default=None)
+
     tokens = {key: value for key, value in {"background": background, "text": text}.items() if value}
     if title:
         font = _font_name(title[1].get("font-family"))
@@ -144,9 +165,17 @@ def extract_html_template_style(template: str) -> tuple[dict[str, str], dict[str
         font = _font_name(body[1].get("font-family"))
         if font:
             tokens["bodyFont"] = font
-    layout = {"title": _textbox_layout(title[1])} if title and _textbox_layout(title[1]) else {}
-    if body and _textbox_layout(body[1]):
-        layout["body"] = _textbox_layout(body[1])
+
+    # Only apply precise absolute-position layout slots for markup that JaSlide itself annotated;
+    # unmarked decks' "sized_elements" fallback is for color/font tokens only, not layout math.
+    layout = {}
+    if marked_textboxes:
+        title_layout = _textbox_layout(title[1]) if title else None
+        if title_layout:
+            layout["title"] = title_layout
+        body_layout = _textbox_layout(body[1]) if body else None
+        if body_layout:
+            layout["body"] = body_layout
     return tokens, layout
 
 

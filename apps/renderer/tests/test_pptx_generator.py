@@ -313,6 +313,37 @@ def test_html_template_without_font_family_uses_default_font():
     assert Presentation(BytesIO(output)).slides[0].shapes[0].text == "Generated"
 
 
+def test_html_template_without_data_object_markup_falls_back_to_generic_layout():
+    # A real-world upload (Genspark export, Tailwind/CSS-class deck) never carries JaSlide's
+    # own data-object markers or absolute-pixel inline positioning. Before this fix, such a
+    # template produced a fully blank slide instead of the generated content below.
+    template = SimpleNamespace(config=SimpleNamespace(
+        htmlTemplate=(
+            '<style>.card { background: #123456; }</style>'
+            '<div class="card"><h1 style="color:#FFFFFF;font-size:56px;font-family:Newsreader">Cover</h1>'
+            '<p style="font-size:20px;font-family:Pretendard">Body copy</p></div>'
+        ),
+        htmlSlides=[
+            '<style>.card { background: #123456; }</style>'
+            '<div class="card"><h1 style="color:#FFFFFF;font-size:56px;font-family:Newsreader">Cover</h1>'
+            '<p style="font-size:20px;font-family:Pretendard">Body copy</p></div>'
+        ],
+    ))
+
+    pptx = PPTXGenerator(template).generate(
+        _presentation(_slide("CONTENT", "Generated title", {"heading": "Generated title", "body": "Generated body"}))
+    )
+
+    slide = Presentation(BytesIO(pptx)).slides[0]
+    # Template background/fonts are still picked up even without data-object markup.
+    assert _rgb(slide.background.fill.fore_color) == "123456"
+    texts = [run.text for shape in slide.shapes if shape.has_text_frame
+             for paragraph in shape.text_frame.paragraphs for run in paragraph.runs]
+    assert "Generated title" in texts
+    assert any("Newsreader" == shape.text_frame.paragraphs[0].runs[0].font.name
+               for shape in slide.shapes if shape.has_text_frame and shape.text_frame.paragraphs[0].runs)
+
+
 def test_reusing_a_generator_does_not_accumulate_prior_slides():
     generator = PPTXGenerator()
     presentation = _presentation(_slide("TITLE", "One", {"heading": "One"}))

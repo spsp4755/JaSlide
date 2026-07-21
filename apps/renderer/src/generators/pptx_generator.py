@@ -132,8 +132,15 @@ class PPTXGenerator:
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""
         if self.html_slides:
-            self._add_html_template_slide(slide_data, template_index, total_slides)
-            return
+            selected_index = self._template_index(slide_data, template_index, total_slides)
+            objects = parse_html_objects(self.html_slides[selected_index])
+            if objects:
+                self._add_html_template_slide(slide_data, selected_index, objects)
+                return
+            # ponytail: the uploaded deck isn't in JaSlide's data-object markup, so there's
+            # nothing to place absolutely. Fall through to the generic layout below, which
+            # already picks up this template's extracted background/font tokens (self.tokens)
+            # instead of emitting a blank slide.
         slide_type = slide_data.type.upper()
         content = slide_data.content
 
@@ -152,10 +159,7 @@ class PPTXGenerator:
         else:
             self._add_content_slide(slide_data)
 
-    def _add_html_template_slide(self, slide_data: Any, template_index: int, total_slides: int):
-        selected_index = self._template_index(slide_data, template_index, total_slides)
-        template = self.html_slides[selected_index]
-        objects = parse_html_objects(template)
+    def _add_html_template_slide(self, slide_data: Any, selected_index: int, objects: list[dict]):
         slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
         background = next((item["background"] for item in objects if item["x"] == 0 and item["y"] == 0 and item["w"] >= 13.3 and item["h"] >= 7.4 and item["background"]), None)
         if background:

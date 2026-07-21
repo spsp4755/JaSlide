@@ -113,6 +113,44 @@ describe('LlmService contracts', () => {
         expect(create).toHaveBeenCalledTimes(4);
     });
 
+    it('batches large outline requests instead of asking for every slide in one completion', async () => {
+        const firstBatch = {
+            title: '연간 사업 계획',
+            slides: Array.from({ length: 6 }, (_, index) => ({
+                order: index + 1, title: `1부-${index + 1}장`, type: 'CONTENT',
+                keyPoints: ['핵심 포인트 A', '핵심 포인트 B'], templateIndex: index,
+            })),
+        };
+        const secondBatch = {
+            title: '무시됨',
+            slides: Array.from({ length: 2 }, (_, index) => ({
+                order: index + 1, title: `2부-${index + 1}장`, type: 'CONTENT',
+                keyPoints: ['핵심 포인트 C', '핵심 포인트 D'], templateIndex: 10 + index,
+            })),
+        };
+        const create = await createService([JSON.stringify(firstBatch), JSON.stringify(secondBatch)]);
+
+        const result = await service.generateOutline({
+            content: '긴 사업 계획서', slideCount: 8, language: 'ko', templateSlides: Array.from({ length: 20 }, (_, i) => `slide-${i}.html`),
+        });
+
+        // Two completions (6 + 2), not one 8-slide request.
+        expect(create).toHaveBeenCalledTimes(2);
+        // Merged and renumbered continuously across both batches.
+        expect(result.title).toBe('연간 사업 계획');
+        expect(result.slides).toHaveLength(8);
+        expect(result.slides.map((slide) => slide.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+        expect(result.slides[7].title).toBe('2부-2장');
+
+        // The second batch's prompt carries forward context from the first, so the
+        // model continues the narrative and spreads across the template instead of
+        // repeating titles or reusing the same template pages.
+        const secondPrompt = create.mock.calls[1][0].messages[1].content as string;
+        expect(secondPrompt).toContain('continuation of a longer deck');
+        expect(secondPrompt).toContain('1부-1장');
+        expect(secondPrompt).toContain('0 (already used)');
+    });
+
     it('coerces out-of-range bullet levels to 0 instead of rejecting', async () => {
         const reply = { heading: '실행 계획', bullets: [{ text: '첫 번째 항목', level: 2 }] };
         const create = await createService([JSON.stringify(reply)]);

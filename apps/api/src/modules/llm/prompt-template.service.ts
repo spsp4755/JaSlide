@@ -5,8 +5,12 @@ import { GenerateOutlineInput, GenerateSlideContentInput } from './llm.service';
 export class PromptTemplateService {
     getOutlinePrompt(input: GenerateOutlineInput): string {
         const language = input.language === 'ko' ? 'Write all content in Korean.' : 'Write all content in English.';
+        const usedIndexes = new Set(input.usedTemplateIndexes ?? []);
         const templateCatalog = input.templateSlides?.length
-            ? `\nTemplate slides (zero-based index):\n${input.templateSlides.map((name, index) => `${index}: ${name}`).join('\n')}\nChoose the single best templateIndex for each slide based on its purpose. Do not choose the first slides by default or simply follow sequence.\n`
+            ? `\nTemplate slides (zero-based index):\n${input.templateSlides.map((name, index) => `${index}${usedIndexes.has(index) ? ' (already used)' : ''}: ${name}`).join('\n')}\nChoose the single best templateIndex for each slide based on its purpose, drawing from across the full list above — not only the first few. Do not simply follow sequence. Prefer an index marked "already used" only when no better match exists for that slide's content.\n`
+            : '';
+        const continuation = input.priorSlideTitles?.length
+            ? `\nThis is a continuation of a longer deck. Slides already planned, in order: ${input.priorSlideTitles.map((title, index) => `${index + 1}. ${title}`).join('; ')}. Continue the narrative from here — do not repeat these titles or their themes.\n`
             : '';
         return `You are a professional presentation consultant. Create exactly ${input.slideCount} slides from the source below.
 ${language}
@@ -17,7 +21,7 @@ ${input.content.slice(0, 10000)}
 ---
 
 Use one type per slide: TITLE, CONTENT, BULLET_LIST, TWO_COLUMN, IMAGE, CHART, QUOTE, COMPARISON, SECTION_HEADER.
-Make keyPoints specific enough for a writer to create a useful slide: include claims, rationale, implications, examples, or actions rather than generic labels. Give each slide 3 to 5 detailed key points except concise title or section divider slides.${templateCatalog}
+Make keyPoints specific enough for a writer to create a useful slide: include claims, rationale, implications, examples, or actions rather than generic labels. Give each slide 3 to 5 detailed key points except concise title or section divider slides.${templateCatalog}${continuation}
 Return JSON only. Every slide must have consecutive order starting at 1, a non-empty title, a valid type, and 2 to 5 non-empty keyPoints.
 
 {

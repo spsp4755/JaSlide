@@ -100,4 +100,15 @@ describe('AdminTemplatesService PPTX import', () => {
             }),
         });
     });
+
+    it('coerces the multipart string isPublic value into a real boolean instead of crashing Prisma', async () => {
+        prisma.template.create.mockResolvedValue({ id: 'template-1' });
+        service = new (AdminTemplatesService as any)(prisma, config, storage);
+
+        await service.create({ name: 'Public deck', category: 'CUSTOM', config: {}, isPublic: 'true' as any });
+        expect(prisma.template.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublic: true }) }));
+
+        await service.create({ name: 'Private deck', category: 'CUSTOM', config: {}, isPublic: 'false' as any });
+        expect(prisma.template.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublic: false }) }));
+    });
 });
