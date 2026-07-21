@@ -4,6 +4,7 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class LlmService {} }));
 jest.mock('../queue/queue.service', () => ({ QueueService: class QueueService {} }));
 
 import { GenerationService } from './generation.service';
+import { defaultLayoutForSlideType } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
@@ -149,5 +150,10 @@ describe('GenerationService cancellation', () => {
         expect(llm.generateOutline).toHaveBeenCalledWith(expect.objectContaining({
             content: '발표 내용', slideCount: 8, language: 'ko',
         }));
+    });
+
+    it('uses a deterministic layout instead of a second LLM call per slide', () => {
+        expect(defaultLayoutForSlideType('TWO_COLUMN')).toBe('two-column');
+        expect(defaultLayoutForSlideType('CONTENT')).toBe('center');
     });
 });

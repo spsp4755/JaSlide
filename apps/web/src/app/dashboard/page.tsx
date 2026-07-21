@@ -341,7 +341,6 @@ export default function HomePage() {
                         progress={progress}
                         status={generationStatus}
                         onCancel={handleCancelGeneration}
-                        estimatedTime={effectiveSlideCount * 3}
                         startTime={generationStartTime || undefined}
                     />
                 </div>

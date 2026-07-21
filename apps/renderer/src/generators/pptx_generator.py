@@ -11,7 +11,7 @@ from pptx.oxml.ns import qn
 from pptx.enum.shapes import MSO_SHAPE
 from io import BytesIO
 from typing import Optional, Any
-from ..services.html_template import parse_html_layout
+from ..services.html_template import extract_html_template_style, parse_html_layout
 
 
 class PPTXGenerator:
@@ -31,9 +31,10 @@ class PPTXGenerator:
 
     def __init__(self, template_config: Optional[Any] = None):
         self.template_config = template_config
-        self.tokens = self._resolve_tokens(template_config)
         config = self._as_dict(getattr(template_config, "config", template_config))
-        self.html_layout = parse_html_layout(config.get("htmlTemplate", ""))
+        self.html_tokens, extracted_layout = extract_html_template_style(config.get("htmlTemplate", ""))
+        self.tokens = self._resolve_tokens(template_config)
+        self.html_layout = parse_html_layout(config.get("htmlTemplate", "")) or extracted_layout
         self._reset_presentation()
 
     def _reset_presentation(self) -> None:
@@ -63,10 +64,10 @@ class PPTXGenerator:
         colors = self._as_dict(config.get("colors"))
         typography = self._as_dict(config.get("typography"))
         return {
-            "background": self._rgb(colors.get("background"), self.DEFAULT_COLORS["background"]),
-            "text": self._rgb(colors.get("text"), self.DEFAULT_COLORS["text"]),
-            "title_font": typography.get("titleFont") or self.DEFAULT_FONT,
-            "body_font": typography.get("bodyFont") or self.DEFAULT_FONT,
+            "background": self._rgb(colors.get("background") or self.html_tokens.get("background"), self.DEFAULT_COLORS["background"]),
+            "text": self._rgb(colors.get("text") or self.html_tokens.get("text"), self.DEFAULT_COLORS["text"]),
+            "title_font": typography.get("titleFont") or self.html_tokens.get("titleFont") or self.DEFAULT_FONT,
+            "body_font": typography.get("bodyFont") or self.html_tokens.get("bodyFont") or self.DEFAULT_FONT,
         }
 
     def _apply_background(self, slide: Any) -> None:

@@ -70,3 +70,13 @@ def test_extract_html_template_endpoint_returns_validated_config():
 
     assert response.status_code == 200
     assert response.json()["config"]["htmlTemplate"] == "<h1>One</h1>"
+
+
+def test_extract_html_template_archive_inlines_bundled_css_tokens():
+    result = extract_html_template_archive(make_zip({
+        "deck/demo/manifest.json": manifest(["one.html"]),
+        "deck/demo/one.html": '<link rel="stylesheet" href="../assets/tokens.css"><h1>One</h1>',
+        "deck/assets/tokens.css": ':root { --ink: #112233; }',
+    }))
+
+    assert '--ink: #112233' in result["htmlTemplate"]

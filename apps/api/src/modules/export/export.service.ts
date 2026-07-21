@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as path from 'path';
@@ -15,6 +15,7 @@ const PptxGenJS = require('pptxgenjs');
 @Injectable()
 export class ExportService {
     private rendererUrl: string;
+    private readonly logger = new Logger(ExportService.name);
 
     constructor(
         private prisma: PrismaService,
@@ -49,7 +50,8 @@ export class ExportService {
                 filename: `${presentation.title}.pptx`,
                 mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             };
-        } catch {
+        } catch (error: any) {
+            this.logger.error('PPTX export failed', error.response || error);
             throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
     }
@@ -167,7 +169,8 @@ export class ExportService {
                 filename: `${presentation.title}.pdf`,
                 mimeType: 'application/pdf',
             };
-        } catch {
+        } catch (error: any) {
+            this.logger.error('PDF export failed', error.response || error);
             throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
     }

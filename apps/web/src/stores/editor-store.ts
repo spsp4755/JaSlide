@@ -25,6 +25,7 @@ interface Presentation {
     title: string;
     slides: Slide[];
     templateId?: string;
+    template?: { config?: any } | null;
 }
 
 interface Version {

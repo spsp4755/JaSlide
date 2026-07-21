@@ -25,7 +25,6 @@ interface GenerationProgressProps {
     progress: number;
     status: 'idle' | 'generating' | 'completed' | 'failed';
     onCancel?: () => void;
-    estimatedTime?: number; // seconds
     startTime?: Date;
 }
 
@@ -72,7 +71,6 @@ export function GenerationProgress({
     progress,
     status,
     onCancel,
-    estimatedTime = 30,
     startTime,
 }: GenerationProgressProps) {
     const [elapsedTime, setElapsedTime] = useState(0);
@@ -110,8 +108,6 @@ export function GenerationProgress({
         const secs = seconds % 60;
         return mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
     };
-
-    const remainingTime = Math.max(0, estimatedTime - elapsedTime);
 
     return (
         <div className="bg-white rounded-xl border shadow-lg p-6 max-w-lg mx-auto">
@@ -169,7 +165,7 @@ export function GenerationProgress({
                         </span>
                         <div className="flex items-center gap-1 text-sm text-gray-500">
                             <Clock className="h-3.5 w-3.5" />
-                            <span>약 {formatTime(remainingTime)} 남음</span>
+                            <span>{formatTime(elapsedTime)} 경과</span>
                         </div>
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden">

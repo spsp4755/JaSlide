@@ -2,6 +2,7 @@
 
 from html.parser import HTMLParser
 import math
+import re
 
 
 SLIDE_WIDTH = 13.333
@@ -59,3 +60,79 @@ def parse_html_layout(template: str) -> dict[str, dict]:
     parser.feed(template)
     parser.close()
     return parser.layout
+
+
+class _StyleParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.items: list[dict[str, str]] = []
+
+    def handle_starttag(self, _tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if values.get("style"):
+            self.items.append(values)
+
+
+def extract_html_template_style(template: str) -> tuple[dict[str, str], dict[str, dict]]:
+    """Extract safe visual tokens from common absolute-positioned HTML decks."""
+    if not isinstance(template, str):
+        return {}, {}
+    parser = _StyleParser()
+    parser.feed(template)
+    parser.close()
+    variables = dict(re.findall(r"(--[\w-]+)\s*:\s*([^;}]+)", template))
+    styles = [_resolve_variables(_style_values(item["style"]), variables) for item in parser.items]
+    background = next((_color(style.get("background", "")) for style in styles if _color(style.get("background", ""))), None)
+    text = next((_color(style.get("color", "")) for style in styles if _color(style.get("color", ""))), None)
+    textboxes = [(item, style) for item, style in zip(parser.items, styles) if item.get("data-object-type") == "textbox"]
+    title = max(textboxes, key=lambda item: _pixels(item[1].get("font-size")), default=None)
+    tokens = {key: value for key, value in {"background": background, "text": text}.items() if value}
+    if title:
+        font = _font_name(title[1].get("font-family"))
+        if font:
+            tokens["titleFont"] = font
+    body = next((item for item in textboxes if item != title), None)
+    if body:
+        font = _font_name(body[1].get("font-family"))
+        if font:
+            tokens["bodyFont"] = font
+    layout = {"title": _textbox_layout(title[1])} if title and _textbox_layout(title[1]) else {}
+    if body and _textbox_layout(body[1]):
+        layout["body"] = _textbox_layout(body[1])
+    return tokens, layout
+
+
+def _style_values(value: str) -> dict[str, str]:
+    return {key.strip().lower(): item.strip() for key, item in re.findall(r"([\w-]+)\s*:\s*([^;]+)", value)}
+
+
+def _resolve_variables(style: dict[str, str], variables: dict[str, str]) -> dict[str, str]:
+    return {
+        key: re.sub(r"var\((--[\w-]+)\)", lambda match: variables.get(match.group(1), match.group(0)), value)
+        for key, value in style.items()
+    }
+
+
+def _color(value: str) -> str | None:
+    match = re.search(r"#[0-9a-fA-F]{6}\b", value)
+    return match.group(0).upper() if match else None
+
+
+def _font_name(value: str) -> str | None:
+    return value.split(",", 1)[0].strip().strip("'\"") or None
+
+
+def _pixels(value: str | None) -> float:
+    match = re.match(r"\s*([\d.]+)px", value or "")
+    return float(match.group(1)) if match else 0
+
+
+def _textbox_layout(style: dict[str, str]) -> dict | None:
+    left, top, width = (_pixels(style.get(key)) for key in ("left", "top", "width"))
+    if width <= 0:
+        return None
+    height = _pixels(style.get("height")) or max(_pixels(style.get("font-size")) * 1.5, 48)
+    x, y, w, h = left / 1920 * SLIDE_WIDTH, top / 1080 * SLIDE_HEIGHT, width / 1920 * SLIDE_WIDTH, height / 1080 * SLIDE_HEIGHT
+    if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > SLIDE_WIDTH or y + h > SLIDE_HEIGHT:
+        return None
+    return {"x": x, "y": y, "w": w, "h": h, "fontSize": max(8, min(round(_pixels(style.get("font-size")) * 0.54), 72))}

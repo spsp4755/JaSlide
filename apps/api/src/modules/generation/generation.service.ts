@@ -7,6 +7,10 @@ import { QueueService } from '../queue/queue.service';
 
 class GenerationCancelledError extends Error { }
 
+export function defaultLayoutForSlideType(type: string): string {
+    return type === 'TWO_COLUMN' ? 'two-column' : 'center';
+}
+
 @Injectable()
 export class GenerationService implements OnModuleInit {
     private readonly logger = new Logger(GenerationService.name);
@@ -207,15 +211,12 @@ export class GenerationService implements OnModuleInit {
                     language,
                 });
 
-                // Suggest layout
-                const layout = await this.llmService.suggestLayout(content, slideOutline.type);
-
                 slides.push({
                     order: i,
                     type: slideOutline.type as any,
                     title: slideOutline.title,
                     content: content as unknown as Prisma.InputJsonValue,
-                    layout,
+                    layout: defaultLayoutForSlideType(slideOutline.type),
                 });
 
                 // Update progress

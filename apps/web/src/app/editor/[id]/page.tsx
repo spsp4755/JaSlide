@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -53,6 +53,15 @@ const slideTypeIcons: Record<string, any> = {
     QUOTE: Quote,
     SECTION_HEADER: Type,
 };
+
+function getTemplatePreviewStyle(template: any): CSSProperties {
+    const config = template?.config || {};
+    const html = config.htmlTemplate || '';
+    const background = config.colors?.background || html.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{6})/)?.[1];
+    const color = config.colors?.text || html.match(/(?:^|[;\s])color\s*:\s*(#[0-9a-fA-F]{6})/)?.[1];
+    const fontFamily = config.typography?.titleFont || html.match(/font-family\s*:\s*['"]?([^,'";]+)/)?.[1]?.trim();
+    return { backgroundColor: background, color, fontFamily };
+}
 
 interface DraggableSlideProps {
     slide: any;
@@ -187,6 +196,7 @@ export default function EditorPage() {
                 title: response.data.title,
                 slides: response.data.slides,
                 templateId: response.data.templateId,
+                template: response.data.template,
             });
         } catch (error) {
             toast({ title: '오류', description: '프레젠테이션을 불러올 수 없습니다.', variant: 'destructive' });
@@ -537,6 +547,7 @@ export default function EditorPage() {
                                 {selectedSlide ? (
                                     <EditableSlidePreview
                                         slide={selectedSlide}
+                                        template={presentation.template}
                                         onUpdate={(updates) => {
                                             updateSlide(selectedSlide.id, updates);
                                         }}
@@ -781,16 +792,18 @@ export default function EditorPage() {
 // Editable Slide Preview Component
 interface EditableSlidePreviewProps {
     slide: any;
+    template?: any;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
 }
 
-function EditableSlidePreview({ slide, onUpdate, onSave }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
     const body = content.body || '';
     const bullets = content.bullets || [];
+    const previewStyle = getTemplatePreviewStyle(template);
 
     const handleHeadingChange = (newHeading: string) => {
         onUpdate({
@@ -844,7 +857,7 @@ function EditableSlidePreview({ slide, onUpdate, onSave }: EditableSlidePreviewP
     switch (slide.type) {
         case 'TITLE':
             return (
-                <div className="h-full flex flex-col items-center justify-center p-12 text-center">
+                <div className="h-full flex flex-col items-center justify-center p-12 text-center" style={previewStyle}>
                     <input
                         type="text"
                         value={heading}
@@ -866,7 +879,7 @@ function EditableSlidePreview({ slide, onUpdate, onSave }: EditableSlidePreviewP
 
         case 'SECTION_HEADER':
             return (
-                <div className="h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800 p-12">
+                <div className="h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800 p-12" style={previewStyle}>
                     <input
                         type="text"
                         value={heading}
@@ -880,7 +893,7 @@ function EditableSlidePreview({ slide, onUpdate, onSave }: EditableSlidePreviewP
 
         case 'QUOTE':
             return (
-                <div className="h-full flex flex-col items-center justify-center p-12">
+                <div className="h-full flex flex-col items-center justify-center p-12" style={previewStyle}>
                     <textarea
                         value={body || heading}
                         onChange={(e) => handleBodyChange(e.target.value)}
@@ -896,7 +909,7 @@ function EditableSlidePreview({ slide, onUpdate, onSave }: EditableSlidePreviewP
         case 'CONTENT':
         default:
             return (
-                <div className="h-full p-8">
+                <div className="h-full p-8" style={previewStyle}>
                     <input
                         type="text"
                         value={heading}

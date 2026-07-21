@@ -164,6 +164,27 @@ def test_html_template_layout_styles_bullet_slide_titles():
     assert paragraph.runs[0].font.size == Pt(26)
 
 
+def test_genspark_style_html_applies_colors_fonts_and_title_position_without_slots():
+    template = SimpleNamespace(
+        config=SimpleNamespace(
+            htmlTemplate=(
+                '<body style="background:#fdfcf8;color:#0a1530;font-family:Inter">'
+                '<div data-object-type="textbox" style="position:absolute;left:200px;top:230px;width:1400px;'
+                'font-family:Newsreader;font-size:112px;color:#0a1530"></div></body>'
+            )
+        )
+    )
+    pptx = PPTXGenerator(template).generate(
+        _presentation(_slide("CONTENT", "Heading", {"heading": "Heading", "body": "Body"}))
+    )
+
+    slide = Presentation(BytesIO(pptx)).slides[0]
+    assert _rgb(slide.background.fill.fore_color) == "FDFCF8"
+    assert slide.shapes[0].left == Inches(200 / 1920 * 13.333)
+    assert slide.shapes[0].top == Inches(230 / 1080 * 7.5)
+    assert slide.shapes[0].text_frame.paragraphs[0].runs[0].font.name == "Newsreader"
+
+
 def test_reusing_a_generator_does_not_accumulate_prior_slides():
     generator = PPTXGenerator()
     presentation = _presentation(_slide("TITLE", "One", {"heading": "One"}))

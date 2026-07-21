@@ -30,6 +30,9 @@ def extract_html_template_archive(content: bytes) -> dict:
             root = manifest_path.rsplit("/", 1)[0]
             slides = [_resolve_slide(name, root, names) for name in manifest["playlist"]]
             html_template = _read_text(archive, slides[0])
+            css = "\n".join(_read_text(archive, name) for name in names if name.lower().endswith(".css"))
+            if css:
+                html_template = f"<style>{css}</style>{html_template}"
             metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
             canvas = manifest.get("canvas") if isinstance(manifest.get("canvas"), dict) else {}
 
