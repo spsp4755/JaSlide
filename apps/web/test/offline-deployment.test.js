@@ -4,6 +4,10 @@ const path = require('node:path');
 const test = require('node:test');
 
 const root = path.join(__dirname, '..', '..', '..');
+// Read the current release version instead of hardcoding one, so this test
+// doesn't go stale every time build-amd64-images.sh's default is bumped.
+const currentVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+const escapedVersion = currentVersion.replace(/\./g, '\\.');
 
 test('offline deployment uses imported images and documents the required verification', () => {
     const compose = fs.readFileSync(path.join(root, 'docker-compose.offline.yml'), 'utf8');
@@ -22,11 +26,11 @@ test('offline deployment uses imported images and documents the required verific
     assert.match(releaseScript, /--platform linux\/amd64/);
     assert.match(releaseScript, /jaslide\/postgres:\$\{release_version\}/);
     assert.match(releaseScript, /jaslide\/redis:\$\{release_version\}/);
-    assert.match(guide, /jaslide-v0\.2\.0-linux-amd64-images\.tar\.gz/);
+    assert.match(guide, new RegExp(`jaslide-v${escapedVersion}-linux-amd64-images\\.tar\\.gz`));
     assert.match(guide, /podman load -i/);
     assert.match(kubernetesGuide, /kubectl apply -k deploy\/k8s/);
     assert.match(kustomization, /namespace: jaslide/);
-    assert.match(manifest, /jaslide\/api:v0\.2\.0/);
-    assert.match(manifest, /jaslide\/web:v0\.2\.0/);
-    assert.match(manifest, /jaslide\/renderer:v0\.2\.0/);
+    assert.match(manifest, new RegExp(`jaslide/api:v${escapedVersion}`));
+    assert.match(manifest, new RegExp(`jaslide/web:v${escapedVersion}`));
+    assert.match(manifest, new RegExp(`jaslide/renderer:v${escapedVersion}`));
 });
