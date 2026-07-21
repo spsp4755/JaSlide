@@ -13,6 +13,7 @@ from pptx import Presentation as PptxPresentation
 from .generators.pptx_generator import PPTXGenerator
 from .generators.pdf_exporter import PDFExporter
 from .services.style_extractor import extract_template_tokens
+from .services.html_template_archive import extract_html_template_archive
 
 app = FastAPI(
     title="JaSlide Renderer",
@@ -131,6 +132,17 @@ async def extract_style(file: UploadFile = File(...)):
         config = extract_template_tokens(content)
     except Exception as error:
         raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
+    return {"config": config}
+
+
+@app.post("/api/extract/html-template")
+async def extract_html_template(file: UploadFile = File(...)):
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="ZIP file required")
+    try:
+        config = extract_html_template_archive(await file.read())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return {"config": config}
 
 
