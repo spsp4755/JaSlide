@@ -6,12 +6,11 @@ import { DesignEngineService } from './design-engine.service';
 import { DataVisualizationService } from './data-visualization.service';
 import { SourceExtractionService } from './source-extraction.service';
 import { LlmModule } from '../llm/llm.module';
-import { CreditsModule } from '../credits/credits.module';
 import { AssetsModule } from '../assets/assets.module';
 import { QueueModule } from '../queue/queue.module';
 
 @Module({
-    imports: [LlmModule, CreditsModule, AssetsModule, QueueModule],
+    imports: [LlmModule, AssetsModule, QueueModule],
     controllers: [GenerationController],
     providers: [
         GenerationService,

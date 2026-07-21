@@ -17,7 +17,6 @@ export class AdminDashboardService {
             totalGenerations,
             completedGenerations,
             failedGenerations,
-            recentCreditsUsed,
         ] = await Promise.all([
             // Total users
             this.prisma.user.count(),
@@ -42,14 +41,6 @@ export class AdminDashboardService {
             this.prisma.generationJob.count({
                 where: { status: 'FAILED' },
             }),
-            // Credits used in last 30 days
-            this.prisma.creditTransaction.aggregate({
-                where: {
-                    type: 'USAGE',
-                    createdAt: { gte: last30d },
-                },
-                _sum: { amount: true },
-            }),
         ]);
 
         const errorRate = totalGenerations > 0
@@ -61,7 +52,6 @@ export class AdminDashboardService {
             activeUsers,
             totalPresentations,
             totalGenerations,
-            creditsConsumed: Math.abs(recentCreditsUsed._sum.amount || 0),
             errorRate,
         };
     }
@@ -137,16 +127,6 @@ export class AdminDashboardService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        const dailyUsage = await this.prisma.creditTransaction.groupBy({
-            by: ['createdAt'],
-            where: {
-                type: 'USAGE',
-                createdAt: { gte: startDate },
-            },
-            _sum: { amount: true },
-            _count: true,
-        });
-
         const dailyGenerations = await this.prisma.generationJob.groupBy({
             by: ['createdAt'],
             where: {
@@ -156,7 +136,6 @@ export class AdminDashboardService {
         });
 
         return {
-            creditUsage: dailyUsage,
             generations: dailyGenerations,
         };
     }

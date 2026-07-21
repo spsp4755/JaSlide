@@ -9,7 +9,6 @@ export interface GenerationJob {
     output?: GenerationOutput;
     progress: number;
     error?: GenerationError;
-    creditsCost: number;
     startedAt?: Date;
     completedAt?: Date;
     createdAt: Date;

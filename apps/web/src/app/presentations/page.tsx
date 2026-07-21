@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';
-import { presentationsApi, creditsApi } from '@/lib/api';
-import { Plus, FileText, Clock, Wallet } from 'lucide-react';
+import { presentationsApi } from '@/lib/api';
+import { Plus, FileText, Clock } from 'lucide-react';
 
 interface Presentation {
     id: string;
@@ -22,7 +22,6 @@ export default function PresentationsPage() {
     const router = useRouter();
     const { isAuthenticated, hasHydrated } = useAuthStore();
     const [presentations, setPresentations] = useState<Presentation[]>([]);
-    const [credits, setCredits] = useState<number>(0);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -33,12 +32,8 @@ export default function PresentationsPage() {
         }
         (async () => {
             try {
-                const [presResponse, creditsResponse] = await Promise.all([
-                    presentationsApi.list(),
-                    creditsApi.balance(),
-                ]);
+                const presResponse = await presentationsApi.list();
                 setPresentations(presResponse.data.data);
-                setCredits(creditsResponse.data.available);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
             } finally {
@@ -70,10 +65,6 @@ export default function PresentationsPage() {
                         <h1 className="text-2xl font-bold text-gray-900">내 발표함</h1>
                         <div className="flex items-center gap-3 mt-1 text-gray-500">
                             <span>{presentations.length}개의 프레젠테이션</span>
-                            <span className="flex items-center gap-1 text-gray-900">
-                                <Wallet className="h-4 w-4" />
-                                {credits} 크레딧
-                            </span>
                         </div>
                     </div>
                     <Link href="/dashboard">

@@ -32,7 +32,6 @@ export class AuthResponse {
         id: string;
         email: string;
         name: string | null;
-        creditsRemaining: number;
         role: string;
     };
     accessToken: string;

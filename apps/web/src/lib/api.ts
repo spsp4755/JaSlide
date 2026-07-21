@@ -120,14 +120,6 @@ export const skillsApi = {
     },
 };
 
-// Credits
-export const creditsApi = {
-    balance: () => api.get('/credits/balance'),
-    history: (page = 1, limit = 20) =>
-        api.get('/credits/history', { params: { page, limit } }),
-    usage: (days = 30) => api.get('/credits/usage', { params: { days } }),
-};
-
 // Export
 export const exportApi = {
     pptx: (presentationId: string) =>

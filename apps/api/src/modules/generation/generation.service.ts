@@ -1,9 +1,7 @@
 import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
-import { CreditsService } from '../credits/credits.service';
 import { StartGenerationDto, AIEditDto, GenerateOutlineDto } from './dto/generation.dto';
-import { CREDIT_COSTS } from '@jaslide/shared';
 import type { Prisma } from '@prisma/client';
 import { QueueService } from '../queue/queue.service';
 
@@ -16,7 +14,6 @@ export class GenerationService implements OnModuleInit {
     constructor(
         private prisma: PrismaService,
         private llmService: LlmService,
-        private creditsService: CreditsService,
         private queueService: QueueService,
     ) { }
 
@@ -82,15 +79,6 @@ export class GenerationService implements OnModuleInit {
             : null;
         const effectiveSlideCount = approvedOutline?.slides.length ?? dto.slideCount;
 
-        // Estimate cost
-        const estimatedCost = effectiveSlideCount * CREDIT_COSTS.SLIDE_BASIC;
-
-        // Check credits
-        const hasCredits = await this.creditsService.checkBalance(userId, estimatedCost);
-        if (!hasCredits) {
-            throw new BadRequestException('Insufficient credits');
-        }
-
         const skill = await this.resolveSkill(user, dto.skillId);
         const templateId = dto.templateId ?? skill?.templateId;
 
@@ -125,7 +113,6 @@ export class GenerationService implements OnModuleInit {
                 } as Prisma.InputJsonValue,
                 skillId: skill?.id,
                 progress: 0,
-                creditsCost: estimatedCost,
             },
         });
 
@@ -135,7 +122,6 @@ export class GenerationService implements OnModuleInit {
             jobId: job.id,
             presentationId: presentation.id,
             status: 'QUEUED',
-            estimatedCost,
         };
     }
 
@@ -261,15 +247,6 @@ export class GenerationService implements OnModuleInit {
                 ),
             ]);
 
-            // Deduct credits
-            await this.creditsService.deductCredits(
-                job.userId,
-                job.creditsCost,
-                'USAGE',
-                `Generated presentation with ${slides.length} slides`,
-                job.presentationId ?? undefined,
-            );
-
             await this.updateJobStatus(jobId, 'COMPLETED', 100);
         } catch (error) {
             if (error instanceof GenerationCancelledError) return;
@@ -317,12 +294,6 @@ export class GenerationService implements OnModuleInit {
             throw new BadRequestException('Slide not found');
         }
 
-        // Check credits for AI edit
-        const hasCredits = await this.creditsService.checkBalance(userId, CREDIT_COSTS.AI_EDIT_SIMPLE);
-        if (!hasCredits) {
-            throw new BadRequestException('Insufficient credits');
-        }
-
         // Apply AI edit
         const currentContent = JSON.stringify(slide.content);
         const editedContent = await this.llmService.editContent(currentContent, dto.instruction);
@@ -332,15 +303,6 @@ export class GenerationService implements OnModuleInit {
             where: { id: dto.slideId },
             data: { content: JSON.parse(editedContent) },
         });
-
-        // Deduct credits
-        await this.creditsService.deductCredits(
-            userId,
-            CREDIT_COSTS.AI_EDIT_SIMPLE,
-            'USAGE',
-            `AI edit on slide`,
-            dto.slideId,
-        );
 
         return {
             success: true,

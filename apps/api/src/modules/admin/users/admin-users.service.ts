@@ -4,7 +4,6 @@ import {
     AdminCreateUserDto,
     AdminUpdateUserDto,
     AdminUserFilterDto,
-    AdminCreditAdjustmentDto,
 } from '../dto';
 import * as bcrypt from 'bcrypt';
 
@@ -50,7 +49,6 @@ export class AdminUsersService {
                     image: true,
                     role: true,
                     status: true,
-                    creditsRemaining: true,
                     organizationId: true,
                     organization: { select: { id: true, name: true } },
                     lastLoginAt: true,
@@ -81,14 +79,13 @@ export class AdminUsersService {
                 image: true,
                 role: true,
                 status: true,
-                creditsRemaining: true,
                 preferences: true,
                 organizationId: true,
                 organization: { select: { id: true, name: true, slug: true } },
                 lastLoginAt: true,
                 createdAt: true,
                 updatedAt: true,
-                _count: { select: { presentations: true, creditTransactions: true } },
+                _count: { select: { presentations: true } },
             },
         });
 
@@ -122,7 +119,6 @@ export class AdminUsersService {
                 password: hashedPassword,
                 organizationId: dto.organizationId,
                 role: dto.role || 'USER',
-                creditsRemaining: dto.creditsRemaining ?? 100,
             },
             select: {
                 id: true,
@@ -130,7 +126,6 @@ export class AdminUsersService {
                 name: true,
                 role: true,
                 status: true,
-                creditsRemaining: true,
                 organizationId: true,
                 createdAt: true,
             },
@@ -163,7 +158,6 @@ export class AdminUsersService {
                 role: dto.role,
                 status: dto.status,
                 organizationId: dto.organizationId,
-                creditsRemaining: dto.creditsRemaining,
             },
             select: {
                 id: true,
@@ -172,7 +166,6 @@ export class AdminUsersService {
                 image: true,
                 role: true,
                 status: true,
-                creditsRemaining: true,
                 organizationId: true,
                 updatedAt: true,
             },
@@ -215,75 +208,4 @@ export class AdminUsersService {
         return { success: true, message: 'User deactivated successfully' };
     }
 
-    async adjustCredits(userId: string, dto: AdminCreditAdjustmentDto, adminId: string) {
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { creditsRemaining: true },
-        });
-
-        if (!user) {
-            throw new NotFoundException('User not found');
-        }
-
-        const newBalance = user.creditsRemaining + dto.amount;
-
-        const result = await this.prisma.$transaction(async (tx) => {
-            // Update user balance
-            await tx.user.update({
-                where: { id: userId },
-                data: { creditsRemaining: newBalance },
-            });
-
-            // Create transaction record
-            const transaction = await tx.creditTransaction.create({
-                data: {
-                    userId,
-                    amount: dto.amount,
-                    type: dto.type,
-                    description: dto.description,
-                    balance: newBalance,
-                },
-            });
-
-            return transaction;
-        });
-
-        // Create audit log
-        await this.prisma.auditLog.create({
-            data: {
-                userId: adminId,
-                action: 'CREDIT_ADJUSTMENT',
-                resource: 'USER',
-                resourceId: userId,
-                details: { ...dto },
-            },
-        });
-
-        return {
-            transaction: result,
-            newBalance,
-        };
-    }
-
-    async getCreditHistory(userId: string, page = 1, limit = 20) {
-        const skip = (page - 1) * limit;
-
-        const [transactions, total] = await Promise.all([
-            this.prisma.creditTransaction.findMany({
-                where: { userId },
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: limit,
-            }),
-            this.prisma.creditTransaction.count({ where: { userId } }),
-        ]);
-
-        return {
-            data: transactions,
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-        };
-    }
 }

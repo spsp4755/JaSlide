@@ -32,7 +32,6 @@ export class AuthService {
                 email: dto.email,
                 name: dto.name,
                 password: hashedPassword,
-                creditsRemaining: 100, // Default free credits
             },
         });
 
@@ -44,7 +43,6 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                creditsRemaining: user.creditsRemaining,
                 role: user.role,
             },
             accessToken: token,
@@ -109,7 +107,6 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                creditsRemaining: user.creditsRemaining,
                 role: user.role,
             },
             accessToken: token,
@@ -158,7 +155,6 @@ export class AuthService {
                     email: profile.email,
                     name: profile.name,
                     image: profile.image,
-                    creditsRemaining: 100,
                     accounts: {
                         create: {
                             type: 'oauth',
@@ -198,7 +194,6 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                creditsRemaining: user.creditsRemaining,
                 role: user.role,
             },
             accessToken: token,
@@ -238,7 +233,6 @@ export class AuthService {
                         email: profile.email,
                         name: profile.name,
                         image: profile.image,
-                        creditsRemaining: 100,
                         role: this.keycloakRole(profile.roles),
                         accounts: {
                             create: { type: 'oauth', provider, providerAccountId },
@@ -261,7 +255,6 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                creditsRemaining: user.creditsRemaining,
                 role: user.role,
             },
             accessToken: this.generateToken(user.id, user.email),

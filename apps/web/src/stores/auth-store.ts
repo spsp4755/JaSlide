@@ -7,7 +7,6 @@ interface User {
     id: string;
     email: string;
     name: string | null;
-    creditsRemaining: number;
     role: UserRole;
 }
 
@@ -21,7 +20,6 @@ interface AuthState {
     hasHydrated: boolean;
     setAuth: (user: User, token?: string) => void;
     clearAuth: () => void;
-    updateCredits: (credits: number) => void;
     setHasHydrated: (state: boolean) => void;
 }
 
@@ -37,10 +35,6 @@ export const useAuthStore = create<AuthState>()(
             clearAuth: () => {
                 set({ user: null, isAuthenticated: false });
             },
-            updateCredits: (credits) =>
-                set((state) => ({
-                    user: state.user ? { ...state.user, creditsRemaining: credits } : null,
-                })),
             setHasHydrated: (state) => set({ hasHydrated: state }),
         }),
         {

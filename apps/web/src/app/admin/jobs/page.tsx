@@ -11,7 +11,6 @@ interface Job {
     id: string;
     status: string;
     progress: number;
-    creditsCost: number;
     user: { id: string; email: string; name: string | null };
     presentation: { id: string; title: string } | null;
     createdAt: string;
@@ -154,7 +153,6 @@ export default function AdminJobsPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용자</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">진행률</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">크레딧</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">생성일</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">작업</th>
                             </tr>
@@ -178,7 +176,6 @@ export default function AdminJobsPage() {
                                         </div>
                                         <div className="text-xs text-gray-500 mt-1">{job.progress}%</div>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900">{job.creditsCost}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
                                         {new Date(job.createdAt).toLocaleString('ko-KR')}
                                     </td>

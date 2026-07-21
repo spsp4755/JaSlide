@@ -17,7 +17,6 @@ describe('AuthController', () => {
             id: 'user-123',
             email: 'test@example.com',
             name: 'Test User',
-            creditsRemaining: 100,
             role: 'USER' as const,
         },
         accessToken: 'jwt-token',

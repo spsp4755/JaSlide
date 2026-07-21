@@ -14,7 +14,6 @@ export class UsersService {
                 email: true,
                 name: true,
                 image: true,
-                creditsRemaining: true,
                 role: true,
                 preferences: true,
                 organizationId: true,
@@ -48,7 +47,6 @@ export class UsersService {
                 email: true,
                 name: true,
                 image: true,
-                creditsRemaining: true,
                 role: true,
                 preferences: true,
                 organizationId: true,
@@ -56,19 +54,6 @@ export class UsersService {
         });
 
         return user;
-    }
-
-    async getCredits(userId: string) {
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { creditsRemaining: true },
-        });
-
-        if (!user) {
-            throw new NotFoundException('User not found');
-        }
-
-        return { credits: user.creditsRemaining };
     }
 
     async getPresentations(userId: string, page = 1, limit = 10) {

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { AdminUsersModule } from './users/admin-users.module';
 import { AdminOrganizationsModule } from './organizations/admin-organizations.module';
 import { AdminRolesModule } from './roles/admin-roles.module';
-import { AdminCreditsModule } from './credits/admin-credits.module';
 import { AdminTemplatesModule } from './templates/admin-templates.module';
 import { AdminModelsModule } from './models/admin-models.module';
 import { AdminPromptsModule } from './prompts/admin-prompts.module';
@@ -25,7 +24,6 @@ import { AdminThemesModule } from './themes/admin-themes.module';
 import { AdminFontSetsModule } from './font-sets/admin-font-sets.module';
 import { AdminColorPalettesModule } from './color-palettes/admin-color-palettes.module';
 import { AdminSeedDataModule } from './seed-data/admin-seed-data.module';
-import { AdminBillingModule } from './billing/admin-billing.module';
 import { AdminApiKeysModule } from './api-keys/admin-api-keys.module';
 import { AdminWebhooksModule } from './webhooks/admin-webhooks.module';
 import { AdminIntegrationsModule } from './integrations/admin-integrations.module';
@@ -36,7 +34,6 @@ import { AdminIntegrationsModule } from './integrations/admin-integrations.modul
         AdminUsersModule,
         AdminOrganizationsModule,
         AdminRolesModule,
-        AdminCreditsModule,
         AdminTemplatesModule,
         AdminModelsModule,
         AdminPromptsModule,
@@ -56,7 +53,6 @@ import { AdminIntegrationsModule } from './integrations/admin-integrations.modul
         AdminFontSetsModule,
         AdminColorPalettesModule,
         AdminSeedDataModule,
-        AdminBillingModule,
         AdminApiKeysModule,
         AdminWebhooksModule,
         AdminIntegrationsModule,

@@ -46,7 +46,6 @@ async function bootstrap() {
         .addTag('generation', 'AI generation endpoints')
         .addTag('templates', 'Template management')
         .addTag('assets', 'Asset management')
-        .addTag('credits', 'Credit system')
         .addTag('export', 'Export endpoints')
         .build();
 

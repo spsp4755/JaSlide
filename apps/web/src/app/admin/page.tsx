@@ -7,7 +7,6 @@ import {
     Users,
     FileText,
     Activity,
-    CreditCard,
     CheckCircle2,
     AlertTriangle,
     TrendingUp,
@@ -21,7 +20,6 @@ interface DashboardStats {
     activeUsers: number;
     totalPresentations: number;
     totalGenerations: number;
-    creditsConsumed: number;
     errorRate: number;
 }
 
@@ -67,7 +65,6 @@ export default function AdminDashboard() {
                     activeUsers: 342,
                     totalPresentations: 8921,
                     totalGenerations: 15420,
-                    creditsConsumed: 245800,
                     errorRate: 0.23,
                 });
             }
@@ -140,18 +137,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Secondary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-medium text-gray-700">크레딧 소비</h3>
-                        <CreditCard className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">
-                        {stats?.creditsConsumed.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">이번 달 총 사용량</p>
-                </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div className="bg-white rounded-lg p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-medium text-gray-700">시스템 상태</h3>

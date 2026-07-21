@@ -16,7 +16,6 @@ describe('AuthService', () => {
         email: 'test@example.com',
         name: 'Test User',
         password: '$2b$10$hashedpassword',
-        creditsRemaining: 100,
         role: 'USER' as const,
         image: null,
         status: 'ACTIVE' as const,

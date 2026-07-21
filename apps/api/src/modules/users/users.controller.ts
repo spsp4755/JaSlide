@@ -32,12 +32,6 @@ export class UsersController {
         return this.usersService.update(user.id, dto);
     }
 
-    @Get('me/credits')
-    @ApiOperation({ summary: 'Get current user credits' })
-    async getCredits(@CurrentUser() user: any) {
-        return this.usersService.getCredits(user.id);
-    }
-
     @Get('me/presentations')
     @ApiOperation({ summary: 'Get current user presentations' })
     async getPresentations(

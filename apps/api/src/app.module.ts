@@ -9,7 +9,6 @@ import { SlidesModule } from './modules/slides/slides.module';
 import { GenerationModule } from './modules/generation/generation.module';
 import { TemplatesModule } from './modules/templates/templates.module';
 import { AssetsModule } from './modules/assets/assets.module';
-import { CreditsModule } from './modules/credits/credits.module';
 import { ExportModule } from './modules/export/export.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { QueueModule } from './modules/queue/queue.module';
@@ -56,7 +55,6 @@ import { SkillsModule } from './modules/skills/skills.module';
         GenerationModule,
         TemplatesModule,
         AssetsModule,
-        CreditsModule,
         ExportModule,
         LlmModule,
         QueueModule,

@@ -19,7 +19,6 @@ model User {
   name               String?
   image              String?
   password           String?
-  creditsRemaining   Int                  @default(100)
   role               UserRole             @default(USER)
   status             UserStatus           @default(ACTIVE)
   preferences        Json                 @default("{}")
@@ -31,7 +30,6 @@ model User {
   organization       Organization?        @relation(fields: [organizationId], references: [id])
   organizationId     String?
   presentations      Presentation[]
-  creditTransactions CreditTransaction[]
   generationJobs     GenerationJob[]
   assets             Asset[]
   auditLogs          AuditLog[]
@@ -328,7 +326,7 @@ enum AssetType {
 }
 
 // ============================================
-// Generation & Credits
+// Generation
 // ============================================
 
 model GenerationJob {
@@ -344,7 +342,6 @@ model GenerationJob {
   output         Json?
   progress       Int              @default(0)
   error          Json?
-  creditsCost    Int              @default(0)
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime         @default(now())
@@ -365,32 +362,6 @@ enum GenerationStatus {
   COMPLETED
   FAILED
   CANCELLED
-}
-
-model CreditTransaction {
-  id            String                @id @default(cuid())
-  user          User                  @relation(fields: [userId], references: [id])
-  userId        String
-  amount        Int
-  type          CreditTransactionType
-  description   String
-  referenceId   String?
-  referenceType String?
-  balance       Int
-  createdAt     DateTime              @default(now())
-
-  @@index([userId])
-  @@index([type])
-  @@index([createdAt])
-}
-
-enum CreditTransactionType {
-  PURCHASE
-  USAGE
-  REFUND
-  BONUS
-  SUBSCRIPTION
-  ADJUSTMENT
 }
 
 // ============================================
@@ -441,40 +412,6 @@ model UserRoleAssignment {
   @@unique([userId, roleId])
   @@index([userId])
   @@index([roleId])
-}
-
-// ============================================
-// Credit & Pricing Management
-// ============================================
-
-model CreditPolicy {
-  id          String   @id @default(cuid())
-  name        String
-  modelType   String   // 'llm', 'image', 'generation'
-  modelName   String?  // specific model name
-  costPerUnit Int      // credits per operation
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([modelType])
-  @@index([isActive])
-}
-
-model PricingPlan {
-  id             String   @id @default(cuid())
-  name           String   @unique
-  displayName    String
-  monthlyCredits Int
-  price          Decimal  @db.Decimal(10, 2)
-  features       Json     @default("[]")
-  isActive       Boolean  @default(true)
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([isActive])
 }
 
 // ============================================

@@ -19,7 +19,7 @@ describe('GenerationService cancellation', () => {
             create: jest.fn(),
         },
     };
-    const service = new GenerationService(prisma as any, {} as any, {} as any, {} as any);
+    const service = new GenerationService(prisma as any, {} as any, {} as any);
 
     beforeEach(() => jest.clearAllMocks());
 
@@ -43,9 +43,8 @@ describe('GenerationService cancellation', () => {
     });
 
     it('applies an owned Skill guidance and its linked template to a generation job', async () => {
-        const credits = { checkBalance: jest.fn().mockResolvedValue(true) };
         const queue = { addGenerationJob: jest.fn().mockResolvedValue(undefined) };
-        const skillService = new GenerationService(prisma as any, {} as any, credits as any, queue as any);
+        const skillService = new GenerationService(prisma as any, {} as any, queue as any);
         prisma.presentationSkill.findFirst.mockResolvedValue({
             id: 'skill-1',
             templateId: 'template-from-skill',
@@ -77,9 +76,8 @@ describe('GenerationService cancellation', () => {
     });
 
     it('allows selecting a Skill shared within the caller\'s organization', async () => {
-        const credits = { checkBalance: jest.fn().mockResolvedValue(true) };
         const queue = { addGenerationJob: jest.fn().mockResolvedValue(undefined) };
-        const skillService = new GenerationService(prisma as any, {} as any, credits as any, queue as any);
+        const skillService = new GenerationService(prisma as any, {} as any, queue as any);
         prisma.presentationSkill.findFirst.mockResolvedValue({
             id: 'skill-org',
             templateId: null,
@@ -106,9 +104,8 @@ describe('GenerationService cancellation', () => {
 
     it('validates an edited outline and sizes the job by its slide count', async () => {
         const llm = { validateClientOutline: jest.fn((outline) => outline) };
-        const credits = { checkBalance: jest.fn().mockResolvedValue(true) };
         const queue = { addGenerationJob: jest.fn().mockResolvedValue(undefined) };
-        const svc = new GenerationService(prisma as any, llm as any, credits as any, queue as any);
+        const svc = new GenerationService(prisma as any, llm as any, queue as any);
         prisma.presentation.create.mockResolvedValue({ id: 'presentation-3' });
         prisma.generationJob.create.mockResolvedValue({ id: 'job-3' });
         const outline = {
@@ -135,7 +132,7 @@ describe('GenerationService cancellation', () => {
     });
 
     it('generateOutline rejects empty content', async () => {
-        const svc = new GenerationService(prisma as any, {} as any, {} as any, {} as any);
+        const svc = new GenerationService(prisma as any, {} as any, {} as any);
         await expect(svc.generateOutline({ id: 'user-1' }, { content: '   ' } as any))
             .rejects.toBeInstanceOf(BadRequestException);
     });
@@ -145,7 +142,7 @@ describe('GenerationService cancellation', () => {
             detectLanguage: jest.fn().mockResolvedValue('ko'),
             generateOutline: jest.fn().mockResolvedValue({ title: 'T', slides: [] }),
         };
-        const svc = new GenerationService(prisma as any, llm as any, {} as any, {} as any);
+        const svc = new GenerationService(prisma as any, llm as any, {} as any);
 
         await svc.generateOutline({ id: 'user-1' }, { content: '발표 내용', slideCount: 8 } as any);
 

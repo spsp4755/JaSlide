@@ -13,7 +13,6 @@ interface User {
     name: string | null;
     role: string;
     status: string;
-    creditsRemaining: number;
     organization?: { id: string; name: string } | null;
     lastLoginAt: string | null;
     createdAt: string;
@@ -137,7 +136,6 @@ export default function AdminUsersPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용자</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">역할</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">크레딧</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">조직</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">최근 로그인</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">작업</th>
@@ -167,9 +165,6 @@ export default function AdminUsersPage() {
                                             }`}>
                                             {user.status}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900">
-                                        {user.creditsRemaining.toLocaleString()}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
                                         {user.organization?.name || '-'}

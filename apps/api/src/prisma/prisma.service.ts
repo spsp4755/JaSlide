@@ -26,7 +26,6 @@ export class PrismaService
         if (process.env.NODE_ENV !== 'production') {
             // Clean up in correct order (respecting foreign keys)
             await this.auditLog.deleteMany();
-            await this.creditTransaction.deleteMany();
             await this.generationJob.deleteMany();
             await this.slide.deleteMany();
             await this.presentation.deleteMany();

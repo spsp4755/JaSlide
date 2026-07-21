@@ -18,7 +18,6 @@ import {
     AdminCreateUserDto,
     AdminUpdateUserDto,
     AdminUserFilterDto,
-    AdminCreditAdjustmentDto,
 } from '../dto';
 
 @Controller('admin/users')
@@ -50,23 +49,5 @@ export class AdminUsersController {
     @Delete(':id')
     async delete(@Param('id') id: string) {
         return this.usersService.delete(id);
-    }
-
-    @Post(':id/credits/adjust')
-    async adjustCredits(
-        @Param('id') id: string,
-        @Body() dto: AdminCreditAdjustmentDto,
-        @Request() req: any,
-    ) {
-        return this.usersService.adjustCredits(id, dto, req.user.id);
-    }
-
-    @Get(':id/credits/history')
-    async getCreditHistory(
-        @Param('id') id: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-    ) {
-        return this.usersService.getCreditHistory(id, page, limit);
     }
 }

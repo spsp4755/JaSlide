@@ -5,7 +5,6 @@ export interface User {
     email: string;
     name?: string;
     image?: string;
-    creditsRemaining: number;
     organizationId?: string;
     role: UserRole;
     preferences: UserPreferences;

@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus, OrganizationPlan, PresentationStatus, SourceType, SlideType, TemplateCategory, AssetType, GenerationStatus, CreditTransactionType, BlockType, CollaboratorRole } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, OrganizationPlan, PresentationStatus, SourceType, SlideType, TemplateCategory, AssetType, GenerationStatus, BlockType, CollaboratorRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -14,8 +14,6 @@ async function main() {
     await prisma.$executeRaw`TRUNCATE TABLE "Organization" CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Template" CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Role" CASCADE`;
-    await prisma.$executeRaw`TRUNCATE TABLE "CreditPolicy" CASCADE`;
-    await prisma.$executeRaw`TRUNCATE TABLE "PricingPlan" CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "ColorPalette" CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "FontSet" CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "SystemPolicy" CASCADE`;
@@ -68,7 +66,6 @@ async function main() {
                 password: adminPassword,
                 role: UserRole.ADMIN,
                 status: UserStatus.ACTIVE,
-                creditsRemaining: 10000,
                 preferences: { theme: 'dark', language: 'ko' },
             },
         }),
@@ -79,7 +76,6 @@ async function main() {
                 password: userPassword,
                 role: UserRole.ORG_ADMIN,
                 status: UserStatus.ACTIVE,
-                creditsRemaining: 500,
                 organizationId: orgs[0].id,
                 preferences: { theme: 'light', language: 'ko' },
             },
@@ -91,7 +87,6 @@ async function main() {
                 password: userPassword,
                 role: UserRole.USER,
                 status: UserStatus.ACTIVE,
-                creditsRemaining: 150,
                 organizationId: orgs[1].id,
             },
         }),
@@ -102,7 +97,6 @@ async function main() {
                 password: userPassword,
                 role: UserRole.USER,
                 status: UserStatus.ACTIVE,
-                creditsRemaining: 200,
                 organizationId: orgs[2].id,
             },
         }),
@@ -113,7 +107,6 @@ async function main() {
                 password: userPassword,
                 role: UserRole.USER,
                 status: UserStatus.ACTIVE,
-                creditsRemaining: 80,
             },
         }),
     ]);
@@ -410,16 +403,6 @@ async function main() {
     ]);
 
     // ============================================
-    // Credit Policies
-    // ============================================
-    await Promise.all([
-        prisma.creditPolicy.create({ data: { name: 'GPT-4 사용', modelType: 'llm', modelName: 'gpt-4', costPerUnit: 10, description: 'GPT-4 API 호출당 크레딧' } }),
-        prisma.creditPolicy.create({ data: { name: 'GPT-3.5 사용', modelType: 'llm', modelName: 'gpt-3.5-turbo', costPerUnit: 2, description: 'GPT-3.5 API 호출당 크레딧' } }),
-        prisma.creditPolicy.create({ data: { name: 'DALL-E 3 이미지', modelType: 'image', modelName: 'dall-e-3', costPerUnit: 15, description: '이미지 1장 생성당 크레딧' } }),
-        prisma.creditPolicy.create({ data: { name: '프레젠테이션 생성', modelType: 'generation', costPerUnit: 20, description: '프레젠테이션 1개 생성당 크레딧' } }),
-    ]);
-
-    // ============================================
     // LLM Models
     // ============================================
     await Promise.all([
@@ -535,16 +518,6 @@ async function main() {
     ]);
 
     // ============================================
-    // Pricing Plans
-    // ============================================
-    await Promise.all([
-        prisma.pricingPlan.create({ data: { name: 'free', displayName: '무료 플랜', monthlyCredits: 100, price: 0, features: ['월 100 크레딧', '기본 템플릿', '워터마크 포함'], sortOrder: 0 } }),
-        prisma.pricingPlan.create({ data: { name: 'starter', displayName: '스타터', monthlyCredits: 500, price: 9900, features: ['월 500 크레딧', '모든 템플릿', '워터마크 제거', 'PDF 내보내기'], sortOrder: 1 } }),
-        prisma.pricingPlan.create({ data: { name: 'professional', displayName: '프로페셔널', monthlyCredits: 2000, price: 29900, features: ['월 2000 크레딧', '프리미엄 템플릿', 'PPTX 내보내기', '팀 협업'], sortOrder: 2 } }),
-        prisma.pricingPlan.create({ data: { name: 'enterprise', displayName: '엔터프라이즈', monthlyCredits: 10000, price: 99900, features: ['월 10000 크레딧', '맞춤 템플릿', 'API 액세스', '전담 지원'], sortOrder: 3 } }),
-    ]);
-
-    // ============================================
     // Color Palettes & Font Sets
     // ============================================
     await Promise.all([
@@ -568,16 +541,6 @@ async function main() {
         prisma.systemPolicy.create({ data: { category: 'limits', key: 'max_slides_per_presentation', value: { limit: 50 }, description: '프레젠테이션당 최대 슬라이드 수' } }),
         prisma.systemPolicy.create({ data: { category: 'limits', key: 'max_file_upload_size', value: { mb: 100 }, description: '최대 파일 업로드 크기' } }),
         prisma.systemPolicy.create({ data: { category: 'retention', key: 'deleted_presentation_retention', value: { days: 30 }, description: '삭제된 프레젠테이션 보관 기간' } }),
-    ]);
-
-    // ============================================
-    // Credit Transactions
-    // ============================================
-    await Promise.all([
-        prisma.creditTransaction.create({ data: { userId: users[1].id, amount: 1000, type: CreditTransactionType.PURCHASE, description: '프로페셔널 플랜 결제', balance: 1000 } }),
-        prisma.creditTransaction.create({ data: { userId: users[1].id, amount: -20, type: CreditTransactionType.USAGE, description: '프레젠테이션 생성', referenceId: presentations[0].id, referenceType: 'presentation', balance: 980 } }),
-        prisma.creditTransaction.create({ data: { userId: users[2].id, amount: 500, type: CreditTransactionType.SUBSCRIPTION, description: '스타터 플랜 구독', balance: 500 } }),
-        prisma.creditTransaction.create({ data: { userId: users[4].id, amount: 100, type: CreditTransactionType.BONUS, description: '신규 가입 보너스', balance: 100 } }),
     ]);
 
     // ============================================

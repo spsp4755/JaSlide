@@ -20,8 +20,8 @@ export const PERMISSION_ACTIONS = ['create', 'read', 'update', 'delete', 'manage
 // Predefined resources
 export const RESOURCES = [
     'users', 'roles', 'organizations', 'presentations', 'templates',
-    'models', 'prompts', 'credits', 'policies', 'logs', 'settings',
-    'assets', 'billing', 'webhooks', 'api-keys',
+    'models', 'prompts', 'policies', 'logs', 'settings',
+    'assets', 'webhooks', 'api-keys',
 ] as const;
 
 @Injectable()

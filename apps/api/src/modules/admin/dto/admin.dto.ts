@@ -45,11 +45,6 @@ export class AdminCreateUserDto {
     @IsOptional()
     @IsEnum(['USER', 'ADMIN', 'ORG_ADMIN'])
     role?: 'USER' | 'ADMIN' | 'ORG_ADMIN';
-
-    @IsOptional()
-    @IsInt()
-    @Min(0)
-    creditsRemaining?: number;
 }
 
 export class AdminUpdateUserDto {
@@ -72,10 +67,6 @@ export class AdminUpdateUserDto {
     @IsOptional()
     @IsString()
     organizationId?: string;
-
-    @IsOptional()
-    @IsInt()
-    creditsRemaining?: number;
 }
 
 export class AdminUserFilterDto extends PaginationDto {
@@ -165,103 +156,6 @@ export class AdminUpdateRoleDto {
 
     @IsOptional()
     permissions?: string[];
-}
-
-// Credit Policy DTOs
-export class AdminCreateCreditPolicyDto {
-    @IsString()
-    name: string;
-
-    @IsString()
-    modelType: string;
-
-    @IsOptional()
-    @IsString()
-    modelName?: string;
-
-    @IsInt()
-    @Min(1)
-    costPerUnit: number;
-
-    @IsOptional()
-    @IsString()
-    description?: string;
-
-    @IsOptional()
-    @IsBoolean()
-    isActive?: boolean;
-}
-
-export class AdminUpdateCreditPolicyDto {
-    @IsOptional()
-    @IsString()
-    name?: string;
-
-    @IsOptional()
-    @IsInt()
-    @Min(1)
-    costPerUnit?: number;
-
-    @IsOptional()
-    @IsString()
-    description?: string;
-
-    @IsOptional()
-    @IsBoolean()
-    isActive?: boolean;
-}
-
-// Pricing Plan DTOs
-export class AdminCreatePricingPlanDto {
-    @IsString()
-    name: string;
-
-    @IsString()
-    displayName: string;
-
-    @IsInt()
-    @Min(0)
-    monthlyCredits: number;
-
-    @Type(() => Number)
-    price: number;
-
-    @IsOptional()
-    features?: string[];
-
-    @IsOptional()
-    @IsBoolean()
-    isActive?: boolean;
-
-    @IsOptional()
-    @IsInt()
-    sortOrder?: number;
-}
-
-export class AdminUpdatePricingPlanDto {
-    @IsOptional()
-    @IsString()
-    displayName?: string;
-
-    @IsOptional()
-    @IsInt()
-    @Min(0)
-    monthlyCredits?: number;
-
-    @IsOptional()
-    @Type(() => Number)
-    price?: number;
-
-    @IsOptional()
-    features?: string[];
-
-    @IsOptional()
-    @IsBoolean()
-    isActive?: boolean;
-
-    @IsOptional()
-    @IsInt()
-    sortOrder?: number;
 }
 
 // LLM Model DTOs
@@ -534,16 +428,4 @@ export class AdminDocumentFilterDto extends PaginationDto {
     @IsOptional()
     @IsString()
     endDate?: string;
-}
-
-// Credit Adjustment DTO
-export class AdminCreditAdjustmentDto {
-    @IsInt()
-    amount: number;
-
-    @IsEnum(['PURCHASE', 'BONUS', 'REFUND', 'SUBSCRIPTION', 'ADJUSTMENT'])
-    type: 'PURCHASE' | 'BONUS' | 'REFUND' | 'SUBSCRIPTION' | 'ADJUSTMENT';
-
-    @IsString()
-    description: string;
 }
