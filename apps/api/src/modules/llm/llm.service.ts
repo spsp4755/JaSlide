@@ -9,6 +9,7 @@ export interface GenerateOutlineInput {
     slideCount: number;
     language: string;
     style?: string;
+    templateSlides?: string[];
 }
 
 export interface SlideOutline {
@@ -18,6 +19,7 @@ export interface SlideOutline {
         title: string;
         type: string;
         keyPoints: string[];
+        templateIndex?: number;
     }[];
 }
 
@@ -33,6 +35,7 @@ export interface SlideContent {
     subheading?: string;
     body?: string;
     bullets?: { text: string; level: number }[];
+    chart?: { labels: string[]; values: number[]; series?: string; isExample?: boolean };
 }
 
 interface LlmModelConfig {
@@ -48,6 +51,7 @@ export class LlmService {
     private readonly logger = new Logger(LlmService.name);
     private cachedClient: OpenAI | null = null;
     private cachedModel: string | null = null;
+    private cachedMaxTokens: number = 4096;
     private cacheExpiry: number = 0;
     private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
     private readonly SLIDE_TYPES = new Set([
@@ -97,12 +101,12 @@ export class LlmService {
         return this.LOCAL_PROVIDERS.includes(provider.toLowerCase());
     }
 
-    private async getOpenAIClient(): Promise<{ client: OpenAI; model: string }> {
+    private async getOpenAIClient(): Promise<{ client: OpenAI; model: string; maxTokens: number }> {
         const now = Date.now();
 
         // Return cached client if still valid
         if (this.cachedClient && this.cachedModel && now < this.cacheExpiry) {
-            return { client: this.cachedClient, model: this.cachedModel };
+            return { client: this.cachedClient, model: this.cachedModel, maxTokens: this.cachedMaxTokens };
         }
 
         // Fetch from database
@@ -125,10 +129,11 @@ export class LlmService {
 
                 this.cachedClient = new OpenAI(clientConfig);
                 this.cachedModel = llmConfig.modelId;
+                this.cachedMaxTokens = llmConfig.maxTokens || 4096;
                 this.cacheExpiry = now + this.CACHE_TTL;
 
                 this.logger.log(`Using local LLM: ${llmConfig.provider} at ${llmConfig.endpoint}`);
-                return { client: this.cachedClient, model: this.cachedModel };
+                return { client: this.cachedClient, model: this.cachedModel, maxTokens: this.cachedMaxTokens };
             }
 
             // For cloud providers, API key is required
@@ -142,9 +147,10 @@ export class LlmService {
 
                 this.cachedClient = new OpenAI(clientConfig);
                 this.cachedModel = llmConfig.modelId;
+                this.cachedMaxTokens = llmConfig.maxTokens || 4096;
                 this.cacheExpiry = now + this.CACHE_TTL;
 
-                return { client: this.cachedClient, model: this.cachedModel };
+                return { client: this.cachedClient, model: this.cachedModel, maxTokens: this.cachedMaxTokens };
             }
         }
 
@@ -158,9 +164,10 @@ export class LlmService {
                 ...(envBaseUrl ? { baseURL: envBaseUrl } : {}),
             });
             this.cachedModel = this.configService.get<string>('OPENAI_MODEL') || 'gpt-4-turbo-preview';
+            this.cachedMaxTokens = Number(this.configService.get<string>('OPENAI_MAX_TOKENS')) || 4096;
             this.cacheExpiry = now + this.CACHE_TTL;
 
-            return { client: this.cachedClient, model: this.cachedModel };
+            return { client: this.cachedClient, model: this.cachedModel, maxTokens: this.cachedMaxTokens };
         }
 
         throw new Error(
@@ -177,7 +184,8 @@ export class LlmService {
             return await this.generateValidatedJson(
                 'You are a professional presentation consultant. Return valid JSON only.',
                 prompt,
-                (value) => this.validateOutline(value, input.slideCount),
+                (value) => this.validateOutline(value, input.slideCount, input.templateSlides?.length ?? 0),
+                Number.MAX_SAFE_INTEGER,
             );
         } catch (error) {
             this.logger.error('Failed to generate outline', error);
@@ -202,7 +210,10 @@ export class LlmService {
                 || !slide.keyPoints.every((point) => this.isText(point))) {
                 throw new Error(`Invalid outline slide at position ${index + 1}`);
             }
-            return { order: index + 1, title: slide.title, type: slide.type, keyPoints: slide.keyPoints };
+            return {
+                order: index + 1, title: slide.title, type: slide.type, keyPoints: slide.keyPoints,
+                ...(Number.isInteger(slide.templateIndex) && (slide.templateIndex as number) >= 0 ? { templateIndex: slide.templateIndex as number } : {}),
+            };
         });
         return { title: value.title, slides };
     }
@@ -214,7 +225,8 @@ export class LlmService {
             return await this.generateValidatedJson(
                 'You are a professional presentation content writer. Return valid JSON only.',
                 prompt,
-                (value) => this.validateSlideContent(value),
+                (value) => this.validateSlideContent(value, input.type),
+                4096,
             );
         } catch (error) {
             this.logger.error('Failed to generate slide content', error);
@@ -298,7 +310,7 @@ Return JSON with "layout" field only.`;
             });
             return res.choices[0]?.message?.content || '';
         } catch (error: any) {
-            if (error?.status === 400 && /response_format/i.test(error?.message || '')) {
+            if (error?.status === 400 && /response_format|peg-native/i.test(error?.message || '')) {
                 const res = await client.chat.completions.create(params);
                 return res.choices[0]?.message?.content || '';
             }
@@ -319,25 +331,27 @@ Return JSON with "layout" field only.`;
         system: string,
         prompt: string,
         validate: (value: unknown) => T,
+        requestedMaxTokens: number,
     ): Promise<T> {
-        const { client, model } = await this.getOpenAIClient();
+        const { client, model, maxTokens } = await this.getOpenAIClient();
         let responseText = '';
         let error: unknown;
 
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let attempt = 0; attempt < 4; attempt++) {
             const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
                 { role: 'system', content: system },
                 {
                     role: 'user',
                     content: attempt === 0
                         ? prompt
-                        : `${prompt}\n\nThe previous response was invalid: ${responseText}\nValidation error: ${error instanceof Error ? error.message : 'invalid JSON'}. Return a corrected JSON object only.`,
+                        : `${prompt}\n\nThe previous response was invalid. Return a corrected JSON object only. Do not use quotation marks inside text values. Validation error: ${error instanceof Error ? error.message : 'invalid JSON'}.`,
                 },
             ];
             responseText = await this.chatJson(client, {
                 model,
                 messages,
                 temperature: 0.7,
+                max_tokens: Math.min(requestedMaxTokens, maxTokens || requestedMaxTokens),
             });
 
             try {
@@ -353,7 +367,7 @@ Return JSON with "layout" field only.`;
         throw error instanceof Error ? error : new Error('Invalid LLM JSON response');
     }
 
-    private validateOutline(value: unknown, slideCount: number): SlideOutline {
+    private validateOutline(value: unknown, slideCount: number, templateCount: number): SlideOutline {
         if (!this.isRecord(value) || !this.isText(value.title) || !Array.isArray(value.slides)) {
             throw new Error('Outline must include a non-empty title and slides');
         }
@@ -368,12 +382,18 @@ Return JSON with "layout" field only.`;
                 || !slide.keyPoints.every((point) => this.isText(point))) {
                 throw new Error(`Invalid outline slide at position ${index + 1}`);
             }
-            return { order: slide.order, title: slide.title, type: slide.type, keyPoints: slide.keyPoints };
+            return {
+                order: slide.order, title: slide.title, type: slide.type, keyPoints: slide.keyPoints,
+                ...(Number.isInteger(slide.templateIndex) && (slide.templateIndex as number) >= 0 && (templateCount === 0 || (slide.templateIndex as number) < templateCount) ? { templateIndex: slide.templateIndex as number } : {}),
+            };
         });
         return { title: value.title, slides };
     }
 
-    private validateSlideContent(value: unknown): SlideContent {
+    private validateSlideContent(value: unknown, type: string): SlideContent {
+        if (this.isRecord(value) && this.isRecord(value.slide)) {
+            value = value.slide;
+        }
         if (!this.isRecord(value) || !this.isText(value.heading)) {
             throw new Error('Slide content requires a non-empty heading');
         }
@@ -383,17 +403,39 @@ Return JSON with "layout" field only.`;
         let bullets: { text: string; level: number }[] | undefined;
         if (Array.isArray(value.bullets)) {
             const cleaned = value.bullets
-                .filter((bullet): bullet is Record<string, unknown> => this.isRecord(bullet) && this.isText(bullet.text))
+                .filter((bullet): bullet is string | Record<string, unknown> => this.isText(bullet) || (this.isRecord(bullet) && this.isText(bullet.text)))
                 .slice(0, 5)
-                .map((bullet) => ({ text: bullet.text as string, level: bullet.level === 1 ? 1 : 0 }));
+                .map((bullet) => this.isText(bullet)
+                    ? { text: bullet, level: 0 }
+                    : { text: bullet.text as string, level: bullet.level === 1 ? 1 : 0 });
             if (cleaned.length > 0) bullets = cleaned;
         }
+
+        const chartValue = this.isRecord(value.chart) ? value.chart : undefined;
+        const chartLabels = chartValue?.labels ?? chartValue?.xAxisLabels;
+        const chartSeries = Array.isArray(chartValue?.series) && this.isRecord(chartValue.series[0]) ? chartValue.series[0] : undefined;
+        const chartValues = chartValue?.values ?? chartSeries?.values;
+        const chart = Array.isArray(chartLabels) && Array.isArray(chartValues)
+            && chartLabels.length >= 2 && chartLabels.length <= 6
+            && chartLabels.length === chartValues.length
+            && chartLabels.every((label) => this.isText(label))
+            && chartValues.every((number) => typeof number === 'number' && Number.isFinite(number))
+            ? {
+                labels: chartLabels as string[],
+                values: chartValues as number[],
+                ...(this.isText(chartValue?.series) ? { series: chartValue.series as string } : this.isText(chartSeries?.name) ? { series: chartSeries.name as string } : this.isText(chartValue?.label) ? { series: chartValue.label as string } : {}),
+                ...(chartValue?.isExample === true ? { isExample: true } : {}),
+            }
+            : type === 'CHART'
+                ? { labels: ['현재 수준', '개선 목표'], values: [60, 35], series: '예시 지표', isExample: true }
+                : undefined;
 
         return {
             heading: value.heading,
             ...(this.isText(value.subheading) ? { subheading: value.subheading } : {}),
             ...(this.isText(value.body) ? { body: value.body } : {}),
             ...(bullets !== undefined ? { bullets } : {}),
+            ...(chart ? { chart } : {}),
         };
     }
 

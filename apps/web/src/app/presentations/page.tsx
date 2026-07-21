@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';
 import { presentationsApi } from '@/lib/api';
-import { Plus, FileText, Clock } from 'lucide-react';
+import { Plus, FileText, Clock, Trash2 } from 'lucide-react';
 
 interface Presentation {
     id: string;
@@ -23,6 +23,7 @@ export default function PresentationsPage() {
     const { isAuthenticated, hasHydrated } = useAuthStore();
     const [presentations, setPresentations] = useState<Presentation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!hasHydrated) return;
@@ -48,6 +49,17 @@ export default function PresentationsPage() {
             month: 'long',
             day: 'numeric',
         });
+
+    const deletePresentation = async (presentation: Presentation) => {
+        if (!window.confirm(`"${presentation.title}" 발표 자료를 삭제할까요?`)) return;
+        setDeletingId(presentation.id);
+        try {
+            await presentationsApi.delete(presentation.id);
+            setPresentations((current) => current.filter((item) => item.id !== presentation.id));
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     if (!hasHydrated || !isAuthenticated || loading) {
         return (
@@ -90,11 +102,8 @@ export default function PresentationsPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {presentations.map((pres) => (
-                            <Link
-                                key={pres.id}
-                                href={`/editor/${pres.id}`}
-                                className="bg-white rounded-xl border hover:shadow-lg transition-shadow overflow-hidden"
-                            >
+                            <div key={pres.id} className="relative bg-white rounded-xl border hover:shadow-lg transition-shadow overflow-hidden">
+                            <Link href={`/editor/${pres.id}`} className="block">
                                 <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
                                     <FileText className="h-12 w-12 text-gray-500" />
                                 </div>
@@ -127,6 +136,16 @@ export default function PresentationsPage() {
                                     </div>
                                 </div>
                             </Link>
+                            <button
+                                type="button"
+                                aria-label={`${pres.title} 삭제`}
+                                disabled={deletingId === pres.id}
+                                onClick={() => deletePresentation(pres)}
+                                className="absolute right-3 top-3 rounded-md bg-white/90 p-2 text-red-600 shadow hover:bg-red-50 disabled:opacity-50"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                            </div>
                         ))}
                     </div>
                 )}

@@ -55,12 +55,20 @@ export class GenerationService implements OnModuleInit {
         return skill;
     }
 
+    private async templateSlides(templateId?: string | null): Promise<string[]> {
+        if (!templateId) return [];
+        const template = await this.prisma.template.findUnique({ where: { id: templateId }, select: { config: true } });
+        const slides = (template?.config as any)?.zipTemplate?.slides;
+        return Array.isArray(slides) ? slides.filter((slide): slide is string => typeof slide === 'string') : [];
+    }
+
     // Reused outline generation shared by the outline endpoint and (implicitly) the pipeline.
     async generateOutline(user: { id: string; organizationId?: string | null }, dto: GenerateOutlineDto) {
         if (!dto.content?.trim()) {
             throw new BadRequestException('Content is required');
         }
         const skill = await this.resolveSkill(user, dto.skillId);
+        const templateSlides = await this.templateSlides(dto.templateId ?? skill?.templateId);
         const guidedContent = skill?.outlineGuidance
             ? `${dto.content}\n\n[작성 Skill 가이드]\n${skill.outlineGuidance}`
             : dto.content;
@@ -70,6 +78,7 @@ export class GenerationService implements OnModuleInit {
             slideCount: dto.slideCount ?? 10,
             language,
             style: dto.options?.style,
+            templateSlides,
         });
     }
 
@@ -85,6 +94,7 @@ export class GenerationService implements OnModuleInit {
 
         const skill = await this.resolveSkill(user, dto.skillId);
         const templateId = dto.templateId ?? skill?.templateId;
+        const templateSlides = await this.templateSlides(templateId);
 
         // Create presentation
         const presentation = await this.prisma.presentation.create({
@@ -111,6 +121,7 @@ export class GenerationService implements OnModuleInit {
                     slideCount: effectiveSlideCount,
                     language: dto.language || 'ko',
                     templateId,
+                    templateSlides,
                     skillGuidance: skill?.outlineGuidance,
                     options: dto.options,
                     outline: approvedOutline ?? undefined,
@@ -195,6 +206,7 @@ export class GenerationService implements OnModuleInit {
                     slideCount: input.slideCount,
                     language,
                     style: input.options?.style,
+                    templateSlides: input.templateSlides,
                 });
 
             await this.updateJobStatus(jobId, 'GENERATING_CONTENT', 30);
@@ -215,7 +227,7 @@ export class GenerationService implements OnModuleInit {
                     order: i,
                     type: slideOutline.type as any,
                     title: slideOutline.title,
-                    content: content as unknown as Prisma.InputJsonValue,
+                    content: { ...content, ...(Number.isInteger(slideOutline.templateIndex) ? { templateIndex: slideOutline.templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
                     layout: defaultLayoutForSlideType(slideOutline.type),
                 });
 

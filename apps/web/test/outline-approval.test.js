@@ -19,11 +19,37 @@ test('home requests an editable outline before starting generation', () => {
     assert.match(dashboard, /order:\s*index \+ 1/);
     // Editing affordances are present.
     assert.match(dashboard, /addKeyPoint/);
+    assert.match(dashboard, /addSlide/);
     assert.match(dashboard, /moveSlide/);
     assert.match(dashboard, /removeSlide/);
+    assert.match(dashboard, /최소 3장 필요/);
+    assert.match(dashboard, /slides\.length < 3/);
 });
 
 test('generation api client exposes the outline endpoint', () => {
     const api = fs.readFileSync(path.join(webRoot, 'src', 'lib', 'api.ts'), 'utf8');
     assert.match(api, /outline:\s*\(data: any\) => api\.post\('\/generation\/outline', data\)/);
+});
+
+test('skills page uses the shared application sidebar', () => {
+    const skills = fs.readFileSync(path.join(webRoot, 'src', 'app', 'skills', 'page.tsx'), 'utf8');
+    assert.match(skills, /import \{ AppShell \} from '@\/components\/layout\/app-shell';/);
+    assert.match(skills, /<AppShell><SkillsGallery \/><\/AppShell>/);
+});
+
+test('presentations page exposes a confirmed delete action', () => {
+    const page = fs.readFileSync(path.join(webRoot, 'src', 'app', 'presentations', 'page.tsx'), 'utf8');
+    assert.match(page, /presentationsApi\.delete\(presentation\.id\)/);
+    assert.match(page, /window\.confirm/);
+});
+
+test('editor resolves imported template CSS variables for editable content', () => {
+    const editor = fs.readFileSync(path.join(webRoot, 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    assert.match(editor, /function resolveTemplateValue/);
+    assert.match(editor, /matchAll/);
+    assert.match(editor, /style=\{\{ color: previewStyle\.color, fontFamily: previewStyle\.fontFamily \}\}/);
+    assert.match(editor, /exportApi\.preview\(presentationId, slideIndex\)/);
+    assert.match(editor, /URL\.createObjectURL/);
+    assert.match(editor, /<img src=\{previewUrl\}/);
 });

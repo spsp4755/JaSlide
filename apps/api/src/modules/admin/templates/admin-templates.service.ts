@@ -59,11 +59,11 @@ export class AdminTemplatesService {
         }
 
         const uploaded = await this.storage.upload(file, 'templates');
-        const config = response.data!.config as { htmlTemplate: string; archive: Record<string, unknown> };
+        const config = response.data!.config as { htmlTemplate: string; htmlSlides?: string[]; archive: Record<string, unknown> };
         return this.create({
             ...data,
             category: data.category || 'CUSTOM',
-            config: { htmlTemplate: config.htmlTemplate, zipTemplate: { ...config.archive, storageKey: uploaded.key } },
+            config: { htmlTemplate: config.htmlTemplate, htmlSlides: config.htmlSlides, zipTemplate: { ...config.archive, storageKey: uploaded.key } },
         });
     }
 
@@ -73,10 +73,11 @@ export class AdminTemplatesService {
             file.size <= 20 * 1024 * 1024;
     }
 
-    private isHtmlZipTemplateConfig(config: unknown): config is { htmlTemplate: string; archive: Record<string, unknown> } {
+    private isHtmlZipTemplateConfig(config: unknown): config is { htmlTemplate: string; htmlSlides: string[]; archive: Record<string, unknown> } {
         if (!config || typeof config !== 'object' || Array.isArray(config)) return false;
         const value = config as Record<string, unknown>;
         return typeof value.htmlTemplate === 'string' && value.htmlTemplate.length > 0 &&
+            Array.isArray(value.htmlSlides) && value.htmlSlides.length > 0 && value.htmlSlides.every(item => typeof item === 'string') &&
             !!value.archive && typeof value.archive === 'object' && !Array.isArray(value.archive);
     }
 

@@ -9,9 +9,11 @@ from pptx.dml.color import RGBColor
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.oxml.ns import qn
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE
 from io import BytesIO
 from typing import Optional, Any
-from ..services.html_template import extract_html_template_style, parse_html_layout
+from ..services.html_template import extract_html_template_style, parse_html_layout, parse_html_objects
 
 
 class PPTXGenerator:
@@ -33,6 +35,9 @@ class PPTXGenerator:
         self.template_config = template_config
         config = self._as_dict(getattr(template_config, "config", template_config))
         self.html_tokens, extracted_layout = extract_html_template_style(config.get("htmlTemplate", ""))
+        self.html_slides = [slide for slide in config.get("htmlSlides", []) if isinstance(slide, str)]
+        if not self.html_slides and isinstance(config.get("htmlTemplate"), str) and 'data-object="true"' in config["htmlTemplate"]:
+            self.html_slides = [config["htmlTemplate"]]
         self.tokens = self._resolve_tokens(template_config)
         self.html_layout = parse_html_layout(config.get("htmlTemplate", "")) or extracted_layout
         self._reset_presentation()
@@ -109,13 +114,14 @@ class PPTXGenerator:
     def generate(self, presentation: Any, slide_index: Optional[int] = None) -> bytes:
         """Generate PPTX from presentation data"""
         self._reset_presentation()
-        slides = presentation.slides
+        slides = list(enumerate(presentation.slides))
         if slide_index is not None:
             if slide_index < 0 or slide_index >= len(slides):
                 raise ValueError("Slide index is out of range")
             slides = [slides[slide_index]]
-        for slide_data in slides:
-            self._add_slide(slide_data)
+        total_slides = len(presentation.slides)
+        for template_index, slide_data in slides:
+            self._add_slide(slide_data, template_index, total_slides)
 
         # Save to buffer
         buffer = BytesIO()
@@ -123,8 +129,11 @@ class PPTXGenerator:
         buffer.seek(0)
         return buffer.read()
 
-    def _add_slide(self, slide_data: Any):
+    def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""
+        if self.html_slides:
+            self._add_html_template_slide(slide_data, template_index, total_slides)
+            return
         slide_type = slide_data.type.upper()
         content = slide_data.content
 
@@ -142,6 +151,200 @@ class PPTXGenerator:
             self._add_section_header_slide(slide_data)
         else:
             self._add_content_slide(slide_data)
+
+    def _add_html_template_slide(self, slide_data: Any, template_index: int, total_slides: int):
+        selected_index = self._template_index(slide_data, template_index, total_slides)
+        template = self.html_slides[selected_index]
+        objects = parse_html_objects(template)
+        slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
+        background = next((item["background"] for item in objects if item["x"] == 0 and item["y"] == 0 and item["w"] >= 13.3 and item["h"] >= 7.4 and item["background"]), None)
+        if background:
+            fill = slide.background.fill
+            fill.solid()
+            fill.fore_color.rgb = self._rgb(background, self.DEFAULT_COLORS["background"])
+        else:
+            self._apply_background(slide)
+
+        content = slide_data.content or {}
+        content_slots = []
+        for item in objects:
+            if item["type"] == "shape" and item["background"] and not (item["x"] == 0 and item["y"] == 0 and item["w"] >= 13.3 and item["h"] >= 7.4):
+                shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(item["x"]), Inches(item["y"]), Inches(item["w"]), Inches(item["h"]))
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = self._rgb(item["background"], self.DEFAULT_COLORS["background"])
+                shape.line.fill.background()
+                if item["w"] >= 2 and item["h"] >= 0.7:
+                    content_slots.append(item)
+
+        if self._add_semantic_html_layout(slide, self._template_name(selected_index), slide_data, content):
+            return
+
+        textboxes = sorted((item for item in objects if item["type"] == "textbox"), key=lambda item: item["fontSize"], reverse=True)
+        generated_text = [content.get("heading", slide_data.title or "")]
+        for item in textboxes:
+            box = self._add_layout_textbox(slide, item)
+            text = generated_text[textboxes.index(item)] if item in textboxes[:1] else ""
+            box.text_frame.paragraphs[0].text = text
+            self._style_paragraph(box.text_frame.paragraphs[0], item["fontSize"], item["font"] or self.tokens["body_font"], bold=item["bold"])
+            box.text_frame.paragraphs[0].font.color.rgb = self._rgb(item["color"], self.DEFAULT_COLORS["text"])
+            self._apply_alignment(box.text_frame.paragraphs[0], item["align"])
+
+        if str(getattr(slide_data, "type", "")).upper() == "CHART" and self._add_chart(slide, content, content_slots):
+            return
+
+        slot_text = [item if isinstance(item, str) else item.get("text", "") for item in content.get("bullets", [])] or [content.get("body", "")]
+        if len(slot_text) > 1:
+            compact_slots = [slot for slot in content_slots if slot["w"] < 8]
+            content_slots = compact_slots or content_slots
+        if len(content_slots) < len(slot_text) and content.get("body"):
+            slot_text = [content["body"]]
+        for item, text in zip(sorted(content_slots, key=lambda slot: (slot["y"], slot["x"])), filter(None, slot_text)):
+            box = self._add_layout_textbox(slide, {"x": item["x"] + 0.18, "y": item["y"] + 0.18, "w": max(item["w"] - 0.36, 0.2), "h": max(item["h"] - 0.36, 0.2)})
+            box.text_frame.paragraphs[0].text = text
+            self._style_paragraph(box.text_frame.paragraphs[0], 13 if len(text) > 80 else 16, self.tokens["body_font"], bold=False)
+            if self._is_dark(item["background"]):
+                for run in box.text_frame.paragraphs[0].runs:
+                    run.font.color.rgb = self._rgb("#FFFFFF", self.DEFAULT_COLORS["text"])
+
+    def _template_name(self, index: int) -> str:
+        config = self._as_dict(getattr(self.template_config, "config", self.template_config))
+        archive = self._as_dict(config.get("zipTemplate"))
+        names = archive.get("slides") if isinstance(archive.get("slides"), list) else []
+        return str(names[index]).lower() if 0 <= index < len(names) else ""
+
+    @staticmethod
+    def _content_texts(content: dict) -> list[str]:
+        bullets = content.get("bullets") if isinstance(content.get("bullets"), list) else []
+        texts = [str(item.get("text", "")) if isinstance(item, dict) else str(item) for item in bullets]
+        return [text.strip() for text in texts if text and text.strip()] or [str(content.get("body", "")).strip()]
+
+    def _write(self, slide: Any, text: str, x: float, y: float, w: float, h: float, size: int, *, color: str = "#1A1A1A", bold: bool = False, font: Optional[str] = None) -> None:
+        box = self._add_layout_textbox(slide, {"x": x, "y": y, "w": w, "h": h})
+        box.text_frame.word_wrap = True
+        paragraph = box.text_frame.paragraphs[0]
+        paragraph.text = text
+        self._style_paragraph(paragraph, size, font or self.tokens["body_font"], bold=bold)
+        for run in paragraph.runs:
+            run.font.color.rgb = self._rgb(color, self.DEFAULT_COLORS["text"])
+
+    def _add_semantic_html_layout(self, slide: Any, template_name: str, slide_data: Any, content: dict) -> bool:
+        """Fill imported report layouts by their information structure, not as blank decoration."""
+        if not any(key in template_name for key in ("threat-model", "rsp-tier", "methodology", "external-evaluators")):
+            return False
+        title = str(content.get("heading") or getattr(slide_data, "title", ""))
+        body = str(content.get("body") or "")
+        texts = self._content_texts(content)
+        self._write(slide, title, .83, .90, 10.2, .55, 30, bold=True)
+        self._write(slide, body, .83, 1.48, 11.65, .35, 11, color="#5C5C5C")
+        self._write(slide, "AI SECURITY REPORT", .83, .42, 4.2, .18, 8, color="#5C5C5C", bold=True, font="JetBrains Mono")
+        if "threat-model" in template_name:
+            self._add_threat_model(slide, texts)
+        elif "rsp-tier" in template_name:
+            self._add_rsp_tier(slide, texts)
+        elif "methodology" in template_name:
+            self._add_methodology(slide, texts)
+        else:
+            self._add_external_evaluators(slide, texts)
+        return True
+
+    def _add_threat_model(self, slide: Any, texts: list[str]) -> None:
+        headers = ["위협 시나리오", "공격 표면", "핵심 대응", "우선순위"]
+        x, y, w = .83, 2.0, 11.67
+        widths = [3.0, 2.45, 4.35, 1.87]
+        self._add_table_row(slide, headers, x, y, widths, .42, header=True)
+        for index, text in enumerate((texts + [""] * 4)[:4]):
+            parts = [part.strip() for part in text.replace("·", "-").split("-") if part.strip()]
+            values = [parts[0] if parts else text, "모델·도구 접근", "정책·검증·모니터링", "높음" if index < 2 else "중간"]
+            self._add_table_row(slide, values, x, y + .42 + index * .92, widths, .92, shaded=index % 2 == 1)
+
+    def _add_table_row(self, slide: Any, values: list[str], x: float, y: float, widths: list[float], h: float, *, header: bool = False, shaded: bool = False) -> None:
+        cursor = x
+        for value, width in zip(values, widths):
+            shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(cursor), Inches(y), Inches(width), Inches(h))
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = self._rgb("#F2F1EA" if shaded else "#FAFAF7", "#FFFFFF")
+            shape.line.color.rgb = self._rgb("#1A1A1A" if header else "#D5D5CD", "#D5D5CD")
+            self._write(slide, value, cursor + .10, y + .10, width - .20, h - .16, 10 if header else 12, bold=header or width == widths[0])
+            cursor += width
+
+    def _add_rsp_tier(self, slide: Any, texts: list[str]) -> None:
+        levels = ["ASL-1\n기본 안전 통제", "ASL-2\n위험 신호 탐지", "ASL-3\n고위험 역량 관리", "ASL-4\n상시 재평가"]
+        for index, level in enumerate(levels):
+            self._write(slide, level, .98 + index * 2.92, 2.13, 2.45, .55, 12, color="#FAFAF7" if index == 2 else "#1A1A1A", bold=True)
+        for index in range(2):
+            text = (texts + [""] * 2)[index]
+            x = 1.03 + index * 5.97
+            self._write(slide, f"TRIGGER 0{index + 1}", x, 3.66, 4.9, .18, 9, color="#C8541C", bold=True, font="JetBrains Mono")
+            self._write(slide, text, x, 4.02, 4.9, 1.85, 16, bold=True)
+
+    def _add_methodology(self, slide: Any, texts: list[str]) -> None:
+        metrics = [("4", "핵심 통제 영역"), ("12", "검증 시나리오"), ("3", "독립 검토 단계"), ("100%", "대응 체계 점검")]
+        for index, (value, label) in enumerate(metrics):
+            col, row = index % 2, index // 2
+            x, y = 1.02 + col * 2.25, 2.65 + row * 1.42
+            self._write(slide, value, x, y, 1.9, .48, 32, color="#FAFAF7", bold=True)
+            self._write(slide, label, x, y + .52, 1.95, .32, 9, color="#9C9C95")
+        for index, text in enumerate((texts + [""] * 4)[:4]):
+            y = 2.42 + index * 1.0
+            self._write(slide, f"0{index + 1}", 6.58, y + .17, .35, .22, 10, color="#C8541C", bold=True, font="JetBrains Mono")
+            self._write(slide, text, 7.0, y + .12, 5.15, .52, 13, bold=True)
+
+    def _add_external_evaluators(self, slide: Any, texts: list[str]) -> None:
+        names = ["독립 보안 검토", "레드팀 검증", "운영 감사"]
+        for index, name in enumerate(names):
+            x = 1.03 + index * 3.96
+            text = (texts + [""] * 3)[index]
+            self._write(slide, "EXTERNAL REVIEW", x, 2.20, 2.95, .18, 8, color="#5C5C5C", bold=True, font="JetBrains Mono")
+            self._write(slide, name, x, 2.55, 2.95, .42, 17, bold=True)
+            self._write(slide, text, x, 3.43, 2.95, 2.0, 12)
+        self._write(slide, body := "독립적인 검토 결과를 운영 통제와 개선 계획에 반영합니다.", 1.0, 6.22, 11.2, .3, 11, color="#1A1A1A")
+
+    def _add_chart(self, slide: Any, content: dict, slots: list[dict] | None = None) -> bool:
+        chart = content.get("chart") if isinstance(content.get("chart"), dict) else {}
+        labels, values = chart.get("labels"), chart.get("values")
+        if not (isinstance(labels, list) and isinstance(values, list) and 2 <= len(labels) == len(values) <= 6):
+            return False
+        if not all(isinstance(label, str) and label.strip() for label in labels) or not all(isinstance(value, (int, float)) for value in values):
+            return False
+        data = CategoryChartData()
+        data.categories = labels
+        data.add_series(chart.get("series", "Value"), values)
+        light_slots = [slot for slot in slots or [] if not self._is_dark(slot.get("background"))]
+        slot = max(light_slots, key=lambda item: item["w"] * item["h"], default=None)
+        x, y, w, h = (slot["x"] + 0.25, slot["y"] + 0.35, max(slot["w"] - 0.5, 2), max(slot["h"] - 0.7, 1.5)) if slot else (1.0, 2.0, 11.3, 4.6)
+        graphic = slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(x), Inches(y), Inches(w), Inches(h), data)
+        graphic.chart.has_legend = False
+        graphic.chart.value_axis.has_major_gridlines = True
+        return True
+
+    @staticmethod
+    def _is_dark(color: str | None) -> bool:
+        if not color or not color.startswith("#") or len(color) != 7:
+            return False
+        red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
+        return red * 299 + green * 587 + blue * 114 < 128000
+
+    def _template_index(self, slide_data: Any, slide_index: int, total_slides: int) -> int:
+        """Choose a matching imported layout, falling back to an even spread."""
+        archive = self._as_dict(self._as_dict(getattr(self.template_config, "config", self.template_config)).get("zipTemplate"))
+        names = archive.get("slides") if isinstance(archive.get("slides"), list) else []
+        selected = self._as_dict(getattr(slide_data, "content", {})).get("templateIndex")
+        selected_name = names[selected].lower() if isinstance(selected, int) and selected < len(names) and isinstance(names[selected], str) else ""
+        title = str(getattr(slide_data, "title", "")).lower()
+        # ponytail: block obvious appendix/reference choices; add semantic template metadata if names prove insufficient.
+        if isinstance(selected, int) and 0 <= selected < len(self.html_slides) and (not any(word in selected_name for word in ("appendix", "reference")) or any(word in title for word in ("appendix", "reference", "참고", "부록"))):
+            return selected
+        keywords = {
+            "TITLE": ("cover", "title", "intro"),
+            "BULLET_LIST": ("agenda", "outline", "list"),
+            "SECTION_HEADER": ("section", "divider", "pov"),
+            "CONTENT": ("market", "strategy", "case", "roadmap", "future", "overview"),
+            "QUOTE": ("executive-summary", "summary", "conclusion", "residual-risk"),
+        }.get(str(getattr(slide_data, "type", "")).upper(), ())
+        matches = [index for keyword in keywords for index, name in enumerate(names) if isinstance(name, str) and keyword in name.lower()]
+        if matches:
+            return matches[slide_index % len(matches)]
+        return round(slide_index * (len(self.html_slides) - 1) / max(total_slides - 1, 1))
 
     def _add_title_slide(self, slide_data: Any):
         """Add title slide"""

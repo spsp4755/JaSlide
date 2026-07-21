@@ -8,6 +8,9 @@ import { defaultLayoutForSlideType } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
+        template: {
+            findUnique: jest.fn().mockResolvedValue(null),
+        },
         presentationSkill: {
             findFirst: jest.fn(),
         },

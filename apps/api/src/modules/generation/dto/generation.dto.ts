@@ -59,6 +59,12 @@ export class OutlineSlideDto {
     @IsArray()
     @IsString({ each: true })
     keyPoints: string[];
+
+    @ApiPropertyOptional({ example: 4, description: 'Selected ZIP template slide index, starting at zero' })
+    @IsInt()
+    @Min(0)
+    @IsOptional()
+    templateIndex?: number;
 }
 
 export class OutlineDto {
@@ -101,6 +107,11 @@ export class GenerateOutlineDto {
     @IsString()
     @IsOptional()
     skillId?: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    templateId?: string;
 
     @ApiPropertyOptional({ type: GenerationOptionsDto })
     @IsObject()

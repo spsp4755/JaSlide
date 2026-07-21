@@ -9,4 +9,9 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: true
   prisma: true
+  sharp: true
   unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@astryxdesign/core@0.1.7'
+  - '@astryxdesign/theme-neutral@0.1.7'
+  - '@astryxdesign/cli@0.1.7'

@@ -31,12 +31,12 @@ describe('ExportService', () => {
         );
     });
 
-    it('logs the renderer response before returning a PDF export error', async () => {
+    it('logs a serializable renderer detail before returning a PDF export error', async () => {
         const logger = jest.spyOn(Logger.prototype, 'error').mockImplementation();
         jest.spyOn(axios, 'post').mockRejectedValueOnce({ response: { status: 500, data: { detail: 'conversion failed' } } });
 
         await expect(service.exportToPdf('presentation-1', 'user-1')).rejects.toThrow(ServiceUnavailableException);
 
-        expect(logger).toHaveBeenCalledWith('PDF export failed', expect.objectContaining({ status: 500 }));
+        expect(logger).toHaveBeenCalledWith('PDF export failed: 500 conversion failed');
     });
 });

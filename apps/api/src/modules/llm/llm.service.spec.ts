@@ -44,7 +44,7 @@ describe('LlmService contracts', () => {
             ],
         }).compile();
         service = module.get(LlmService);
-        jest.spyOn(service as any, 'getOpenAIClient').mockResolvedValue({ client, model: 'internal-model' });
+        jest.spyOn(service as any, 'getOpenAIClient').mockResolvedValue({ client, model: 'internal-model', maxTokens: 8192 });
         return client.chat.completions.create;
     };
 
@@ -104,13 +104,13 @@ describe('LlmService contracts', () => {
         expect(create).toHaveBeenCalledTimes(2);
     });
 
-    it('rejects an outline with a different slide count after one repair', async () => {
+    it('rejects an outline with a different slide count after retries', async () => {
         const invalid = { ...outline, slides: [outline.slides[0]] };
-        const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid)]);
+        const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid), JSON.stringify(invalid), JSON.stringify(invalid)]);
 
         await expect(service.generateOutline({ content: '신규 서비스 제안서', slideCount: 2, language: 'ko' }))
             .rejects.toThrow('expected 2 slides');
-        expect(create).toHaveBeenCalledTimes(2);
+        expect(create).toHaveBeenCalledTimes(4);
     });
 
     it('coerces out-of-range bullet levels to 0 instead of rejecting', async () => {
@@ -131,5 +131,76 @@ describe('LlmService contracts', () => {
             title: '실행 계획', type: 'CONTENT', keyPoints: ['분석'], language: 'ko',
         })).resolves.toEqual({ heading: '실행 계획' });
         expect(create).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks for substantive slide content rather than repeating short key points', async () => {
+        const reply = { heading: 'AI safety', body: 'Concrete explanation', bullets: [{ text: 'Specific finding', level: 0 }] };
+        const create = await createService([JSON.stringify(reply)]);
+
+        await service.generateSlideContent({
+            title: 'AI safety', type: 'CONTENT', keyPoints: ['Risks'], language: 'en',
+        });
+
+        expect(create.mock.calls[0][0].messages[1].content).toContain('substantive, self-contained explanation');
+    });
+
+    it('shows chart JSON only for chart slides', () => {
+        const prompts = new PromptTemplateService();
+
+        expect(prompts.getSlideContentPrompt({ title: 'Text', type: 'CONTENT', keyPoints: ['Point'], language: 'en' })).not.toContain('"chart"');
+        expect(prompts.getSlideContentPrompt({ title: 'Chart', type: 'CHART', keyPoints: ['Point'], language: 'en' })).toContain('"chart"');
+    });
+
+    it('keeps valid chart data for chart slides', async () => {
+        const reply = { heading: 'ASR', chart: { labels: ['Before', 'After'], values: [48, 11], series: 'ASR' } };
+        await createService([JSON.stringify(reply)]);
+
+        await expect(service.generateSlideContent({
+            title: 'ASR', type: 'CHART', keyPoints: ['Measured result'], language: 'en',
+        })).resolves.toEqual(reply);
+    });
+
+    it('adds editable example data when a chart slide has no numeric source data', async () => {
+        const reply = { heading: 'Risk reduction', bullets: [{ text: 'Replace these numbers with measured results', level: 0 }] };
+        await createService([JSON.stringify(reply)]);
+
+        await expect(service.generateSlideContent({
+            title: 'Risk reduction', type: 'CHART', keyPoints: ['No metrics provided'], language: 'en',
+        })).resolves.toMatchObject({
+            heading: 'Risk reduction',
+            chart: { labels: ['현재 수준', '개선 목표'], values: [60, 35], isExample: true },
+        });
+    });
+
+    it('normalizes the nested chart format returned by the configured reasoning model', async () => {
+        const reply = {
+            slide: {
+                heading: 'Risk reduction',
+                bullets: ['Layer defenses', 'Monitor anomalies'],
+                chart: {
+                    label: 'Attack success rate',
+                    xAxisLabels: ['Before', 'After'],
+                    series: [{ name: 'ASR', values: [85, 25] }],
+                    isExample: true,
+                },
+            },
+        };
+        await createService([JSON.stringify(reply)]);
+
+        await expect(service.generateSlideContent({
+            title: 'Risk reduction', type: 'CHART', keyPoints: ['No metrics provided'], language: 'en',
+        })).resolves.toEqual({
+            heading: 'Risk reduction',
+            bullets: [{ text: 'Layer defenses', level: 0 }, { text: 'Monitor anomalies', level: 0 }],
+            chart: { labels: ['Before', 'After'], values: [85, 25], series: 'ASR', isExample: true },
+        });
+    });
+
+    it('reserves enough output tokens for reasoning-model outlines', async () => {
+        const create = await createService([JSON.stringify(outline)]);
+
+        await service.generateOutline({ content: 'AI security plan', slideCount: 2, language: 'en' });
+
+        expect(create.mock.calls[0][0]).toMatchObject({ max_tokens: 8192 });
     });
 });

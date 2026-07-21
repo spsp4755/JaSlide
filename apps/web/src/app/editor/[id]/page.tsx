@@ -8,7 +8,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Button } from '@/components/ui/button';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { presentationsApi, slidesApi, exportApi, generationApi } from '@/lib/api';
+import { presentationsApi, slidesApi, exportApi, generationApi, templatesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { UndoRedoButtons } from '@/components/editor/undo-redo-buttons';
 import { VersionHistory } from '@/components/editor/version-history';
@@ -54,12 +54,17 @@ const slideTypeIcons: Record<string, any> = {
     SECTION_HEADER: Type,
 };
 
+function resolveTemplateValue(value: string | undefined, html: string): string | undefined {
+    const variables = Object.fromEntries([...html.matchAll(/(--[\w-]+)\s*:\s*([^;}]+)/g)].map(([, name, value]) => [name, value.trim()]));
+    return value?.replace(/var\((--[\w-]+)\)/g, (_, name) => variables[name] || _).trim();
+}
+
 function getTemplatePreviewStyle(template: any): CSSProperties {
     const config = template?.config || {};
     const html = config.htmlTemplate || '';
-    const background = config.colors?.background || html.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{6})/)?.[1];
-    const color = config.colors?.text || html.match(/(?:^|[;\s])color\s*:\s*(#[0-9a-fA-F]{6})/)?.[1];
-    const fontFamily = config.typography?.titleFont || html.match(/font-family\s*:\s*['"]?([^,'";]+)/)?.[1]?.trim();
+    const background = resolveTemplateValue(config.colors?.background || html.match(/background(?:-color)?\s*:\s*([^;}]+)/)?.[1], html);
+    const color = resolveTemplateValue(config.colors?.text || html.match(/(?:^|[;\s])color\s*:\s*([^;}]+)/)?.[1], html);
+    const fontFamily = resolveTemplateValue(config.typography?.titleFont || html.match(/font-family\s*:\s*([^;}]+)/)?.[1], html);
     return { backgroundColor: background, color, fontFamily };
 }
 
@@ -152,6 +157,8 @@ export default function EditorPage() {
     const [isDuplicating, setIsDuplicating] = useState(false);
     const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
     const [multiSelectedSlides, setMultiSelectedSlides] = useState<string[]>([]);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewVersion, setPreviewVersion] = useState(0);
 
     const selectedSlide = presentation?.slides.find((s) => s.id === selectedSlideId);
 
@@ -188,15 +195,34 @@ export default function EditorPage() {
         fetchPresentation();
     }, [presentationId, isAuthenticated, hasHydrated]);
 
+    useEffect(() => {
+        if (!presentation || !selectedSlideId) return;
+        let objectUrl: string | null = null;
+        const slideIndex = presentation.slides.findIndex((slide) => slide.id === selectedSlideId);
+        exportApi.preview(presentationId, slideIndex).then((response) => {
+            objectUrl = URL.createObjectURL(response.data);
+            setPreviewUrl(objectUrl);
+        }).catch(() => setPreviewUrl(null));
+        return () => {
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [presentationId, selectedSlideId, presentation?.slides.length, previewVersion]);
+
     const fetchPresentation = async () => {
         try {
             const response = await presentationsApi.get(presentationId);
+            // Older presentations can have a template relation omitted from their
+            // response. Fetching it by ID keeps ZIP/HTML layouts available in the
+            // editor instead of silently falling back to the generic canvas.
+            const template = response.data.template || (response.data.templateId
+                ? (await templatesApi.get(response.data.templateId)).data
+                : null);
             setPresentation({
                 id: response.data.id,
                 title: response.data.title,
                 slides: response.data.slides,
                 templateId: response.data.templateId,
-                template: response.data.template,
+                template,
             });
         } catch (error) {
             toast({ title: '오류', description: '프레젠테이션을 불러올 수 없습니다.', variant: 'destructive' });
@@ -244,6 +270,7 @@ export default function EditorPage() {
                 order: slide.order,
             });
             setDirty(false);
+            setPreviewVersion((version) => version + 1);
         } catch (error) {
             console.error('Failed to save slide:', error);
         }
@@ -548,6 +575,7 @@ export default function EditorPage() {
                                     <EditableSlidePreview
                                         slide={selectedSlide}
                                         template={presentation.template}
+                                        previewUrl={previewUrl}
                                         onUpdate={(updates) => {
                                             updateSlide(selectedSlide.id, updates);
                                         }}
@@ -652,6 +680,45 @@ export default function EditorPage() {
                                         className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                                     />
                                 </div>
+                                {selectedSlide.type === 'CHART' && (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                                        <label className="block text-sm font-medium text-gray-800">차트 데이터</label>
+                                        {selectedSlide.content?.chart?.isExample && (
+                                            <p className="text-xs text-amber-800">예시 데이터입니다. 실제 수치로 수정하세요.</p>
+                                        )}
+                                        <input
+                                            type="text"
+                                            value={(selectedSlide.content?.chart?.labels || []).join(', ')}
+                                            onChange={(e) => {
+                                                const chart = selectedSlide.content?.chart || {};
+                                                const content = {
+                                                    ...selectedSlide.content,
+                                                    chart: { ...chart, labels: e.target.value.split(',').map((value: string) => value.trim()).filter(Boolean) },
+                                                };
+                                                updateSlide(selectedSlide.id, { content });
+                                                handleSaveSlideDelayed(selectedSlide.id, { content });
+                                            }}
+                                            placeholder="항목 (쉼표로 구분)"
+                                            className="w-full px-2 py-1.5 border rounded text-sm"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={(selectedSlide.content?.chart?.values || []).join(', ')}
+                                            onChange={(e) => {
+                                                const chart = selectedSlide.content?.chart || {};
+                                                const content = {
+                                                    ...selectedSlide.content,
+                                                    chart: { ...chart, values: e.target.value.split(',').map((value: string) => Number(value.trim())).filter(Number.isFinite), isExample: false },
+                                                };
+                                                updateSlide(selectedSlide.id, { content });
+                                                handleSaveSlideDelayed(selectedSlide.id, { content });
+                                            }}
+                                            placeholder="수치 (쉼표로 구분)"
+                                            inputMode="decimal"
+                                            className="w-full px-2 py-1.5 border rounded text-sm"
+                                        />
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <p className="text-sm text-gray-500">슬라이드를 선택하면 속성을 편집할 수 있습니다.</p>
@@ -793,17 +860,21 @@ export default function EditorPage() {
 interface EditableSlidePreviewProps {
     slide: any;
     template?: any;
+    previewUrl?: string | null;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
 }
 
-function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, onUpdate, onSave }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
     const body = content.body || '';
     const bullets = content.bullets || [];
     const previewStyle = getTemplatePreviewStyle(template);
+    if (previewUrl) {
+        return <img src={previewUrl} alt={`${slide.title || '슬라이드'} 미리보기`} className="h-full w-full object-contain" />;
+    }
 
     const handleHeadingChange = (newHeading: string) => {
         onUpdate({
@@ -857,7 +928,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
     switch (slide.type) {
         case 'TITLE':
             return (
-                <div className="h-full flex flex-col items-center justify-center p-12 text-center" style={previewStyle}>
+                <div className="relative h-full overflow-hidden flex flex-col items-center justify-center p-12 text-center" style={previewStyle}>
                     <input
                         type="text"
                         value={heading}
@@ -865,6 +936,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                         onBlur={onSave}
                         placeholder="제목을 입력하세요"
                         className={`${editableStyle} text-4xl font-bold text-gray-900 mb-4 text-center`}
+                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                     />
                     <input
                         type="text"
@@ -873,13 +945,14 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                         onBlur={onSave}
                         placeholder="부제목을 입력하세요"
                         className={`${editableStyle} text-xl text-gray-600 text-center`}
+                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                     />
                 </div>
             );
 
         case 'SECTION_HEADER':
             return (
-                <div className="h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800 p-12" style={previewStyle}>
+                <div className="relative h-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800 p-12" style={previewStyle}>
                     <input
                         type="text"
                         value={heading}
@@ -887,13 +960,14 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                         onBlur={onSave}
                         placeholder="섹션 제목을 입력하세요"
                         className={`${editableStyle} text-3xl font-bold text-white text-center bg-white/10`}
+                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                     />
                 </div>
             );
 
         case 'QUOTE':
             return (
-                <div className="h-full flex flex-col items-center justify-center p-12" style={previewStyle}>
+                <div className="relative h-full overflow-hidden flex flex-col items-center justify-center p-12" style={previewStyle}>
                     <textarea
                         value={body || heading}
                         onChange={(e) => handleBodyChange(e.target.value)}
@@ -901,6 +975,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                         placeholder="인용문을 입력하세요"
                         rows={4}
                         className={`${editableStyle} text-2xl italic text-gray-700 text-center max-w-2xl resize-none`}
+                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                     />
                 </div>
             );
@@ -909,7 +984,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
         case 'CONTENT':
         default:
             return (
-                <div className="h-full p-8" style={previewStyle}>
+                <div className="relative h-full overflow-hidden p-8" style={previewStyle}>
                     <input
                         type="text"
                         value={heading}
@@ -917,6 +992,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                         onBlur={onSave}
                         placeholder="제목을 입력하세요"
                         className={`${editableStyle} text-2xl font-bold text-gray-900 mb-6`}
+                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                     />
                     <textarea
                         value={body}
@@ -925,6 +1001,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                         placeholder="본문 내용을 입력하세요 (선택사항)"
                         rows={2}
                         className={`${editableStyle} text-gray-600 mb-4 resize-none`}
+                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                     />
                     <ul className="space-y-2">
                         {bullets.map((bullet: any, index: number) => (
@@ -937,6 +1014,7 @@ function EditableSlidePreview({ slide, template, onUpdate, onSave }: EditableSli
                                     onBlur={onSave}
                                     placeholder="항목 내용"
                                     className={`${editableStyle} text-gray-700 flex-1`}
+                                    style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
                                 />
                                 <button
                                     onClick={() => handleRemoveBullet(index)}

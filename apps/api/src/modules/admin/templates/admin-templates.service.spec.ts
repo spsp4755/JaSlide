@@ -77,6 +77,7 @@ describe('AdminTemplatesService PPTX import', () => {
         } as Express.Multer.File;
         const extracted = {
             htmlTemplate: '<h1>Research</h1>',
+            htmlSlides: ['<h1>Research</h1>'],
             archive: { manifestPath: 'deck/research/manifest.json', slides: ['deck/research/slides/01.html'] },
         };
         mockedAxios.post.mockResolvedValue({ data: { config: extracted } } as any);
@@ -93,6 +94,7 @@ describe('AdminTemplatesService PPTX import', () => {
                 name: 'Research',
                 config: expect.objectContaining({
                     htmlTemplate: '<h1>Research</h1>',
+                    htmlSlides: ['<h1>Research</h1>'],
                     zipTemplate: expect.objectContaining({ storageKey: 'templates/research.zip' }),
                 }),
             }),

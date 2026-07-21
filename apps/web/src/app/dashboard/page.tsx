@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { AppShell } from '@/components/layout/app-shell';
+import { Button as AstryxButton } from '@astryxdesign/core';
 import { useAuthStore } from '@/stores/auth-store';
 import { generationApi, skillsApi, templatesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -44,7 +45,7 @@ interface Outline {
     slides: OutlineSlide[];
 }
 
-export default function HomePage() {
+function DashboardContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { isAuthenticated, hasHydrated } = useAuthStore();
@@ -181,6 +182,7 @@ export default function HomePage() {
                 slideCount: effectiveSlideCount,
                 language,
                 skillId: selectedSkillId,
+                templateId: selectedTemplateId,
                 options: {
                     includeImages,
                     includeCharts,
@@ -212,7 +214,7 @@ export default function HomePage() {
                 keyPoints: slide.keyPoints.map((point) => point.trim()).filter(Boolean),
             }))
             .filter((slide) => slide.title && slide.keyPoints.length > 0);
-        if (slides.length === 0) {
+        if (slides.length < 3) {
             toast({ title: '오류', description: '제목과 요점이 있는 슬라이드가 최소 하나는 필요합니다.', variant: 'destructive' });
             return;
         }
@@ -274,6 +276,11 @@ export default function HomePage() {
     const addKeyPoint = (slideIndex: number) =>
         setOutline((prev) => prev && ({ ...prev, slides: prev.slides.map((s, i) => i === slideIndex
             ? { ...s, keyPoints: [...s.keyPoints, ''] } : s) }));
+    const addSlide = () =>
+        setOutline((prev) => prev && ({ ...prev, slides: [...prev.slides, {
+            order: prev.slides.length + 1, title: 'New slide', type: 'CONTENT', keyPoints: ['Key point'],
+        }] }));
+    const validSlideCount = outline?.slides.filter((slide) => slide.title.trim() && slide.keyPoints.some((point) => point.trim())).length ?? 0;
 
     const handleCancelGeneration = async () => {
         if (!jobId) return;
@@ -362,6 +369,9 @@ export default function HomePage() {
                         <>
                             <h2 className="font-display text-2xl font-bold text-foreground mb-1">아웃라인 검토</h2>
                             <p className="text-sm text-muted-foreground mb-6">제목과 순서, 핵심 요점을 확인하고 수정한 뒤 생성하세요.</p>
+                            <div className="mb-6 flex items-center justify-end">
+                                <span className="text-sm text-muted-foreground">최소 3장 필요 · 현재 {validSlideCount}장</span>
+                            </div>
                             <input
                                 value={outline.title}
                                 onChange={(e) => setOutline({ ...outline, title: e.target.value })}
@@ -401,6 +411,7 @@ export default function HomePage() {
                                     </div>
                                 ))}
                             </div>
+                            <button type="button" onClick={addSlide} className="mt-4 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-secondary">+ 슬라이드 추가</button>
                             <div className="mt-6 flex justify-end gap-2">
                                 <button type="button" onClick={() => setOutline(null)} className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary">취소</button>
                                 <button type="button" onClick={handleApproveOutline} className="rounded-xl bg-foreground px-4 py-2.5 text-sm font-medium text-background hover:opacity-85">승인하고 생성</button>
@@ -534,14 +545,15 @@ export default function HomePage() {
                                 )}
                             </div>
                         </div>
-                        <button
+                        <AstryxButton
+                            label="생성 시작"
+                            isIconOnly
+                            icon={<Send className="h-4 w-4" />}
+                            variant="primary"
                             onClick={handleGenerate}
-                            disabled={!textContent.trim() && !uploadedFile}
-                            className="p-2.5 rounded-full bg-foreground text-background hover:opacity-85 disabled:opacity-40 transition-opacity"
-                            title="생성 시작"
-                        >
-                            <Send className="h-4 w-4" />
-                        </button>
+                            isDisabled={!textContent.trim() && !uploadedFile}
+                            tooltip="생성 시작"
+                        />
                     </div>
                 </div>
 
@@ -662,5 +674,13 @@ export default function HomePage() {
                 </section>
             </div>
         </AppShell>
+    );
+}
+
+export default function HomePage() {
+    return (
+        <Suspense fallback={<main className="min-h-screen bg-background" />}>
+            <DashboardContent />
+        </Suspense>
     );
 }

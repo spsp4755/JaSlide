@@ -29,17 +29,18 @@ def extract_html_template_archive(content: bytes) -> dict:
 
             root = manifest_path.rsplit("/", 1)[0]
             slides = [_resolve_slide(name, root, names) for name in manifest["playlist"]]
-            html_template = _read_text(archive, slides[0])
             css = "\n".join(_read_text(archive, name) for name in names if name.lower().endswith(".css"))
+            html_slides = [_read_text(archive, name) for name in slides]
             if css:
-                html_template = f"<style>{css}</style>{html_template}"
+                html_slides = [f"<style>{css}</style>{slide}" for slide in html_slides]
             metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
             canvas = manifest.get("canvas") if isinstance(manifest.get("canvas"), dict) else {}
 
             return {
                 "title": metadata.get("title") if isinstance(metadata.get("title"), str) else "",
                 "description": metadata.get("description") if isinstance(metadata.get("description"), str) else "",
-                "htmlTemplate": html_template,
+                "htmlTemplate": html_slides[0],
+                "htmlSlides": html_slides,
                 "archive": {
                     "manifestPath": manifest_path,
                     "canvas": canvas,

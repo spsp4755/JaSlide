@@ -24,6 +24,12 @@ export class ExportService {
         this.rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
     }
 
+    private rendererError(error: any): string {
+        const data = error.response?.data;
+        const detail = data?.detail || data?.toString?.() || error.message || 'unknown error';
+        return `${error.response?.status ?? 'request'} ${detail}`;
+    }
+
     async exportToPptx(presentationId: string, userId: string) {
         const presentation = await this.getPresentation(presentationId, userId);
 
@@ -51,7 +57,7 @@ export class ExportService {
                 mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             };
         } catch (error: any) {
-            this.logger.error('PPTX export failed', error.response || error);
+            this.logger.error(`PPTX export failed: ${this.rendererError(error)}`);
             throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
     }
@@ -170,7 +176,7 @@ export class ExportService {
                 mimeType: 'application/pdf',
             };
         } catch (error: any) {
-            this.logger.error('PDF export failed', error.response || error);
+            this.logger.error(`PDF export failed: ${this.rendererError(error)}`);
             throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
     }

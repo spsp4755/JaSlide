@@ -38,6 +38,7 @@ def test_extract_html_template_archive_reads_genspark_style_slides():
         "title": "Research deck",
         "description": "Example",
         "htmlTemplate": "<h1>Cover</h1>",
+        "htmlSlides": ["<h1>Cover</h1>", "<p>Body</p>"],
         "archive": {
             "manifestPath": "deck/research.slides/manifest.json",
             "canvas": {"width": 1920, "height": 1080},
@@ -80,3 +81,16 @@ def test_extract_html_template_archive_inlines_bundled_css_tokens():
     }))
 
     assert '--ink: #112233' in result["htmlTemplate"]
+    assert '--ink: #112233' in result["htmlSlides"][0]
+
+
+def test_render_pptx_accepts_a_korean_title():
+    response = TestClient(app).post("/api/render/pptx", json={
+        "presentation": {
+            "id": "presentation-1",
+            "title": "한글 제목",
+            "slides": [{"id": "slide-1", "order": 1, "type": "CONTENT", "title": "제목", "content": {"heading": "제목"}}],
+        },
+    })
+
+    assert response.status_code == 200

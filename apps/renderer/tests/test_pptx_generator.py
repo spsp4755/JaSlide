@@ -185,6 +185,134 @@ def test_genspark_style_html_applies_colors_fonts_and_title_position_without_slo
     assert slide.shapes[0].text_frame.paragraphs[0].runs[0].font.name == "Newsreader"
 
 
+def test_html_slide_template_renders_its_shape_and_title_layout():
+    template = SimpleNamespace(
+        config=SimpleNamespace(
+            htmlSlides=[
+                '<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:#123456"></div>'
+                '<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:172px;width:1680px;height:200px;font-size:56px;color:#FFFFFF">Template title</div>'
+            ]
+        )
+    )
+    pptx = PPTXGenerator(template).generate(
+        _presentation(_slide("CONTENT", "Generated title", {"heading": "Generated title"}))
+    )
+
+    slide = Presentation(BytesIO(pptx)).slides[0]
+    assert _rgb(slide.background.fill.fore_color) == "123456"
+    assert slide.shapes[0].left == Inches(120 / 1920 * 13.333)
+    assert slide.shapes[0].text == "Generated title"
+
+
+def test_html_template_chooses_layouts_by_slide_type_not_first_n_slides():
+    def layout(color):
+        return f'<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:{color}"></div>'
+
+    template = SimpleNamespace(config=SimpleNamespace(
+        htmlSlides=[layout("#111111"), layout("#222222"), layout("#333333")],
+        zipTemplate={"slides": ["slides/cover.html", "slides/agenda.html", "slides/market.html"]},
+    ))
+    output = PPTXGenerator(template).generate(_presentation(
+        _slide("TITLE", "Title", {"heading": "Title"}),
+        _slide("BULLET_LIST", "Agenda", {"heading": "Agenda"}),
+        _slide("CONTENT", "Market", {"heading": "Market"}),
+    ))
+
+    assert [_rgb(slide.background.fill.fore_color) for slide in Presentation(BytesIO(output)).slides] == ["111111", "222222", "333333"]
+
+
+def test_html_template_uses_the_outline_selected_layout_when_present():
+    def layout(color):
+        return f'<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:{color}"></div>'
+
+    template = SimpleNamespace(config=SimpleNamespace(htmlSlides=[layout("#111111"), layout("#222222"), layout("#333333")]))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "CONTENT", "Risk findings", {"heading": "Risk findings", "templateIndex": 2},
+    )))
+
+    assert _rgb(Presentation(BytesIO(output)).slides[0].background.fill.fore_color) == "333333"
+
+
+def test_html_template_rejects_a_reference_layout_for_a_conclusion_slide():
+    def layout(color):
+        return f'<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:{color}"></div>'
+
+    template = SimpleNamespace(config=SimpleNamespace(
+        htmlSlides=[layout("#111111"), layout("#222222"), layout("#333333")],
+        zipTemplate={"slides": ["slides/cover.html", "slides/executive-summary.html", "slides/references.html"]},
+    ))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "QUOTE", "Conclusion", {"heading": "Conclusion", "templateIndex": 2},
+    )))
+
+    assert _rgb(Presentation(BytesIO(output)).slides[0].background.fill.fore_color) == "222222"
+
+
+def test_html_template_fills_blank_card_shapes_with_generated_bullets():
+    template = SimpleNamespace(config=SimpleNamespace(htmlSlides=[
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:#FFFFFF"></div>'
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:120px;top:300px;width:700px;height:400px;background:#F2F5FA"></div>'
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:920px;top:300px;width:700px;height:400px;background:#F2F5FA"></div>'
+    ]))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "BULLET_LIST", "Title", {"heading": "Title", "bullets": ["First", "Second"]},
+    )))
+
+    text = " ".join(shape.text for shape in Presentation(BytesIO(output)).slides[0].shapes if shape.has_text_frame)
+    assert "First" in text and "Second" in text
+
+
+def test_report_template_uses_a_table_layout_for_a_threat_model_slide():
+    html = (
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:#FAFAF7"></div>'
+        '<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:130px;width:1400px;height:80px;font-size:56px;color:#1A1A1A">Template title</div>'
+    )
+    template = SimpleNamespace(config=SimpleNamespace(
+        htmlSlides=[html], zipTemplate={"slides": ["slides/03-threat-model.html"]},
+    ))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "CONTENT", "AI 위협 모델", {"heading": "AI 위협 모델", "body": "우선순위 기반 대응", "bullets": ["프롬프트 인젝션", "권한 오용"]},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    text = " ".join(shape.text for shape in slide.shapes if shape.has_text_frame)
+    assert "위협 시나리오" in text and "프롬프트 인젝션" in text
+    assert len(slide.shapes) >= 17  # title/header plus a four-column table
+
+
+def test_html_template_fills_a_dark_callout_with_the_generated_summary():
+    template = SimpleNamespace(config=SimpleNamespace(htmlSlides=[
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:#FFFFFF"></div>'
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:300px;top:400px;width:1300px;height:400px;background:#1A1A1A"></div>'
+    ]))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "QUOTE", "Decision", {"heading": "Decision", "body": "Ship behind a safety gate.", "bullets": ["One", "Two", "Three"]},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    filled = next(shape for shape in slide.shapes if shape.has_text_frame and "Ship behind" in shape.text)
+    assert _rgb(filled.text_frame.paragraphs[0].runs[0].font.color) == "FFFFFF"
+
+
+def test_html_template_renders_chart_data_for_chart_slides():
+    output = PPTXGenerator(SimpleNamespace(config=SimpleNamespace(htmlSlides=[
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:#FFFFFF"></div>'
+    ]))).generate(_presentation(_slide(
+        "CHART", "ASR", {"heading": "ASR", "chart": {"labels": ["Before", "After"], "values": [48, 11]}},
+    )))
+
+    assert any(shape.has_chart for shape in Presentation(BytesIO(output)).slides[0].shapes)
+
+
+def test_html_template_without_font_family_uses_default_font():
+    template = SimpleNamespace(config=SimpleNamespace(
+        htmlTemplate='<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1200px;height:180px;font-size:48px">Title</div>',
+    ))
+    output = PPTXGenerator(template).generate(_presentation(_slide("TITLE", "Generated", {"heading": "Generated"})))
+
+    assert Presentation(BytesIO(output)).slides[0].shapes[0].text == "Generated"
+
+
 def test_reusing_a_generator_does_not_accumulate_prior_slides():
     generator = PPTXGenerator()
     presentation = _presentation(_slide("TITLE", "One", {"heading": "One"}))

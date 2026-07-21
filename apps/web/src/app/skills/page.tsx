@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SkillsGallery } from '@/components/skills/skills-gallery';
+import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function SkillsPage() {
@@ -14,5 +15,5 @@ export default function SkillsPage() {
     }, [hasHydrated, isAuthenticated, router]);
 
     if (!hasHydrated || !isAuthenticated) return <div className="min-h-screen bg-background" />;
-    return <SkillsGallery />;
+    return <AppShell><SkillsGallery /></AppShell>;
 }

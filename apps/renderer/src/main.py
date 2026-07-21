@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Any
 import io
 import zipfile
+from urllib.parse import quote
 from pptx import Presentation as PptxPresentation
 
 from .generators.pptx_generator import PPTXGenerator
@@ -51,6 +52,8 @@ class TemplateConfig(BaseModel):
     layouts: Optional[dict] = None
     backgrounds: Optional[dict] = None
     htmlTemplate: Optional[str] = None
+    htmlSlides: Optional[List[str]] = None
+    zipTemplate: Optional[dict] = None
 
 
 class Template(BaseModel):
@@ -177,7 +180,7 @@ async def render_pptx(request: RenderRequest):
             io.BytesIO(pptx_buffer),
             media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
             headers={
-                "Content-Disposition": f'attachment; filename="{request.presentation.title}.pptx"'
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(request.presentation.title)}.pptx"
             },
         )
     except Exception as e:
@@ -199,7 +202,7 @@ async def render_pdf(request: RenderRequest):
             io.BytesIO(pdf_buffer),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="{request.presentation.title}.pdf"'
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(request.presentation.title)}.pdf"
             },
         )
     except Exception as e:

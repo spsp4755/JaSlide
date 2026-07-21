@@ -291,6 +291,7 @@ export default function AdminModelsPage() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
                                     <input type="number" value={formData.maxTokens} onChange={(e) => setFormData({ ...formData, maxTokens: parseInt(e.target.value) })}
                                         className="w-full px-3 py-2 border rounded-lg" />
+                                    <p className="mt-1 text-xs text-gray-500">아웃라인과 슬라이드 생성의 최대 출력 토큰입니다.</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Cost/Token ($)</label>

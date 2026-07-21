@@ -73,6 +73,54 @@ class _StyleParser(HTMLParser):
             self.items.append(values)
 
 
+class _ObjectParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.objects: list[dict] = []
+        self.current: dict | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if values.get("data-object") != "true" or not values.get("style"):
+            return
+        self.current = {"tag": tag, "type": values.get("data-object-type"), "style": values["style"], "text": ""}
+
+    def handle_data(self, data: str) -> None:
+        if self.current:
+            self.current["text"] += data
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.current and self.current["tag"] == tag:
+            self.objects.append(self.current)
+            self.current = None
+
+
+def parse_html_objects(template: str) -> list[dict]:
+    """Read absolute HTML deck objects into safe slide coordinates."""
+    if not isinstance(template, str):
+        return []
+    parser = _ObjectParser()
+    parser.feed(template)
+    parser.close()
+    variables = dict(re.findall(r"(--[\w-]+)\s*:\s*([^;}]+)", template))
+    objects = []
+    for item in parser.objects:
+        style = _resolve_variables(_style_values(item["style"]), variables)
+        left, top, width, height = (_pixels(style.get(key)) for key in ("left", "top", "width", "height"))
+        if width <= 0 or height <= 0 or left < 0 or top < 0 or left + width > 1920 or top + height > 1080:
+            continue
+        objects.append({
+            "type": item["type"], "text": " ".join(item["text"].split()),
+            "x": left / 1920 * SLIDE_WIDTH, "y": top / 1080 * SLIDE_HEIGHT,
+            "w": width / 1920 * SLIDE_WIDTH, "h": height / 1080 * SLIDE_HEIGHT,
+            "background": _color(style.get("background", "")), "color": _color(style.get("color", "")),
+            "font": _font_name(style.get("font-family", "")), "fontSize": max(8, min(round(_pixels(style.get("font-size")) * 0.54), 72)),
+            "bold": style.get("font-weight", "") in {"500", "600", "700", "bold"},
+            "align": style.get("text-align") if style.get("text-align") in ALIGNMENTS else "left",
+        })
+    return objects
+
+
 def extract_html_template_style(template: str) -> tuple[dict[str, str], dict[str, dict]]:
     """Extract safe visual tokens from common absolute-positioned HTML decks."""
     if not isinstance(template, str):
@@ -118,7 +166,9 @@ def _color(value: str) -> str | None:
     return match.group(0).upper() if match else None
 
 
-def _font_name(value: str) -> str | None:
+def _font_name(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
     return value.split(",", 1)[0].strip().strip("'\"") or None
 
 
