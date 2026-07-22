@@ -41,7 +41,7 @@ Title: ${input.title}
 Type: ${input.type}
 Key points: ${input.keyPoints.join('; ')}
 ${this.getTypeInstructions(input.type)}
-Write a substantive, self-contained explanation: turn each key point into a specific claim, reason, implication, example, or actionable takeaway. Do not merely repeat or paraphrase the key points. Use 3 to 5 concrete bullets when the slide type allows bullets. Add enough context that the slide stands on its own when presented without speaker notes.
+Turn each key point into a specific, concrete bullet — a claim, reason, implication, example, or action — not a restatement of the key point. Keep the slide scannable: 3 to 5 short bullets, each roughly one line (under ~120 characters). Keep body to one short sentence or omit it entirely. Avoid long paragraphs and dense prose; a slide is not a document.
 
 Return JSON only:
 {
@@ -63,7 +63,19 @@ Return JSON only:
     }
 
     getEditPrompt(currentContent: string, instruction: string): string {
-        return `Current content:\n---\n${currentContent}\n---\nEdit instruction: ${instruction}\nReturn JSON only: { "content": "edited content" }`;
+        return `You are editing one presentation slide. Its current content as JSON:
+---
+${currentContent}
+---
+Apply this instruction: ${instruction}
+
+Return the COMPLETE edited slide as JSON with the same fields (heading, subheading, body, bullets, chart). Keep any field you are not changing. Favor concise, scannable bullets over long paragraphs. Return JSON only:
+{
+  "heading": "Main heading",
+  "subheading": "Optional subheading",
+  "body": "Optional short paragraph",
+  "bullets": [{ "text": "Concrete bullet", "level": 0 }]
+}`;
     }
 
     getSummaryPrompt(text: string, maxLength: number): string {

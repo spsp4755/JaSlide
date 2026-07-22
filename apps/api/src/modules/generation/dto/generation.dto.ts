@@ -167,9 +167,16 @@ export class StartGenerationDto {
 }
 
 export class AIEditDto {
-    @ApiProperty()
+    @ApiPropertyOptional({ description: 'Single slide to edit' })
+    @IsOptional()
     @IsString()
-    slideId: string;
+    slideId?: string;
+
+    @ApiPropertyOptional({ type: [String], description: 'Multiple slides to edit with the same instruction' })
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    slideIds?: string[];
 
     @ApiProperty({ example: 'Make this more concise' })
     @IsString()

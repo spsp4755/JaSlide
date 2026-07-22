@@ -297,9 +297,21 @@ export class GenerationService implements OnModuleInit {
     }
 
     async aiEdit(userId: string, dto: AIEditDto) {
-        // Get current slide content
+        const slideIds = dto.slideIds?.length ? dto.slideIds : dto.slideId ? [dto.slideId] : [];
+        if (!slideIds.length) {
+            throw new BadRequestException('No slide specified');
+        }
+
+        const slides = await Promise.all(
+            slideIds.map((id) => this.editOneSlide(userId, id, dto.instruction)),
+        );
+
+        return { success: true, slide: slides[0], slides };
+    }
+
+    private async editOneSlide(userId: string, slideId: string, instruction: string) {
         const slide = await this.prisma.slide.findUnique({
-            where: { id: dto.slideId },
+            where: { id: slideId },
             include: { presentation: { select: { userId: true } } },
         });
 
@@ -307,19 +319,17 @@ export class GenerationService implements OnModuleInit {
             throw new BadRequestException('Slide not found');
         }
 
-        // Apply AI edit
-        const currentContent = JSON.stringify(slide.content);
-        const editedContent = await this.llmService.editContent(currentContent, dto.instruction);
+        // editSlideContent returns the full validated slide object; store it directly.
+        // (The old flow stringified then re-parsed a flat text reply, which always threw.)
+        const editedContent = await this.llmService.editSlideContent(
+            (slide.content ?? {}) as any,
+            instruction,
+            slide.type,
+        );
 
-        // Update slide
-        const updatedSlide = await this.prisma.slide.update({
-            where: { id: dto.slideId },
-            data: { content: JSON.parse(editedContent) },
+        return this.prisma.slide.update({
+            where: { id: slideId },
+            data: { content: editedContent as any },
         });
-
-        return {
-            success: true,
-            slide: updatedSlide,
-        };
     }
 }

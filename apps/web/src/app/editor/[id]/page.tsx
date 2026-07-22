@@ -72,11 +72,13 @@ interface DraggableSlideProps {
     slide: any;
     index: number;
     isSelected: boolean;
+    isChecked: boolean;
     onSelect: () => void;
+    onToggleCheck: () => void;
     onMove: (from: number, to: number) => void;
 }
 
-function DraggableSlide({ slide, index, isSelected, onSelect, onMove }: DraggableSlideProps) {
+function DraggableSlide({ slide, index, isSelected, isChecked, onSelect, onToggleCheck, onMove }: DraggableSlideProps) {
     const [{ isDragging }, drag] = useDrag({
         type: 'SLIDE',
         item: { index },
@@ -106,9 +108,17 @@ function DraggableSlide({ slide, index, isSelected, onSelect, onMove }: Draggabl
         <div
             ref={setRefs}
             onClick={onSelect}
-            className={`slide-panel p-2 cursor-move ${isSelected ? 'active' : ''} ${isDragging ? 'opacity-50' : ''
+            className={`slide-panel relative p-2 cursor-move ${isSelected ? 'active' : ''} ${isDragging ? 'opacity-50' : ''
                 }`}
         >
+            <input
+                type="checkbox"
+                checked={isChecked}
+                onClick={(e) => e.stopPropagation()}
+                onChange={onToggleCheck}
+                title="AI 편집 대상으로 선택"
+                className="absolute top-1 left-1 z-10 h-4 w-4 cursor-pointer accent-purple-600"
+            />
             <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-50 rounded flex items-center justify-center mb-2">
                 <Icon className="h-6 w-6 text-gray-400" />
             </div>
@@ -153,7 +163,6 @@ export default function EditorPage() {
     const [shareUrl, setShareUrl] = useState('');
     const [aiEditInstruction, setAiEditInstruction] = useState('');
     const [isExporting, setIsExporting] = useState(false);
-    const [isAiEditing, setIsAiEditing] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
     const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
     const [multiSelectedSlides, setMultiSelectedSlides] = useState<string[]>([]);
@@ -392,28 +401,30 @@ export default function EditorPage() {
         }
     };
 
-    // AI Edit handler
+    // AI Edit handler — edits the checked slides, or the current one if none checked.
     const handleAiEdit = async () => {
-        if (!selectedSlideId || !aiEditInstruction.trim()) {
-            toast({ title: '편집 지시를 입력해주세요.', variant: 'destructive' });
+        const targets = multiSelectedSlides.length > 0
+            ? multiSelectedSlides
+            : selectedSlideId ? [selectedSlideId] : [];
+        const instruction = aiEditInstruction.trim();
+        if (!targets.length || !instruction) {
+            toast({ title: '편집할 슬라이드와 지시를 입력해주세요.', variant: 'destructive' });
             return;
         }
 
+        // Non-blocking: close the dialog right away so the user can keep working or
+        // navigate away while the edit runs. A toast reports the result when it lands.
+        setShowAiEditDialog(false);
+        setAiEditInstruction('');
+        toast({ title: 'AI 편집 중...', description: `${targets.length}개 슬라이드를 편집하고 있습니다.` });
+
         try {
-            setIsAiEditing(true);
-            await generationApi.edit({
-                slideId: selectedSlideId,
-                instruction: aiEditInstruction,
-            });
-            toast({ title: 'AI 편집 완료', description: '슬라이드가 업데이트되었습니다.' });
-            setShowAiEditDialog(false);
-            setAiEditInstruction('');
-            // Refresh to see changes
+            await generationApi.edit({ slideIds: targets, instruction });
+            toast({ title: 'AI 편집 완료', description: `${targets.length}개 슬라이드가 업데이트되었습니다.` });
+            setMultiSelectedSlides([]);
             fetchPresentation();
         } catch (error) {
             toast({ title: 'AI 편집 실패', variant: 'destructive' });
-        } finally {
-            setIsAiEditing(false);
         }
     };
 
@@ -559,7 +570,11 @@ export default function EditorPage() {
                                     slide={slide}
                                     index={index}
                                     isSelected={slide.id === selectedSlideId}
+                                    isChecked={multiSelectedSlides.includes(slide.id)}
                                     onSelect={() => setSelectedSlide(slide.id)}
+                                    onToggleCheck={() => setMultiSelectedSlides((prev) =>
+                                        prev.includes(slide.id) ? prev.filter((id) => id !== slide.id) : [...prev, slide.id]
+                                    )}
                                     onMove={reorderSlides}
                                 />
                             ))}
@@ -597,7 +612,7 @@ export default function EditorPage() {
                                         onClick={() => setShowAiEditDialog(true)}
                                     >
                                         <Sparkles className="h-4 w-4 mr-1" />
-                                        AI로 편집
+                                        {multiSelectedSlides.length > 0 ? `AI로 편집 (${multiSelectedSlides.length}개)` : 'AI로 편집'}
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -804,8 +819,13 @@ export default function EditorPage() {
                                     <X className="h-5 w-5" />
                                 </button>
                             </div>
-                            <p className="text-sm text-gray-600 mb-4">
-                                원하는 변경 사항을 자연어로 설명해주세요.
+                            <p className="text-sm text-gray-600 mb-2">
+                                {multiSelectedSlides.length > 0
+                                    ? `선택한 ${multiSelectedSlides.length}개 슬라이드에 적용됩니다.`
+                                    : '현재 슬라이드에 적용됩니다. (왼쪽 목록에서 체크하면 여러 장을 한번에 편집할 수 있어요.)'}
+                            </p>
+                            <p className="text-xs text-gray-400 mb-4">
+                                적용을 누르면 백그라운드에서 처리되며, 완료를 기다리지 않고 계속 작업할 수 있습니다.
                             </p>
                             <textarea
                                 value={aiEditInstruction}
@@ -826,19 +846,10 @@ export default function EditorPage() {
                                 </Button>
                                 <Button
                                     onClick={handleAiEdit}
-                                    disabled={isAiEditing || !aiEditInstruction.trim()}
+                                    disabled={!aiEditInstruction.trim()}
                                 >
-                                    {isAiEditing ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                            처리 중...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="h-4 w-4 mr-1" />
-                                            적용
-                                        </>
-                                    )}
+                                    <Sparkles className="h-4 w-4 mr-1" />
+                                    적용
                                 </Button>
                             </div>
                         </div>

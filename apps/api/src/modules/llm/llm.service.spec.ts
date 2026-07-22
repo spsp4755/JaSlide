@@ -171,7 +171,7 @@ describe('LlmService contracts', () => {
         expect(create).toHaveBeenCalledTimes(1);
     });
 
-    it('asks for substantive slide content rather than repeating short key points', async () => {
+    it('asks for concise, scannable slide content rather than long prose', async () => {
         const reply = { heading: 'AI safety', body: 'Concrete explanation', bullets: [{ text: 'Specific finding', level: 0 }] };
         const create = await createService([JSON.stringify(reply)]);
 
@@ -179,7 +179,23 @@ describe('LlmService contracts', () => {
             title: 'AI safety', type: 'CONTENT', keyPoints: ['Risks'], language: 'en',
         });
 
-        expect(create.mock.calls[0][0].messages[1].content).toContain('substantive, self-contained explanation');
+        const prompt = create.mock.calls[0][0].messages[1].content as string;
+        expect(prompt).toContain('scannable');
+        expect(prompt).toContain('not a document');
+    });
+
+    it('edits a slide and returns the full validated content object (not a flat string)', async () => {
+        const edited = { heading: '개선된 제목', bullets: [{ text: '간결한 항목', level: 0 }] };
+        const create = await createService([JSON.stringify(edited)]);
+
+        const result = await service.editSlideContent(
+            { heading: '원래 제목', body: '너무 긴 줄글 내용...' },
+            '더 간결하게 만들어줘',
+            'CONTENT',
+        );
+
+        expect(result).toEqual(edited);
+        expect(create).toHaveBeenCalledTimes(1);
     });
 
     it('shows chart JSON only for chart slides', () => {

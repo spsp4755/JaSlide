@@ -285,31 +285,21 @@ export class LlmService {
         }
     }
 
-    async editContent(currentContent: string, instruction: string): Promise<string> {
-        const prompt = this.promptTemplates.getEditPrompt(currentContent, instruction);
-
+    // Edit returns the full structured slide so the caller can store it directly.
+    // The old version asked the model for a flat { "content": "..." } string and the
+    // caller then JSON.parse'd that string — which threw on every non-JSON reply, so AI
+    // edit failed every time. Reuse the same validated-JSON path as content generation.
+    async editSlideContent(current: SlideContent, instruction: string, type: string): Promise<SlideContent> {
+        const prompt = this.promptTemplates.getEditPrompt(JSON.stringify(current), instruction);
         try {
-            const { client, model } = await this.getOpenAIClient();
-            const content = await this.chatJson(client, {
-                model,
-                messages: [
-                    {
-                        role: 'system',
-                        content: `You are a helpful editor. Apply the requested edit to the content and return the result as JSON with a "content" field.`,
-                    },
-                    { role: 'user', content: prompt },
-                ],
-                temperature: 0.5,
-            });
-
-            if (!content) {
-                throw new Error('No response from LLM');
-            }
-
-            const result = JSON.parse(this.extractJson(content));
-            return result.content || currentContent;
+            return await this.generateValidatedJson(
+                'You are a professional presentation editor. Return valid JSON only.',
+                prompt,
+                (value) => this.validateSlideContent(value, type),
+                Number.MAX_SAFE_INTEGER,
+            );
         } catch (error) {
-            this.logger.error('Failed to edit content', error);
+            this.logger.error('Failed to edit slide content', error);
             throw error;
         }
     }
