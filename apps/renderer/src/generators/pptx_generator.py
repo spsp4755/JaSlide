@@ -151,6 +151,9 @@ class PPTXGenerator:
             return
         if isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             shape.text = edit["text"]
+        for key, size in (("left", self.prs.slide_width), ("width", self.prs.slide_width), ("top", self.prs.slide_height), ("height", self.prs.slide_height)):
+            if isinstance(edit.get(key), (int, float)):
+                setattr(shape, key, int(edit[key] * size / (1920 if key in ("left", "width") else 1080)))
         cells = edit.get("cells")
         if isinstance(cells, list) and getattr(shape, "has_table", False):
             for row_index, row in enumerate(cells):

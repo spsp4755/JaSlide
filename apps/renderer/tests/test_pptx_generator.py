@@ -382,7 +382,7 @@ def test_pptx_template_keeps_native_text_and_table_objects_editable():
     template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(source_buffer.getvalue()).decode("ascii")))
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
         "objectEdits": [
-            {"slide": 0, "objectId": str(title.shape_id), "text": "Updated title"},
+            {"slide": 0, "objectId": str(title.shape_id), "text": "Updated title", "left": 240, "top": 180, "width": 720, "height": 120},
             {"slide": 0, "objectId": str(table_shape.shape_id), "cells": [["Updated cell"]]},
         ],
     })))
@@ -390,5 +390,7 @@ def test_pptx_template_keeps_native_text_and_table_objects_editable():
     generated = Presentation(BytesIO(output))
     assert generated.slides[0].shapes[0].has_text_frame
     assert generated.slides[0].shapes[0].text == "Updated title"
+    assert generated.slides[0].shapes[0].left == generated.slide_width * 240 // 1920
+    assert generated.slides[0].shapes[0].top == generated.slide_height * 180 // 1080
     assert generated.slides[0].shapes[1].has_table
     assert generated.slides[0].shapes[1].table.cell(0, 0).text == "Updated cell"

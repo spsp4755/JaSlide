@@ -449,6 +449,7 @@ export default function EditorPage() {
     const previewPendingRef = useRef(new Map<string, Promise<string | null>>());
     const previewSlideIdRef = useRef<string | null>(null);
     const [selectedHtmlTextIndex, setSelectedHtmlTextIndex] = useState<number | null>(null);
+    const [selectedNativeObjectId, setSelectedNativeObjectId] = useState<string | null>(null);
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
 
@@ -459,16 +460,32 @@ export default function EditorPage() {
     const selectedSlide = presentation?.slides.find((s) => s.id === selectedSlideId);
     const selectedHtmlObject = selectedSlide?.content?.html && selectedHtmlTextIndex !== null
         ? getHtmlTextFields(selectedSlide.content.html)[selectedHtmlTextIndex] : null;
+    const nativeObjects = presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide
+        ? (presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || [])
+        : [];
+    const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
     const navigateSlide = (direction: -1 | 1) => {
         const index = presentation?.slides.findIndex((slide) => slide.id === selectedSlideId) ?? -1;
         const target = presentation?.slides[index + direction];
         if (!target) return;
         setSelectedSlide(target.id);
         setSelectedHtmlTextIndex(null);
+        setSelectedNativeObjectId(null);
     };
     const updateSelectedHtmlObject = (updates: Record<string, string>) => {
         if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
         const content = { ...selectedSlide.content, html: updateHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex, updates) };
+        updateSlide(selectedSlide.id, { content });
+        handleSaveSlideDelayed(selectedSlide.id, { content });
+    };
+    const updateNativeObject = (objectId: string, updates: Record<string, any>) => {
+        if (!selectedSlide) return;
+        const objectEdits = [...(selectedSlide.content?.objectEdits || [])];
+        const index = objectEdits.findIndex((item: any) => item.objectId === objectId);
+        const base = { objectId, slide: selectedSlide.content?.templateIndex ?? selectedSlide.order ?? 0 };
+        if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...updates };
+        else objectEdits.push({ ...base, ...updates });
+        const content = { ...selectedSlide.content, objectEdits };
         updateSlide(selectedSlide.id, { content });
         handleSaveSlideDelayed(selectedSlide.id, { content });
     };
@@ -1109,10 +1126,13 @@ export default function EditorPage() {
                                         previewUrl={previewUrl}
                                         selectedHtmlTextIndex={selectedHtmlTextIndex}
                                         onSelectHtmlText={setSelectedHtmlTextIndex}
+                                        nativeObjects={nativeObjects}
+                                        selectedNativeObjectId={selectedNativeObjectId}
+                                        onSelectNativeObject={setSelectedNativeObjectId}
                                         onNavigate={navigateSlide}
                                         onUpdate={(updates) => {
                                             updateSlide(selectedSlide.id, updates);
-                                            if (updates.content?.html) handleSaveSlideDelayed(selectedSlide.id, updates);
+                                            if (updates.content) handleSaveSlideDelayed(selectedSlide.id, updates);
                                         }}
                                         onSave={() => handleSaveSlide(selectedSlide)}
                                     />
@@ -1176,7 +1196,27 @@ export default function EditorPage() {
                             </div>
                         )}
                         {rightTab === 'edit' && (<div className="overflow-auto">
-                        {selectedSlide ? (selectedSlide.content?.html ? (
+                        {selectedSlide ? (nativeObjects.length ? (
+                            <div className="space-y-3">
+                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">원본 PPTX 객체를 선택해 텍스트, 표, 위치와 크기를 직접 수정합니다.</div>
+                                <select value={selectedNativeObjectId ?? ''} onChange={(event) => setSelectedNativeObjectId(event.target.value || null)} className="w-full rounded-lg border px-3 py-2 text-sm">
+                                    <option value="">수정할 PPTX 객체 선택</option>
+                                    {nativeObjects.filter((item: any) => item.kind === 'text' || item.kind === 'table').map((item: any, index: number) => <option key={item.id} value={item.id}>{item.kind === 'table' ? '표' : '텍스트'} {index + 1}</option>)}
+                                </select>
+                                {selectedNativeObject ? <div className="space-y-3">
+                                    <label className="block text-xs font-medium text-gray-600">{selectedNativeObject.kind === 'table' ? '표 내용 (줄마다 첫 번째 열)' : '텍스트'}</label>
+                                    <textarea
+                                        value={selectedNativeObject.kind === 'table' ? ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || []).map((row: string[]) => row.join(' | ')).join('\n') : ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.text ?? '')}
+                                        rows={selectedNativeObject.kind === 'table' ? 6 : 4}
+                                        onChange={(event) => updateNativeObject(selectedNativeObject.id, selectedNativeObject.kind === 'table' ? { cells: event.target.value.split('\n').map((row) => row.split('|').map((cell) => cell.trim())) } : { text: event.target.value })}
+                                        className="w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(['left', 'top', 'width', 'height'] as const).map((property) => <label key={property} className="text-xs text-gray-600">{{ left: 'X', top: 'Y', width: 'W', height: 'H' }[property]}<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.[property] ?? selectedNativeObject[property] ?? 0} onChange={(event) => updateNativeObject(selectedNativeObject.id, { [property]: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>)}
+                                    </div>
+                                </div> : <p className="text-sm text-gray-500">슬라이드 위의 텍스트나 표를 클릭하면 바로 편집할 수 있습니다.</p>}
+                            </div>
+                        ) : selectedSlide.content?.html ? (
                             <div className="space-y-3">
                                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                                     텍스트를 직접 수정해도 템플릿의 레이아웃과 디자인은 유지됩니다.
@@ -1426,12 +1466,15 @@ interface EditableSlidePreviewProps {
     previewUrl?: string | null;
     selectedHtmlTextIndex: number | null;
     onSelectHtmlText: (index: number | null) => void;
+    nativeObjects: any[];
+    selectedNativeObjectId: string | null;
+    onSelectNativeObject: (id: string | null) => void;
     onNavigate: (direction: -1 | 1) => void;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, onNavigate, onUpdate, onSave }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1633,10 +1676,46 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         window.addEventListener('pointerup', stop, { once: true });
     };
 
+    const startNativeTransform = (event: any, object: any, resizing: boolean) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const canvas = (event.currentTarget as HTMLElement).closest('[data-html-canvas]') as HTMLElement | null;
+        if (!canvas) return;
+        const bounds = canvas.getBoundingClientRect();
+        const current = (content.objectEdits || []).find((item: any) => item.objectId === object.id) || {};
+        const initial = { left: current.left ?? object.left ?? 0, top: current.top ?? object.top ?? 0, width: current.width ?? object.width ?? 0, height: current.height ?? object.height ?? 0 };
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const move = (moveEvent: PointerEvent) => {
+            const dx = (moveEvent.clientX - startX) * 1920 / bounds.width;
+            const dy = (moveEvent.clientY - startY) * 1080 / bounds.height;
+            const transform = resizing ? { width: Math.max(40, Math.round(initial.width + dx)), height: Math.max(24, Math.round(initial.height + dy)) } : { left: Math.round(initial.left + dx), top: Math.round(initial.top + dy) };
+            const objectEdits = [...(content.objectEdits || [])];
+            const index = objectEdits.findIndex((item: any) => item.objectId === object.id);
+            if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...transform };
+            else objectEdits.push({ objectId: object.id, slide: content.templateIndex ?? slide.order ?? 0, ...transform });
+            onUpdate({ content: { ...content, objectEdits } });
+        };
+        const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', stop, { once: true });
+    };
+
     if (previewUrl && !content.html) {
         return (
             <div className="relative h-full w-full touch-pan-y" data-html-canvas onPointerDown={startSlideSwipe}>
                 <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
+                {nativeObjects.map((object: any) => {
+                    const edit = (content.objectEdits || []).find((item: any) => item.objectId === object.id) || {};
+                    const left = edit.left ?? object.left ?? 0;
+                    const top = edit.top ?? object.top ?? 0;
+                    const width = edit.width ?? object.width ?? 0;
+                    const height = edit.height ?? object.height ?? 0;
+                    const selected = selectedNativeObjectId === object.id;
+                    return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}>
+                        {selected && <button type="button" aria-label="native object resize" className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-sm border border-purple-700 bg-white" onPointerDown={(event) => startNativeTransform(event, object, true)} />}
+                    </div>;
+                })}
                 {htmlSelectionAreas.map((area) => {
                     const field = htmlTextFields[area.index];
                     return field && (
