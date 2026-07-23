@@ -164,12 +164,7 @@ export class ExportService {
             const response = await axios.post(
                 `${this.rendererUrl}/api/render/pdf`,
                 {
-                    presentation: {
-                        id: presentation.id,
-                        title: presentation.title,
-                        slides: presentation.slides,
-                        template: presentation.template,
-                    },
+                    presentation: await this.rendererPresentation(presentation),
                 },
                 {
                     responseType: 'arraybuffer',
@@ -354,12 +349,7 @@ export class ExportService {
             const response = await axios.post(
                 `${this.rendererUrl}/api/render/preview`,
                 {
-                    presentation: {
-                        id: presentation.id,
-                        title: presentation.title,
-                        slides: presentation.slides,
-                        template: presentation.template,
-                    },
+                    presentation: await this.rendererPresentation(presentation),
                     slideIndex: slideIndex ?? 0,
                 },
                 {
