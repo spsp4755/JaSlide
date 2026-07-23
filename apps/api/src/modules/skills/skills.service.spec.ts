@@ -14,7 +14,8 @@ describe('SkillsService', () => {
             create: jest.fn(),
         },
     };
-    const service = new SkillsService(prisma as any, { get: jest.fn().mockReturnValue('http://renderer.internal') } as any);
+    const storage = { upload: jest.fn() };
+    const service = new SkillsService(prisma as any, { get: jest.fn().mockReturnValue('http://renderer.internal') } as any, storage as any);
     const user = { id: 'user-1', organizationId: 'org-1' };
 
     beforeEach(() => {
@@ -59,6 +60,7 @@ describe('SkillsService', () => {
             data: { config: { colors: { primary: '#123456' }, typography: { titleFont: 'Noto Sans KR' } } },
         });
         prisma.template.create.mockResolvedValue({ id: 'template-1' });
+        storage.upload.mockResolvedValue({ key: 'templates/executive-report.pptx' });
         prisma.presentationSkill.create.mockResolvedValue({ id: 'skill-1', templateId: 'template-1' });
 
         await expect(service.importPptx(user, {
@@ -72,7 +74,7 @@ describe('SkillsService', () => {
             data: expect.objectContaining({
                 name: '임원 보고 스타일',
                 category: 'BUSINESS',
-                config: { colors: { primary: '#123456' }, typography: { titleFont: 'Noto Sans KR' } },
+                config: expect.objectContaining({ pptxTemplate: { storageKey: 'templates/executive-report.pptx', originalname: 'executive-report.pptx' }, source: expect.objectContaining({ storageKey: 'templates/executive-report.pptx' }) }),
                 isPublic: false,
                 organizationId: 'org-1',
             }),

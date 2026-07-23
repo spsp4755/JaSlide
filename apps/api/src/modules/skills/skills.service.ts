@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSkillDto } from './dto/skill.dto';
+import { StorageService } from '../assets/storage.service';
 
 interface SkillUser {
     id: string;
@@ -14,6 +15,7 @@ export class SkillsService {
     constructor(
         private prisma: PrismaService,
         private configService: ConfigService,
+        private storage: StorageService,
     ) {}
 
     async findVisible(user: SkillUser, category?: string) {
@@ -62,11 +64,12 @@ export class SkillsService {
         if (!this.isTemplateConfig(config)) throw new BadRequestException('Invalid PPTX style tokens');
 
         const skillName = name?.trim() || file.originalname.replace(/\.pptx$/i, '');
+        const uploaded = await this.storage.upload(file, 'templates');
         const template = await this.prisma.template.create({
             data: {
                 name: skillName,
                 category: 'BUSINESS',
-                config,
+                config: { ...(config as Record<string, any>), pptxTemplate: { storageKey: uploaded.key, originalname: file.originalname }, source: { ...(config as any).source, storageKey: uploaded.key } },
                 isPublic: false,
                 organizationId: user.organizationId ?? null,
             },

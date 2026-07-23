@@ -35,6 +35,7 @@ describe('AdminTemplatesService PPTX import', () => {
             typography: { titleFont: 'Noto Sans KR', bodyFont: 'Noto Sans KR' },
             htmlSlides: ['<div class="slide-container" />'],
             archive: { slides: ['slide-01'] },
+            source: { kind: 'pptx', slides: [{ objects: [{ id: '7', kind: 'table' }] }] },
         };
         mockedAxios.post.mockResolvedValue({ data: { config: extracted } } as any);
         prisma.template.create.mockResolvedValue({ id: 'template-1', name: 'Brand' });
@@ -51,7 +52,7 @@ describe('AdminTemplatesService PPTX import', () => {
         expect(prisma.template.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
                 name: 'Brand', category: 'CUSTOM',
-                config: expect.objectContaining({ ...extracted, pptxTemplate: { storageKey: 'templates/brand.pptx', originalname: 'brand.pptx' } }),
+                config: expect.objectContaining({ ...extracted, pptxTemplate: { storageKey: 'templates/brand.pptx', originalname: 'brand.pptx' }, source: expect.objectContaining({ storageKey: 'templates/brand.pptx' }) }),
             }),
         });
     });

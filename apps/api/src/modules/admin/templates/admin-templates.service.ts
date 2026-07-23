@@ -40,7 +40,7 @@ export class AdminTemplatesService {
         return this.create({
             ...data,
             category: data.category || 'CUSTOM',
-            config: { ...(response.data.config as Record<string, unknown>), pptxTemplate: { storageKey: uploaded.key, originalname: file.originalname } },
+            config: { ...(response.data.config as Record<string, any>), pptxTemplate: { storageKey: uploaded.key, originalname: file.originalname }, source: { ...(response.data.config as any).source, storageKey: uploaded.key } },
         });
     }
 
@@ -68,7 +68,7 @@ export class AdminTemplatesService {
         return this.create({
             ...data,
             category: data.category || 'CUSTOM',
-            config: { htmlTemplate: config.htmlTemplate, htmlSlides: config.htmlSlides, zipTemplate: { ...config.archive, storageKey: uploaded.key } },
+            config: { htmlTemplate: config.htmlTemplate, htmlSlides: config.htmlSlides, zipTemplate: { ...config.archive, storageKey: uploaded.key }, source: { kind: 'html_zip', storageKey: uploaded.key } },
         });
     }
 

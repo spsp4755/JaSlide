@@ -60,6 +60,9 @@ def test_converts_tables_without_assuming_a_shape_fill():
 
     assert 'data-object-type="table"' in result["htmlSlides"][0]
     assert "Header" in result["htmlSlides"][0]
+    assert result["source"]["kind"] == "pptx"
+    assert result["source"]["slides"][0]["objects"][0]["kind"] == "table"
+    assert result["source"]["slides"][0]["objects"][0]["id"]
 
 
 def test_preserves_table_cell_dimensions_and_formatting():
