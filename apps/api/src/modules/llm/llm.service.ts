@@ -33,6 +33,10 @@ export interface GenerateSlideContentInput {
     language: string;
 }
 
+export interface GenerateSlideHtmlInput extends GenerateSlideContentInput {
+    templateHtml: string;
+}
+
 export interface SlideContent {
     heading?: string;
     subheading?: string;
@@ -285,11 +289,42 @@ export class LlmService {
         }
     }
 
+    async generateSlideHtml(input: GenerateSlideHtmlInput): Promise<string> {
+        return this.generateValidatedJson(
+            'You are a presentation HTML editor. Return valid JSON only.',
+            this.promptTemplates.getSlideHtmlPrompt(input),
+            (value) => {
+                const html = this.isRecord(value) ? value.html : undefined;
+                if (!this.isText(html) || !/(slide-container|data-object=|<body)/i.test(html)) {
+                    throw new Error('Slide HTML must contain a slide container or data object');
+                }
+                return html;
+            },
+            Number.MAX_SAFE_INTEGER,
+        );
+    }
+
+    async editSlideHtml(currentHtml: string, instruction: string, signal?: AbortSignal): Promise<string> {
+        return this.generateValidatedJson(
+            'You are a presentation HTML editor. Return valid JSON only.',
+            this.promptTemplates.getSlideHtmlEditPrompt(currentHtml, instruction),
+            (value) => {
+                const html = this.isRecord(value) ? value.html : undefined;
+                if (!this.isText(html) || !/(slide-container|data-object=|<body)/i.test(html)) {
+                    throw new Error('Slide HTML must contain a slide container or data object');
+                }
+                return html;
+            },
+            Number.MAX_SAFE_INTEGER,
+            signal,
+        );
+    }
+
     // Edit returns the full structured slide so the caller can store it directly.
     // The old version asked the model for a flat { "content": "..." } string and the
     // caller then JSON.parse'd that string — which threw on every non-JSON reply, so AI
     // edit failed every time. Reuse the same validated-JSON path as content generation.
-    async editSlideContent(current: SlideContent, instruction: string, type: string): Promise<SlideContent> {
+    async editSlideContent(current: SlideContent, instruction: string, type: string, signal?: AbortSignal): Promise<SlideContent> {
         const prompt = this.promptTemplates.getEditPrompt(JSON.stringify(current), instruction);
         try {
             return await this.generateValidatedJson(
@@ -297,6 +332,7 @@ export class LlmService {
                 prompt,
                 (value) => this.validateSlideContent(value, type),
                 Number.MAX_SAFE_INTEGER,
+                signal,
             );
         } catch (error) {
             this.logger.error('Failed to edit slide content', error);
@@ -343,16 +379,17 @@ Return JSON with "layout" field only.`;
     private async chatJson(
         client: OpenAI,
         params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, 'response_format'>,
+        signal?: AbortSignal,
     ): Promise<string> {
         try {
             const res = await client.chat.completions.create({
                 ...params,
                 response_format: { type: 'json_object' },
-            });
+            }, { signal });
             return res.choices[0]?.message?.content || '';
         } catch (error: any) {
             if (error?.status === 400 && /response_format|peg-native/i.test(error?.message || '')) {
-                const res = await client.chat.completions.create(params);
+                const res = await client.chat.completions.create(params, { signal });
                 return res.choices[0]?.message?.content || '';
             }
             throw error;
@@ -373,6 +410,7 @@ Return JSON with "layout" field only.`;
         prompt: string,
         validate: (value: unknown) => T,
         requestedMaxTokens: number,
+        signal?: AbortSignal,
     ): Promise<T> {
         const { client, model, maxTokens } = await this.getOpenAIClient();
         let responseText = '';
@@ -393,7 +431,7 @@ Return JSON with "layout" field only.`;
                 messages,
                 temperature: 0.7,
                 max_tokens: Math.min(requestedMaxTokens, maxTokens || requestedMaxTokens),
-            });
+            }, signal);
 
             try {
                 if (!responseText) {

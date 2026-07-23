@@ -82,3 +82,32 @@ def test_render_preview_returns_rasterized_pptx_output(monkeypatch):
     assert response.status_code == 200
     assert response.content == b"\x89PNG\r\n\x1a\npreview"
     assert requested_indexes == [1]
+
+
+def test_render_preview_returns_html_renderer_output_when_slide_has_html(monkeypatch):
+    monkeypatch.setattr("apps.renderer.src.main.render_slide_png", lambda html: b"html-png")
+
+    response = TestClient(app).post(
+        "/api/render/preview",
+        json={"presentation": {"id": "presentation-1", "title": "Preview check", "slides": [
+            {"id": "slide-1", "order": 0, "type": "CONTENT", "content": {"html": "<main data-object=\"true\">HTML</main>"}},
+        ]}},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"html-png"
+
+
+def test_render_pdf_returns_html_renderer_output_when_all_slides_have_html(monkeypatch):
+    monkeypatch.setattr("apps.renderer.src.main.render_slides_pdf", lambda htmls: b"%PDF-html")
+
+    response = TestClient(app).post(
+        "/api/render/pdf",
+        json={"presentation": {"id": "presentation-1", "title": "PDF check", "slides": [
+            {"id": "slide-1", "order": 0, "type": "CONTENT", "content": {"html": "<main data-object=\"true\">One</main>"}},
+            {"id": "slide-2", "order": 1, "type": "CONTENT", "content": {"html": "<main data-object=\"true\">Two</main>"}},
+        ]}},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"%PDF-html"

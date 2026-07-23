@@ -49,6 +49,9 @@ venv
 
 # Generated files
 *.generated.*
+.playwright-mcp/
+tmp/
+docker-compose.override.yml
 
 # Uploads
 uploads/*

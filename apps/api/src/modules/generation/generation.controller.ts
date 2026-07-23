@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { GenerationService } from './generation.service';
@@ -51,7 +51,9 @@ export class GenerationController {
 
     @Post('edit')
     @ApiOperation({ summary: 'Apply AI edit to slide' })
-    async aiEdit(@CurrentUser() user: any, @Body() dto: AIEditDto) {
-        return this.generationService.aiEdit(user.id, dto);
+    async aiEdit(@CurrentUser() user: any, @Body() dto: AIEditDto, @Req() request: any) {
+        const abortController = new AbortController();
+        request.on('aborted', () => abortController.abort());
+        return this.generationService.aiEdit(user.id, dto, abortController.signal);
     }
 }

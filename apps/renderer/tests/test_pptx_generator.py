@@ -1,4 +1,5 @@
 from io import BytesIO
+import base64
 from types import SimpleNamespace
 
 from pptx import Presentation
@@ -202,6 +203,20 @@ def test_html_slide_template_renders_its_shape_and_title_layout():
     assert _rgb(slide.background.fill.fore_color) == "123456"
     assert slide.shapes[0].left == Inches(120 / 1920 * 13.333)
     assert slide.shapes[0].text == "Generated title"
+
+
+def test_html_content_embeds_one_full_slide_browser_image(monkeypatch):
+    png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Jp5cAAAAASUVORK5CYII=")
+    monkeypatch.setattr("apps.renderer.src.generators.pptx_generator.render_slide_png", lambda html: png)
+
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "CONTENT", "HTML", {"html": "<main data-object=\"true\">HTML</main>"},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    picture = next(shape for shape in slide.shapes if shape.shape_type == 13)
+    assert picture.left == 0 and picture.top == 0
+    assert picture.width == Inches(13.333) and picture.height == Inches(7.5)
 
 
 def test_html_template_chooses_layouts_by_slide_type_not_first_n_slides():

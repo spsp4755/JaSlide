@@ -84,8 +84,8 @@ export const generationApi = {
     start: (data: any) => api.post('/generation/start', data),
     status: (jobId: string) => api.get(`/generation/${jobId}/status`),
     cancel: (jobId: string) => api.post(`/generation/${jobId}/cancel`),
-    edit: (data: { slideId?: string; slideIds?: string[]; instruction: string }) =>
-        api.post('/generation/edit', data),
+    edit: (data: { slideId?: string; slideIds?: string[]; instruction: string }, signal?: AbortSignal) =>
+        api.post('/generation/edit', data, { signal }),
 };
 
 // Templates

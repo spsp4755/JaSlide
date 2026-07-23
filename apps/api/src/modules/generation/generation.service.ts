@@ -62,6 +62,13 @@ export class GenerationService implements OnModuleInit {
         return Array.isArray(slides) ? slides.filter((slide): slide is string => typeof slide === 'string') : [];
     }
 
+    private async templateHtmlSlides(templateId?: string | null): Promise<string[]> {
+        if (!templateId) return [];
+        const template = await this.prisma.template.findUnique({ where: { id: templateId }, select: { config: true } });
+        const slides = (template?.config as any)?.htmlSlides;
+        return Array.isArray(slides) ? slides.filter((slide): slide is string => typeof slide === 'string' && slide.trim().length > 0) : [];
+    }
+
     // Reused outline generation shared by the outline endpoint and (implicitly) the pipeline.
     async generateOutline(user: { id: string; organizationId?: string | null }, dto: GenerateOutlineDto) {
         if (!dto.content?.trim()) {
@@ -210,6 +217,7 @@ export class GenerationService implements OnModuleInit {
                 });
 
             await this.updateJobStatus(jobId, 'GENERATING_CONTENT', 30);
+            const htmlTemplates = await this.templateHtmlSlides(input.templateId);
 
             // Generate content for each slide
             const slides = [];
@@ -222,12 +230,24 @@ export class GenerationService implements OnModuleInit {
                     keyPoints: slideOutline.keyPoints,
                     language,
                 });
+                const templateIndex = Number.isInteger(slideOutline.templateIndex) ? slideOutline.templateIndex as number : -1;
+                let html: string | undefined;
+                if (htmlTemplates[templateIndex]) {
+                    try {
+                        html = await this.llmService.generateSlideHtml({
+                            templateHtml: htmlTemplates[templateIndex], title: slideOutline.title,
+                            type: slideOutline.type, keyPoints: slideOutline.keyPoints, language,
+                        });
+                    } catch (error) {
+                        this.logger.warn(`HTML generation failed for slide ${i + 1}; using structured fallback`);
+                    }
+                }
 
                 slides.push({
                     order: i,
                     type: slideOutline.type as any,
                     title: slideOutline.title,
-                    content: { ...content, ...(Number.isInteger(slideOutline.templateIndex) ? { templateIndex: slideOutline.templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
+                    content: { ...content, ...(html ? { html } : {}), ...(Number.isInteger(slideOutline.templateIndex) ? { templateIndex: slideOutline.templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
                     layout: defaultLayoutForSlideType(slideOutline.type),
                 });
 
@@ -296,20 +316,20 @@ export class GenerationService implements OnModuleInit {
         if (!job || job.status === 'CANCELLED') throw new GenerationCancelledError();
     }
 
-    async aiEdit(userId: string, dto: AIEditDto) {
+    async aiEdit(userId: string, dto: AIEditDto, signal?: AbortSignal) {
         const slideIds = dto.slideIds?.length ? dto.slideIds : dto.slideId ? [dto.slideId] : [];
         if (!slideIds.length) {
             throw new BadRequestException('No slide specified');
         }
 
-        const slides = await Promise.all(
-            slideIds.map((id) => this.editOneSlide(userId, id, dto.instruction)),
-        );
+        const edits = await Promise.all(slideIds.map((id) => this.editOneSlide(userId, id, dto.instruction, signal)));
+        if (signal?.aborted) throw new GenerationCancelledError();
+        const slides = await Promise.all(edits.map(({ id, content }) => this.prisma.slide.update({ where: { id }, data: { content: content as any } })));
 
         return { success: true, slide: slides[0], slides };
     }
 
-    private async editOneSlide(userId: string, slideId: string, instruction: string) {
+    private async editOneSlide(userId: string, slideId: string, instruction: string, signal?: AbortSignal) {
         const slide = await this.prisma.slide.findUnique({
             where: { id: slideId },
             include: { presentation: { select: { userId: true } } },
@@ -321,15 +341,12 @@ export class GenerationService implements OnModuleInit {
 
         // editSlideContent returns the full validated slide object; store it directly.
         // (The old flow stringified then re-parsed a flat text reply, which always threw.)
-        const editedContent = await this.llmService.editSlideContent(
-            (slide.content ?? {}) as any,
-            instruction,
-            slide.type,
-        );
-
-        return this.prisma.slide.update({
-            where: { id: slideId },
-            data: { content: editedContent as any },
-        });
+        const currentContent = (slide.content ?? {}) as any;
+        if (signal?.aborted) throw new GenerationCancelledError();
+        const editedContent = typeof currentContent.html === 'string'
+            ? { ...currentContent, html: await this.llmService.editSlideHtml(currentContent.html, instruction, signal) }
+            : await this.llmService.editSlideContent(currentContent, instruction, slide.type, signal);
+        if (signal?.aborted) throw new GenerationCancelledError();
+        return { id: slideId, content: editedContent };
     }
 }

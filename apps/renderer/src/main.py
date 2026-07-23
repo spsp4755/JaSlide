@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any
 import io
+import asyncio
 import zipfile
 from urllib.parse import quote
 from pptx import Presentation as PptxPresentation
@@ -15,6 +16,8 @@ from .generators.pptx_generator import PPTXGenerator
 from .generators.pdf_exporter import PDFExporter
 from .services.style_extractor import extract_template_tokens
 from .services.html_template_archive import extract_html_template_archive
+from .services.html_renderer import render_slide_png, render_slides_pdf
+from .services.pptx_to_html import pptx_to_html
 
 app = FastAPI(
     title="JaSlide Renderer",
@@ -78,6 +81,11 @@ class PreviewRequest(BaseModel):
     slideIndex: int = 0
 
 
+def _html_slides(presentation: Presentation) -> list[str] | None:
+    htmls = [slide.content.get("html") for slide in presentation.slides]
+    return htmls if htmls and all(isinstance(html, str) and html.strip() for html in htmls) else None
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "jaslide-renderer"}
@@ -132,7 +140,7 @@ async def extract_style(file: UploadFile = File(...)):
     if not _is_safe_pptx_package(content):
         raise HTTPException(status_code=400, detail="Invalid PPTX package")
     try:
-        config = extract_template_tokens(content)
+        config = pptx_to_html(content)
     except Exception as error:
         raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
     return {"config": config}
@@ -174,7 +182,7 @@ async def render_pptx(request: RenderRequest):
     """Generate PPTX file from presentation data"""
     try:
         generator = PPTXGenerator(template_config=request.presentation.template)
-        pptx_buffer = generator.generate(request.presentation)
+        pptx_buffer = await asyncio.to_thread(generator.generate, request.presentation)
 
         return StreamingResponse(
             io.BytesIO(pptx_buffer),
@@ -191,9 +199,16 @@ async def render_pptx(request: RenderRequest):
 async def render_pdf(request: RenderRequest):
     """Generate PDF file from presentation data"""
     try:
+        htmls = _html_slides(request.presentation)
+        if htmls:
+            return StreamingResponse(
+                io.BytesIO(await asyncio.to_thread(render_slides_pdf, htmls)),
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(request.presentation.title)}.pdf"},
+            )
         # First generate PPTX, then convert to PDF
         generator = PPTXGenerator(template_config=request.presentation.template)
-        pptx_buffer = generator.generate(request.presentation)
+        pptx_buffer = await asyncio.to_thread(generator.generate, request.presentation)
 
         exporter = PDFExporter()
         pdf_buffer = exporter.convert_pptx_to_pdf(pptx_buffer)
@@ -213,8 +228,11 @@ async def render_pdf(request: RenderRequest):
 async def render_preview(request: PreviewRequest):
     """Generate preview image for a specific slide"""
     try:
+        html = request.presentation.slides[request.slideIndex].content.get("html")
+        if isinstance(html, str) and html.strip():
+            return StreamingResponse(io.BytesIO(await asyncio.to_thread(render_slide_png, html)), media_type="image/png")
         generator = PPTXGenerator(template_config=request.presentation.template)
-        pptx_buffer = generator.generate(request.presentation, request.slideIndex)
+        pptx_buffer = await asyncio.to_thread(generator.generate, request.presentation, request.slideIndex)
         preview_buffer = PDFExporter().convert_pptx_to_preview(pptx_buffer)
 
         return StreamingResponse(

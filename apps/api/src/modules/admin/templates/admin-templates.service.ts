@@ -81,10 +81,12 @@ export class AdminTemplatesService {
             !!value.archive && typeof value.archive === 'object' && !Array.isArray(value.archive);
     }
 
-    private isTemplateConfig(config: unknown): config is { colors: Record<string, string>; typography: Record<string, string> } {
+    private isTemplateConfig(config: unknown): config is { colors: Record<string, string>; typography: Record<string, string>; htmlSlides: string[]; archive: Record<string, unknown> } {
         if (!config || typeof config !== 'object' || Array.isArray(config)) return false;
         const value = config as Record<string, unknown>;
-        return this.isStringRecord(value.colors) && this.isStringRecord(value.typography);
+        return this.isStringRecord(value.colors) && this.isStringRecord(value.typography) &&
+            Array.isArray(value.htmlSlides) && value.htmlSlides.length > 0 && value.htmlSlides.every(item => typeof item === 'string') &&
+            !!value.archive && typeof value.archive === 'object' && !Array.isArray(value.archive);
     }
 
     private isStringRecord(value: unknown): value is Record<string, string> {

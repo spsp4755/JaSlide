@@ -159,4 +159,79 @@ describe('GenerationService cancellation', () => {
         expect(defaultLayoutForSlideType('TWO_COLUMN')).toBe('two-column');
         expect(defaultLayoutForSlideType('CONTENT')).toBe('center');
     });
+
+    it('persists HTML generated from the template selected by the outline', async () => {
+        const createdSlide = { id: 'slide-1' };
+        const pipelinePrisma = {
+            generationJob: {
+                findUnique: jest.fn()
+                    .mockResolvedValueOnce({
+                        id: 'job-html', status: 'QUEUED', presentationId: 'presentation-html', input: {
+                            content: 'AI 보안 대응 전략', slideCount: 1, language: 'ko', templateId: 'template-html',
+                        },
+                    })
+                    .mockResolvedValueOnce({ status: 'GENERATING_CONTENT' }),
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+                update: jest.fn(),
+            },
+            template: {
+                findUnique: jest.fn().mockResolvedValue({
+                    config: { htmlSlides: ['<main class="slide-container"><h1>원본 제목</h1></main>'] },
+                }),
+            },
+            slide: { deleteMany: jest.fn(), create: jest.fn().mockResolvedValue(createdSlide) },
+            presentation: { update: jest.fn() },
+            $transaction: jest.fn().mockResolvedValue([]),
+        };
+        const llm = {
+            detectLanguage: jest.fn().mockResolvedValue('ko'),
+            generateOutline: jest.fn().mockResolvedValue({
+                title: 'AI 보안 대응 전략',
+                slides: [{ title: '위협 모델', type: 'CONTENT', keyPoints: ['공격 표면'], templateIndex: 0 }],
+            }),
+            generateSlideContent: jest.fn().mockResolvedValue({ body: '구조화된 보조 콘텐츠' }),
+            generateSlideHtml: jest.fn().mockResolvedValue('<main class="slide-container"><h1>AI 위협 모델</h1></main>'),
+        };
+        const svc = new GenerationService(pipelinePrisma as any, llm as any, {} as any);
+
+        await svc.processGeneration('job-html');
+
+        expect(llm.generateSlideHtml).toHaveBeenCalledWith(expect.objectContaining({
+            templateHtml: '<main class="slide-container"><h1>원본 제목</h1></main>',
+            title: '위협 모델',
+        }));
+        expect(pipelinePrisma.slide.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                content: expect.objectContaining({
+                    html: '<main class="slide-container"><h1>AI 위협 모델</h1></main>',
+                    templateIndex: 0,
+                }),
+            }),
+        }));
+    });
+
+    it('uses the HTML edit path and retains the slide metadata', async () => {
+        const updated = { id: 'slide-html' };
+        const editPrisma = {
+            slide: {
+                findUnique: jest.fn().mockResolvedValue({
+                    id: 'slide-html', type: 'CONTENT', content: { html: '<main>before</main>', templateIndex: 3 },
+                    presentation: { userId: 'user-1' },
+                }),
+                update: jest.fn().mockResolvedValue(updated),
+            },
+        };
+        const llm = { editSlideHtml: jest.fn().mockResolvedValue('<main>after</main>') };
+        const svc = new GenerationService(editPrisma as any, llm as any, {} as any);
+
+        await expect(svc.aiEdit('user-1', { slideId: 'slide-html', instruction: '제목을 바꿔줘' } as any)).resolves.toEqual({
+            success: true, slide: updated, slides: [updated],
+        });
+
+        expect(llm.editSlideHtml).toHaveBeenCalledWith('<main>before</main>', '제목을 바꿔줘', undefined);
+        expect(editPrisma.slide.update).toHaveBeenCalledWith({
+            where: { id: 'slide-html' },
+            data: { content: { html: '<main>after</main>', templateIndex: 3 } },
+        });
+    });
 });

@@ -21,6 +21,9 @@ WORKDIR /app/apps/renderer
 # Install Python dependencies
 RUN pip install --no-cache-dir .
 
+# Chromium is the render engine for uploaded HTML templates.
+RUN python -m playwright install --with-deps chromium
+
 EXPOSE 8000
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

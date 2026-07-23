@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GenerateOutlineInput, GenerateSlideContentInput } from './llm.service';
+import { GenerateOutlineInput, GenerateSlideContentInput, GenerateSlideHtmlInput } from './llm.service';
 
 @Injectable()
 export class PromptTemplateService {
@@ -50,6 +50,29 @@ Return JSON only:
   "body": "Short explanatory paragraph",
   "bullets": [{ "text": "Concrete bullet", "level": 0 }]${chartField}
 }`;
+    }
+
+    getSlideHtmlPrompt(input: GenerateSlideHtmlInput): string {
+        const language = input.language === 'ko' ? 'Write Korean text.' : 'Write English text.';
+        return `Rewrite this complete HTML presentation slide for the requested content. ${language}
+Keep the same DOM structure, classes, inline styles, positions, colors, and data-object attributes. Change only human-readable text; do not add markdown.
+Title: ${input.title}
+Key points: ${input.keyPoints.join('; ')}
+Template HTML:
+---
+${input.templateHtml}
+---
+Return JSON only: {"html":"complete HTML slide"}`;
+    }
+
+    getSlideHtmlEditPrompt(html: string, instruction: string): string {
+        return `Edit this complete HTML presentation slide. Keep all structure, classes, inline styles, positions, and data-object attributes unchanged; alter only human-readable text.
+Instruction: ${instruction}
+HTML:
+---
+${html}
+---
+Return JSON only: {"html":"complete HTML slide"}`;
     }
 
     private getTypeInstructions(type: string): string {

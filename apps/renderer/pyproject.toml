@@ -10,6 +10,7 @@ dependencies = [
     "python-pptx>=0.6.21",
     "pydantic>=2.5.0",
     "python-multipart>=0.0.6",
+    "playwright>=1.52.0",
 ]
 
 [project.optional-dependencies]

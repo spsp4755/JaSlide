@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-release_version="${1:-v0.3.0}"
+release_version="${1:-v0.4.0}"
 web_api_url="${NEXT_PUBLIC_API_URL:-/api}"
 output_dir="${OUTPUT_DIR:-dist/release}"
 

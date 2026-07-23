@@ -14,6 +14,7 @@ from pptx.enum.chart import XL_CHART_TYPE
 from io import BytesIO
 from typing import Optional, Any
 from ..services.html_template import extract_html_template_style, parse_html_layout, parse_html_objects
+from ..services.html_renderer import render_slide_png
 
 
 class PPTXGenerator:
@@ -131,6 +132,10 @@ class PPTXGenerator:
 
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""
+        content = self._as_dict(getattr(slide_data, "content", {}))
+        if isinstance(content.get("html"), str) and content["html"].strip():
+            self._add_html_image_slide(content["html"])
+            return
         if self.html_slides:
             selected_index = self._template_index(slide_data, template_index, total_slides)
             objects = parse_html_objects(self.html_slides[selected_index])
@@ -158,6 +163,10 @@ class PPTXGenerator:
             self._add_section_header_slide(slide_data)
         else:
             self._add_content_slide(slide_data)
+
+    def _add_html_image_slide(self, html: str) -> None:
+        slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
+        slide.shapes.add_picture(BytesIO(render_slide_png(html)), 0, 0, self.SLIDE_WIDTH, self.SLIDE_HEIGHT)
 
     def _add_html_template_slide(self, slide_data: Any, selected_index: int, objects: list[dict]):
         slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])

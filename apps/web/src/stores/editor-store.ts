@@ -103,16 +103,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     isLoadingVersions: false,
 
     setPresentation: (presentation) => {
-        set({
+        set((state) => ({
             presentation,
-            selectedSlideId: presentation.slides[0]?.id || null,
+            selectedSlideId: presentation.slides.some((slide) => slide.id === state.selectedSlideId)
+                ? state.selectedSlideId
+                : presentation.slides[0]?.id || null,
             selectedBlockId: null,
             isDirty: false,
             undoStack: [],
             redoStack: [],
             canUndo: false,
             canRedo: false,
-        });
+        }));
     },
 
     setSelectedSlide: (slideId) => {

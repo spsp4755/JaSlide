@@ -268,4 +268,14 @@ describe('LlmService contracts', () => {
 
         expect(create.mock.calls[0][0]).toMatchObject({ max_tokens: 8192 });
     });
+
+    it('generates a complete HTML slide while preserving the template markup contract', async () => {
+        const html = '<div class="slide-container"><main data-object="true">AI 보안</main></div>';
+        await createService([JSON.stringify({ html })]);
+
+        await expect(service.generateSlideHtml({
+            templateHtml: '<div class="slide-container"><main data-object="true">Template</main></div>',
+            title: 'AI 보안', type: 'CONTENT', keyPoints: ['위협을 식별한다'], language: 'ko',
+        })).resolves.toBe(html);
+    });
 });
