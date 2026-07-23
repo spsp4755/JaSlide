@@ -107,22 +107,23 @@ def pptx_to_html(content: bytes) -> dict:
             width = _px(shape.width, presentation.slide_width, CANVAS_WIDTH)
             height = _px(shape.height, presentation.slide_height, CANVAS_HEIGHT)
             position = f"position:absolute;left:{left}px;top:{top}px;width:{width}px;height:{height}px"
+            source_object = {"id": str(shape.shape_id), "left": left, "top": top, "width": width, "height": height}
             if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                source_objects.append({"id": str(shape.shape_id), "kind": "image"})
+                source_objects.append({**source_object, "kind": "image"})
                 image = shape.image
                 encoded = base64.b64encode(image.blob).decode("ascii")
                 objects.append(f'<img data-object="true" data-object-type="image" src="data:{image.content_type};base64,{encoded}" style="{position}">')
             elif getattr(shape, "has_table", False):
-                source_objects.append({"id": str(shape.shape_id), "kind": "table"})
+                source_objects.append({**source_object, "kind": "table"})
                 objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape)}</div>')
             elif getattr(shape, "has_text_frame", False) and shape.text.strip():
-                source_objects.append({"id": str(shape.shape_id), "kind": "text"})
+                source_objects.append({**source_object, "kind": "text"})
                 text, font_size, color = _text_html(shape)
                 fill = _color(getattr(shape, "fill", None))
                 surface = f"background:{fill};" if fill else ""
                 objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
             else:
-                source_objects.append({"id": str(shape.shape_id), "kind": "shape"})
+                source_objects.append({**source_object, "kind": "shape"})
                 fill = _color(getattr(shape, "fill", None))
                 surface = f"background:{fill};" if fill else "background:transparent;"
                 objects.append(f'<div data-object="true" data-object-type="shape" style="{position};box-sizing:border-box;{surface}{_line_style(shape)}"></div>')

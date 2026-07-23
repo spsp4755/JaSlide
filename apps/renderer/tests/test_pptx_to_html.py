@@ -63,6 +63,7 @@ def test_converts_tables_without_assuming_a_shape_fill():
     assert result["source"]["kind"] == "pptx"
     assert result["source"]["slides"][0]["objects"][0]["kind"] == "table"
     assert result["source"]["slides"][0]["objects"][0]["id"]
+    assert result["source"]["slides"][0]["objects"][0]["left"] == 192
 
 
 def test_preserves_table_cell_dimensions_and_formatting():
