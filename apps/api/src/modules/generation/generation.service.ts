@@ -18,6 +18,15 @@ export function preservesTemplateStructure(template: string, candidate: string):
         && count(candidate, /data-object\s*=\s*["']true["']/gi) >= count(template, /data-object\s*=\s*["']true["']/gi);
 }
 
+export function populatePptxTableCells(cells: unknown, values: string[]): string[][] {
+    if (!Array.isArray(cells)) return [];
+    const replacements = values.filter(Boolean);
+    return cells.map((row) => Array.isArray(row) ? row.map((cell) => {
+        if (typeof cell === 'string' && cell.trim()) return cell;
+        return replacements.shift() || '';
+    }) : []);
+}
+
 @Injectable()
 export class GenerationService implements OnModuleInit {
     private readonly logger = new Logger(GenerationService.name);
@@ -263,9 +272,7 @@ export class GenerationService implements OnModuleInit {
                     .filter((item: any) => item.kind === 'text')
                     .map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : content.body || slideOutline.keyPoints.join('\n') }))
                     : [];
-                if (pptxSource) {
-                    objectEdits.push(...objects.filter((item: any) => item.kind === 'table').map((item: any) => ({ objectId: item.id, slide: templateIndex, cells: [[slideOutline.title], [content.body || slideOutline.keyPoints.join('\n')]] })));
-                }
+                if (pptxSource) objectEdits.push(...objects.filter((item: any) => item.kind === 'table').map((item: any) => ({ objectId: item.id, slide: templateIndex, cells: populatePptxTableCells(item.cells, [slideOutline.title, content.body || '', ...slideOutline.keyPoints]) })));
                 if (html && !pptxSource) {
                     try {
                         const generatedHtml = await this.llmService.generateSlideHtml({

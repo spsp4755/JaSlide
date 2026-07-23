@@ -4,7 +4,7 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class LlmService {} }));
 jest.mock('../queue/queue.service', () => ({ QueueService: class QueueService {} }));
 
 import { GenerationService } from './generation.service';
-import { defaultLayoutForSlideType, preservesTemplateStructure } from './generation.service';
+import { defaultLayoutForSlideType, populatePptxTableCells, preservesTemplateStructure } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
@@ -323,5 +323,12 @@ describe('GenerationService cancellation', () => {
         const llm = { generateOutline: jest.fn().mockResolvedValue({ title: 'Weekly', slides: [{ title: 'Status', type: 'CONTENT', keyPoints: ['Done'] }] }), generateSlideContent: jest.fn().mockResolvedValue({ heading: 'Status', body: 'Done' }) };
         await new GenerationService(pipelinePrisma as any, llm as any, {} as any).processGeneration('job-pptx');
         expect(pipelinePrisma.slide.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ content: expect.objectContaining({ objectEdits: expect.arrayContaining([expect.objectContaining({ objectId: '7', text: 'Status' })]) }) }) }));
+    });
+});
+
+describe('populatePptxTableCells', () => {
+    it('keeps template labels and fills only blank cells', () => {
+        expect(populatePptxTableCells([['KPI', ''], ['Owner', '']], ['Status', 'Done']))
+            .toEqual([['KPI', 'Status'], ['Owner', 'Done']]);
     });
 });
