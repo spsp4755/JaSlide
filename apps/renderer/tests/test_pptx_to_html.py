@@ -64,6 +64,7 @@ def test_converts_tables_without_assuming_a_shape_fill():
     assert result["source"]["slides"][0]["objects"][0]["kind"] == "table"
     assert result["source"]["slides"][0]["objects"][0]["id"]
     assert result["source"]["slides"][0]["objects"][0]["left"] == 192
+    assert result["source"]["slides"][0]["objects"][0]["cells"] == [["Header", ""], ["", "Value"]]
 
 
 def test_preserves_table_cell_dimensions_and_formatting():

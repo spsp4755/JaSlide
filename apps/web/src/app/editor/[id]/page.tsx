@@ -1206,7 +1206,7 @@ export default function EditorPage() {
                                 {selectedNativeObject ? <div className="space-y-3">
                                     <label className="block text-xs font-medium text-gray-600">{selectedNativeObject.kind === 'table' ? '표 내용 (줄마다 첫 번째 열)' : '텍스트'}</label>
                                     <textarea
-                                        value={selectedNativeObject.kind === 'table' ? ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || []).map((row: string[]) => row.join(' | ')).join('\n') : ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.text ?? '')}
+                                        value={selectedNativeObject.kind === 'table' ? ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || selectedNativeObject.cells || []).map((row: string[]) => row.join(' | ')).join('\n') : ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.text ?? selectedNativeObject.text ?? '')}
                                         rows={selectedNativeObject.kind === 'table' ? 6 : 4}
                                         onChange={(event) => updateNativeObject(selectedNativeObject.id, selectedNativeObject.kind === 'table' ? { cells: event.target.value.split('\n').map((row) => row.split('|').map((cell) => cell.trim())) } : { text: event.target.value })}
                                         className="w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"

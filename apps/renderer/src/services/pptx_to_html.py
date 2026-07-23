@@ -114,11 +114,11 @@ def pptx_to_html(content: bytes) -> dict:
                 encoded = base64.b64encode(image.blob).decode("ascii")
                 objects.append(f'<img data-object="true" data-object-type="image" src="data:{image.content_type};base64,{encoded}" style="{position}">')
             elif getattr(shape, "has_table", False):
-                source_objects.append({**source_object, "kind": "table"})
+                source_objects.append({**source_object, "kind": "table", "cells": [[cell.text for cell in row.cells] for row in shape.table.rows]})
                 objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape)}</div>')
             elif getattr(shape, "has_text_frame", False) and shape.text.strip():
-                source_objects.append({**source_object, "kind": "text"})
                 text, font_size, color = _text_html(shape)
+                source_objects.append({**source_object, "kind": "text", "text": shape.text})
                 fill = _color(getattr(shape, "fill", None))
                 surface = f"background:{fill};" if fill else ""
                 objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
