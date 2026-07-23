@@ -237,6 +237,10 @@ export class GenerationService implements OnModuleInit {
 
             await this.updateJobStatus(jobId, 'GENERATING_CONTENT', 30);
             const htmlTemplates = await this.templateHtmlSlides(input.templateId);
+            const templateConfig = input.templateId
+                ? (await this.prisma.template.findUnique({ where: { id: input.templateId }, select: { config: true } }))?.config as any
+                : null;
+            const pptxSource = templateConfig?.source?.kind === 'pptx' ? templateConfig.source : null;
 
             // Generate content for each slide
             const slides = [];
@@ -254,7 +258,12 @@ export class GenerationService implements OnModuleInit {
                     ? (htmlTemplates[requestedTemplateIndex] ? requestedTemplateIndex : i % htmlTemplates.length)
                     : -1;
                 let html = templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
-                if (html) {
+                const objects = pptxSource?.slides?.[templateIndex]?.objects || [];
+                const objectEdits = pptxSource ? objects
+                    .filter((item: any) => item.kind === 'text')
+                    .map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : content.body || slideOutline.keyPoints.join('\n') }))
+                    : [];
+                if (html && !pptxSource) {
                     try {
                         const generatedHtml = await this.llmService.generateSlideHtml({
                             templateHtml: htmlTemplates[templateIndex], title: slideOutline.title,
@@ -272,7 +281,7 @@ export class GenerationService implements OnModuleInit {
                     order: i,
                     type: slideOutline.type as any,
                     title: slideOutline.title,
-                    content: { ...content, ...(html ? { html } : {}), ...(templateIndex >= 0 ? { templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
+                    content: { ...content, ...(html ? { html } : {}), ...(objectEdits.length ? { objectEdits } : {}), ...(templateIndex >= 0 ? { templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
                     layout: defaultLayoutForSlideType(slideOutline.type),
                 });
 
