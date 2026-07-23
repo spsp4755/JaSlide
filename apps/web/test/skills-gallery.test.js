@@ -33,5 +33,5 @@ test('dashboard passes the selected Skill to generation', () => {
 
     assert.match(dashboard, /skillsApi\.list\(\)/);
     assert.match(dashboard, /searchParams\.get\('skillId'\)/);
-    assert.match(dashboard, /skillId:\s*selectedSkillId/);
+    assert.match(dashboard, /skillId:\s*outlineContext\?\.skillId \?\? selectedSkillId/);
 });

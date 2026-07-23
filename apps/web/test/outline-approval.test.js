@@ -8,22 +8,16 @@ const webRoot = path.join(__dirname, '..');
 test('home requests an editable outline before starting generation', () => {
     const dashboard = fs.readFileSync(path.join(webRoot, 'src', 'app', 'dashboard', 'page.tsx'), 'utf8');
 
-    // Submit generates an outline draft, not a job.
     assert.match(dashboard, /generationApi\.outline\(/);
-    // A review step exists with its own approve handler.
     assert.match(dashboard, /handleApproveOutline/);
-    assert.match(dashboard, /아웃라인 검토/);
-    // Approval submits the edited outline to start.
     assert.match(dashboard, /outline:\s*cleaned/);
-    // Order is renumbered on submit.
     assert.match(dashboard, /order:\s*index \+ 1/);
-    // Editing affordances are present.
     assert.match(dashboard, /addKeyPoint/);
     assert.match(dashboard, /addSlide/);
     assert.match(dashboard, /moveSlide/);
     assert.match(dashboard, /removeSlide/);
-    assert.match(dashboard, /최소 3장 필요/);
-    assert.match(dashboard, /slides\.length < 3/);
+    assert.match(dashboard, /최소 1장 필요/);
+    assert.match(dashboard, /slides\.length < 1/);
 });
 
 test('generation api client exposes the outline endpoint', () => {

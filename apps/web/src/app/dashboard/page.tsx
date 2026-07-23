@@ -81,6 +81,7 @@ function DashboardContent() {
     const [outlineLoading, setOutlineLoading] = useState(false);
     const [outline, setOutline] = useState<Outline | null>(null);
     const [pendingContent, setPendingContent] = useState('');
+    const [outlineContext, setOutlineContext] = useState<{ skillId: string | null; templateId: string | null } | null>(null);
 
     useEffect(() => {
         if (!hasHydrated) return;
@@ -163,11 +164,13 @@ function DashboardContent() {
 
     const handleGenerate = async () => {
         let generationSkillId = selectedSkillId;
+        let generationTemplateId = selectedTemplateId;
         let sourceFile = uploadedFile;
         if (uploadedFile?.name.toLowerCase().endsWith('.pptx') && pptxMode === 'skill') {
             const importedSkill = await handleImportSkill();
             if (!importedSkill) return;
             generationSkillId = importedSkill.id;
+            generationTemplateId = selectedTemplateId ?? importedSkill.templateId ?? null;
             if (textContent.trim()) sourceFile = null;
         }
         if (!textContent.trim() && !sourceFile) {
@@ -187,7 +190,7 @@ function DashboardContent() {
                 ...(slideCount ? { slideCount } : {}),
                 language,
                 skillId: generationSkillId,
-                templateId: selectedTemplateId,
+                templateId: generationTemplateId,
                 options: {
                     includeImages,
                     includeCharts,
@@ -196,6 +199,7 @@ function DashboardContent() {
                     purpose: 'general',
                 },
             });
+            setOutlineContext({ skillId: generationSkillId, templateId: generationTemplateId });
             setOutline(response.data);
         } catch (error: any) {
             toast({
@@ -219,7 +223,7 @@ function DashboardContent() {
                 keyPoints: slide.keyPoints.map((point) => point.trim()).filter(Boolean),
             }))
             .filter((slide) => slide.title && slide.keyPoints.length > 0);
-        if (slides.length < 3) {
+        if (slides.length < 1) {
             toast({ title: '오류', description: '제목과 요점이 있는 슬라이드가 최소 하나는 필요합니다.', variant: 'destructive' });
             return;
         }
@@ -234,8 +238,8 @@ function DashboardContent() {
                 content: pendingContent,
                 slideCount: slides.length,
                 language,
-                templateId: selectedTemplateId,
-                skillId: selectedSkillId,
+                templateId: outlineContext?.templateId ?? selectedTemplateId,
+                skillId: outlineContext?.skillId ?? selectedSkillId,
                 options: {
                     includeImages,
                     includeCharts,
@@ -246,6 +250,7 @@ function DashboardContent() {
                 outline: cleaned,
             });
             setOutline(null);
+            setOutlineContext(null);
             setJobId(response.data.jobId);
             pollJobStatus(response.data.jobId, response.data.presentationId);
         } catch (error: any) {
@@ -375,7 +380,7 @@ function DashboardContent() {
                             <h2 className="font-display text-2xl font-bold text-foreground mb-1">아웃라인 검토</h2>
                             <p className="text-sm text-muted-foreground mb-6">제목과 순서, 핵심 요점을 확인하고 수정한 뒤 생성하세요.</p>
                             <div className="mb-6 flex items-center justify-end">
-                                <span className="text-sm text-muted-foreground">최소 3장 필요 · 현재 {validSlideCount}장</span>
+                                <span className="text-sm text-muted-foreground">최소 1장 필요 · 현재 {validSlideCount}장</span>
                             </div>
                             <input
                                 value={outline.title}
@@ -488,7 +493,7 @@ function DashboardContent() {
                                                 </label>
                                             </div>
                                             <input
-                                                type="range" min={3} max={30} value={optionSlideCount}
+                                                type="range" min={1} max={30} value={optionSlideCount}
                                                 onChange={(e) => setSlideCount(Number(e.target.value))}
                                                 className="w-full accent-foreground"
                                             />

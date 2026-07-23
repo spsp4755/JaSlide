@@ -91,9 +91,9 @@ export class GenerateOutlineDto {
     @IsString()
     content: string;
 
-    @ApiPropertyOptional({ example: 10, minimum: 3, maximum: 30 })
+    @ApiPropertyOptional({ example: 10, minimum: 1, maximum: 30 })
     @IsInt()
-    @Min(3)
+    @Min(1)
     @Max(30)
     @IsOptional()
     slideCount?: number;
@@ -133,9 +133,9 @@ export class StartGenerationDto {
     @IsString()
     content: string;
 
-    @ApiProperty({ example: 10, minimum: 3, maximum: 30 })
+    @ApiProperty({ example: 10, minimum: 1, maximum: 30 })
     @IsInt()
-    @Min(3)
+    @Min(1)
     @Max(30)
     slideCount: number;
 

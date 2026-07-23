@@ -17,4 +17,6 @@ test('home accepts PPTX uploads and exposes the upload mode', () => {
     assert.match(source, /setPptxMode\('skill'\)/);
     assert.match(source, /const importedSkill = await handleImportSkill\(\)/);
     assert.match(source, /skillId: generationSkillId/);
+    assert.match(source, /setOutlineContext\(\{ skillId: generationSkillId, templateId: generationTemplateId \}\)/);
+    assert.match(source, /templateId: outlineContext\?\.templateId \?\? selectedTemplateId/);
 });

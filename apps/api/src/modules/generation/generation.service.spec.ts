@@ -167,6 +167,18 @@ describe('GenerationService cancellation', () => {
         expect(llm.generateOutline).toHaveBeenCalledWith(expect.objectContaining({ slideCount: 4 }));
     });
 
+    it('allows a one-slide automatic outline for a short prompt', async () => {
+        const llm = {
+            detectLanguage: jest.fn().mockResolvedValue('ko'),
+            generateOutline: jest.fn().mockResolvedValue({ title: 'T', slides: [] }),
+        };
+        const svc = new GenerationService(prisma as any, llm as any, {} as any);
+
+        await svc.generateOutline({ id: 'user-1' }, { content: 'weekly report' } as any);
+
+        expect(llm.generateOutline).toHaveBeenCalledWith(expect.objectContaining({ slideCount: 1 }));
+    });
+
     it('uses a deterministic layout instead of a second LLM call per slide', () => {
         expect(defaultLayoutForSlideType('TWO_COLUMN')).toBe('two-column');
         expect(defaultLayoutForSlideType('CONTENT')).toBe('center');

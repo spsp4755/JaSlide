@@ -85,7 +85,7 @@ export class GenerationService implements OnModuleInit {
 
     private automaticSlideCount(content: string): number {
         // ponytail: length heuristic; add an LLM planning pass only if content structure needs finer sizing.
-        return Math.min(30, Math.max(3, Math.ceil(content.replace(/\s/g, '').length / 350)));
+        return Math.min(30, Math.max(1, Math.ceil(content.replace(/\s/g, '').length / 350)));
     }
 
     // Reused outline generation shared by the outline endpoint and (implicitly) the pipeline.
