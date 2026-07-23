@@ -10,8 +10,11 @@ test('home accepts PPTX uploads and exposes the upload mode', () => {
     assert.match(source, /presentationml\.presentation/);
     assert.match(source, /내용으로 사용/);
     assert.match(source, /Skill\/템플릿으로 등록/);
-    assert.match(source, /generationApi\.extractSource\(uploadedFile\)/);
+    assert.match(source, /generationApi\.extractSource\(sourceFile\)/);
     assert.match(source, /sourceType:\s*'TEXT'/);
     assert.match(api, /extractSource:\s*async \(file: File\)/);
     assert.match(api, /generation\/source\/extract/);
+    assert.match(source, /setPptxMode\('skill'\)/);
+    assert.match(source, /const importedSkill = await handleImportSkill\(\)/);
+    assert.match(source, /skillId: generationSkillId/);
 });

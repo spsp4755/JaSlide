@@ -18,25 +18,30 @@ export class AdminTemplatesService {
         file: Express.Multer.File,
         data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },
     ) {
-        if (!file || !file.originalname.toLowerCase().endsWith('.pptx') ||
-            file.mimetype !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-            file.size > 20 * 1024 * 1024) {
+        if (!file || !file.originalname.toLowerCase().endsWith('.pptx') || !file.size || file.size > 20 * 1024 * 1024) {
             throw new BadRequestException('PPTX file up to 20MB required');
         }
 
         const form = new FormData();
-        form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
+        const pptxMime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        form.append('file', new Blob([new Uint8Array(file.buffer)], { type: pptxMime }), file.originalname);
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
         let response: { data?: { config?: unknown } };
         try {
-            response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 15000 });
-        } catch {
-            throw new BadRequestException('Failed to extract PPTX style');
+            response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 60000 });
+        } catch (error) {
+            const detail = axios.isAxiosError(error) ? error.response?.data?.detail : null;
+            throw new BadRequestException(typeof detail === 'string' ? detail : 'Failed to extract PPTX template');
         }
         if (!this.isTemplateConfig(response.data?.config)) {
             throw new BadRequestException('Invalid renderer template config');
         }
-        return this.create({ ...data, category: data.category || 'CUSTOM', config: response.data.config });
+        const uploaded = await this.storage.upload({ ...file, mimetype: pptxMime } as Express.Multer.File, 'templates');
+        return this.create({
+            ...data,
+            category: data.category || 'CUSTOM',
+            config: { ...(response.data.config as Record<string, unknown>), pptxTemplate: { storageKey: uploaded.key, originalname: file.originalname } },
+        });
     }
 
     async importHtmlZip(
@@ -170,6 +175,9 @@ export class AdminTemplatesService {
         }
 
         await this.prisma.template.delete({ where: { id } });
+        const config = template.config as Record<string, any> | null;
+        const storageKey = config?.pptxTemplate?.storageKey || config?.zipTemplate?.storageKey;
+        if (typeof storageKey === 'string') await this.storage.delete(storageKey).catch(() => undefined);
         return { success: true };
     }
 

@@ -14,4 +14,5 @@ test('HTML slides expose text-only editing without replacing the template markup
     assert.match(source, /cursor-se-resize/);
     assert.match(source, /selectedHtmlTextIndex === area\.index/);
     assert.match(source, /function getHtmlSelectionAreas/);
+    assert.doesNotMatch(source, /if \(previewUrl && content\.html\)/);
 });

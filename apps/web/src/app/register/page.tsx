@@ -52,7 +52,7 @@ export default function RegisterPage() {
             <div className="w-full max-w-sm">
                 <div className="text-center mb-10">
                     <h1 className="font-display text-4xl font-black tracking-tight text-foreground">
-                        JaSlide
+                        TaeSlide
                     </h1>
                     <p className="mt-3 text-muted-foreground">
                         계정을 만들고 바로 시작하세요.

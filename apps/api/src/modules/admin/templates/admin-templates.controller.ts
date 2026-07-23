@@ -30,11 +30,9 @@ export class AdminTemplatesController {
     @Post('import-pptx')
     @UseInterceptors(FileInterceptor('file', {
         limits: { fileSize: 20 * 1024 * 1024 },
-        fileFilter: (_request, file, callback) => callback(
-            null,
-            file.originalname.toLowerCase().endsWith('.pptx') &&
-            file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        ),
+        // Browsers and offline clients often send an empty or generic MIME type
+        // for .pptx files. The renderer validates the actual OOXML ZIP package.
+        fileFilter: (_request, file, callback) => callback(null, file.originalname.toLowerCase().endsWith('.pptx')),
     }))
     async importPptx(
         @UploadedFile() file: Express.Multer.File,

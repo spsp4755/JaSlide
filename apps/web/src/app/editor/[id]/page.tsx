@@ -39,6 +39,19 @@ import {
     FileText,
     FileSpreadsheet,
     Loader2,
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    ListOrdered,
+    Table2,
+    PanelLeftClose,
+    PanelLeftOpen,
+    PanelRightClose,
+    PanelRightOpen,
 } from 'lucide-react';
 
 // Slide type icons mapping
@@ -79,13 +92,19 @@ function resolveAiEditTargets(instruction: string, slides: Array<{ id: string }>
 }
 
 function htmlTextElements(document: Document): HTMLElement[] {
-    return Array.from(document.querySelectorAll<HTMLElement>('[data-object="true"]'))
-        .filter((element) => element.dataset.objectType !== 'shape')
+    const objectSelector = '[data-object="true"]';
+    const objects = Array.from(document.querySelectorAll<HTMLElement>(objectSelector))
         .flatMap((element) => {
+            if (element.dataset.objectType === 'shape' || element.dataset.objectType === 'image') return [element];
             const cells = Array.from(element.querySelectorAll<HTMLElement>('th, td')).filter((cell) => !!cell.textContent?.trim());
-            return cells.length ? cells : [element];
+            return element.dataset.objectType === 'table' ? [element, ...cells] : cells.length ? cells : [element];
         })
-        .filter((element) => !!element.textContent?.trim() && !element.querySelector('[data-object="true"]'));
+        .filter((element) => (element.dataset.objectType === 'shape' || element.dataset.objectType === 'image' || !!element.textContent?.trim()) && !element.querySelector('[data-object="true"]'));
+    const editableTextSelector = 'h1,h2,h3,h4,h5,h6,p,li,th,td,span,div';
+    const generatedText = Array.from(document.querySelectorAll<HTMLElement>(editableTextSelector))
+        .filter((element) => !element.closest(objectSelector) && !!element.textContent?.trim())
+        .filter((element) => !element.querySelector(editableTextSelector));
+    return [...objects, ...generatedText];
 }
 
 function getHtmlTextFields(html: string) {
@@ -96,26 +115,26 @@ function getHtmlTextFields(html: string) {
         width: element.style.width || '640',
         height: element.style.height || element.style.minHeight || '64',
         positionable: element.dataset.object === 'true',
+        generated: element.dataset.object !== 'true',
+        objectType: element.dataset.objectType || 'textbox',
+        fontFamily: element.style.fontFamily || '', fontSize: element.style.fontSize || '24', color: element.style.color || '#1A1A1A',
+        backgroundColor: element.style.backgroundColor || '#ffffff', borderColor: element.style.borderColor || '#000000',
+        borderWidth: element.style.borderWidth || '0', textAlign: element.style.textAlign || 'left',
+        fontWeight: element.style.fontWeight || '400', fontStyle: element.style.fontStyle || 'normal', textDecoration: element.style.textDecoration || 'none',
     }));
 }
 
 function getHtmlSelectionAreas(html: string) {
     const document = new DOMParser().parseFromString(html, 'text/html');
     const fields = htmlTextElements(document);
-    return Array.from(document.querySelectorAll<HTMLElement>('[data-object="true"]'))
-        .filter((element) => element.dataset.objectType !== 'shape' && !!element.textContent?.trim())
-        .map((element) => {
-            const target = element.querySelector<HTMLElement>('th, td') || element;
-            return {
-                index: fields.indexOf(target),
-                left: element.style.left || '0', top: element.style.top || '0',
-                width: element.style.width || '0', height: element.style.height || '0',
-            };
-        })
-        .filter((area) => area.index >= 0);
+    return fields.map((element, index) => ({
+        index,
+        left: element.style.left || '0', top: element.style.top || '0',
+        width: element.style.width || '0', height: element.style.height || '0',
+    })).filter((area) => fields[area.index].dataset.object === 'true');
 }
 
-function updateHtmlText(html: string, index: number, updates: { text?: string; left?: string; top?: string; width?: string; height?: string }): string {
+function updateHtmlObject(html: string, index: number, updates: Record<string, string | undefined>): string {
     const document = new DOMParser().parseFromString(html, 'text/html');
     const element = htmlTextElements(document)[index];
     if (!element) return html;
@@ -126,7 +145,34 @@ function updateHtmlText(html: string, index: number, updates: { text?: string; l
     if (updates.top !== undefined) element.style.top = `${updates.top}px`;
     if (updates.width !== undefined) element.style.width = `${updates.width}px`;
     if (updates.height !== undefined) element.style.height = `${updates.height}px`;
+    if (updates.fontFamily !== undefined) element.style.fontFamily = updates.fontFamily;
+    if (updates.fontSize !== undefined) {
+        const size = `${Math.max(1, Number(updates.fontSize) || 24)}px`;
+        element.style.setProperty('font-size', size, 'important');
+        element.querySelectorAll<HTMLElement>('*').forEach((child) => child.style.setProperty('font-size', size, 'important'));
+    }
+    if (updates.color !== undefined) element.style.color = updates.color;
+    if (updates.backgroundColor !== undefined) element.style.backgroundColor = updates.backgroundColor;
+    if (updates.borderColor !== undefined) element.style.borderColor = updates.borderColor;
+    if (updates.borderWidth !== undefined) { element.style.borderStyle = 'solid'; element.style.borderWidth = `${updates.borderWidth}px`; }
+    if (updates.textAlign !== undefined) element.style.textAlign = updates.textAlign;
+    if (updates.fontWeight !== undefined) element.style.fontWeight = updates.fontWeight;
+    if (updates.fontStyle !== undefined) element.style.fontStyle = updates.fontStyle;
+    if (updates.textDecoration !== undefined) element.style.textDecoration = updates.textDecoration;
+    if (updates.listStyleType !== undefined) element.style.listStyleType = updates.listStyleType;
     return document.documentElement.outerHTML;
+}
+
+function updateHtmlText(html: string, index: number, updates: Record<string, string | undefined>): string { return updateHtmlObject(html, index, updates); }
+
+function editorFrameHtml(html: string): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    document.querySelectorAll('script, iframe, object, embed').forEach((element) => element.remove());
+    htmlTextElements(document).forEach((element, index) => element.dataset.taeslideEditorIndex = String(index));
+    document.querySelectorAll<HTMLElement>('*').forEach((element) => {
+        for (const attribute of [...element.attributes]) if (attribute.name.startsWith('on')) element.removeAttribute(attribute.name);
+    });
+    return `<!doctype html>${document.documentElement.outerHTML}`;
 }
 
 function addHtmlText(html: string): string {
@@ -138,6 +184,153 @@ function addHtmlText(html: string): string {
     element.style.cssText = 'position:absolute;left:120px;top:120px;width:640px;min-height:64px;font-size:32px;color:#1A1A1A;z-index:100';
     element.textContent = '새 텍스트';
     container.append(element);
+    return document.documentElement.outerHTML;
+}
+
+const EDITOR_COLORS = ['#111827', '#374151', '#6B7280', '#FFFFFF', '#DC2626', '#EA580C', '#D97706', '#16A34A', '#2563EB', '#4F46E5', '#9333EA', '#DB2777'];
+const ALL_SHAPE_GROUPS = [
+    ['기본 도형', [['rectangle', '사각형'], ['rounded', '둥근 사각형'], ['round1Rectangle', '한쪽 둥근 사각형'], ['round2DiagonalRectangle', '대각 둥근 사각형'], ['round2SameRectangle', '양쪽 둥근 사각형'], ['snip1Rectangle', '한쪽 잘린 사각형'], ['snip2DiagonalRectangle', '대각 잘린 사각형'], ['snip2SameRectangle', '양쪽 잘린 사각형'], ['snipRoundRectangle', '잘린 둥근 사각형'], ['ellipse', '타원'], ['arc', '호'], ['blockArc', '블록 호'], ['triangle', '삼각형'], ['rightTriangle', '직각 삼각형'], ['diamond', '마름모'], ['trapezoid', '사다리꼴'], ['parallelogram', '평행사변형'], ['pentagon', '오각형'], ['hexagon', '육각형'], ['heptagon', '칠각형'], ['octagon', '팔각형'], ['decagon', '십각형'], ['dodecagon', '십이각형'], ['donut', '도넛'], ['pie', '파이'], ['chord', '현'], ['plaque', '명판'], ['bevel', '베벨'], ['can', '원통'], ['cube', '큐브'], ['frame', '프레임'], ['halfFrame', '반 프레임'], ['foldedCorner', '접힌 모서리'], ['corner', '모서리']]],
+    ['화살표', [['arrow', '오른쪽 화살표'], ['leftArrow', '왼쪽 화살표'], ['upArrow', '위 화살표'], ['downArrow', '아래 화살표'], ['leftRightArrow', '양방향 화살표'], ['leftRightUpArrow', '좌우 위 화살표'], ['leftUpArrow', '왼쪽 위 화살표'], ['upDownArrow', '상하 화살표'], ['quadArrow', '사방 화살표'], ['bentArrow', '꺾인 화살표'], ['bentUpArrow', '위로 꺾인 화살표'], ['uturnArrow', 'U턴 화살표'], ['curvedLeftArrow', '곡선 왼쪽 화살표'], ['curvedRightArrow', '곡선 오른쪽 화살표'], ['curvedUpArrow', '곡선 위 화살표'], ['curvedDownArrow', '곡선 아래 화살표'], ['notchedRightArrow', '홈 화살표'], ['stripedRightArrow', '줄무늬 화살표'], ['arrowEast', '동쪽 화살표'], ['arrowNorthEast', '북동 화살표'], ['arrowNorth', '북쪽 화살표'], ['downArrowCallout', '아래 화살표 설명선'], ['leftArrowCallout', '왼쪽 화살표 설명선'], ['leftRightArrowCallout', '양방향 화살표 설명선'], ['quadArrowCallout', '사방 화살표 설명선'], ['rightArrowCallout', '오른쪽 화살표 설명선'], ['upArrowCallout', '위 화살표 설명선']]],
+    ['설명·기호', [['cloud', '구름'], ['cloudCallout', '구름 설명선'], ['heart', '하트'], ['smileyFace', '스마일'], ['sun', '태양'], ['moon', '달'], ['lightningBolt', '번개'], ['star4', '4각 별'], ['star5', '5각 별'], ['star6', '6각 별'], ['star7', '7각 별'], ['star8', '8각 별'], ['star10', '10각 별'], ['star12', '12각 별'], ['star16', '16각 별'], ['star24', '24각 별'], ['star32', '32각 별'], ['irregularSeal1', '불규칙 인장 1'], ['irregularSeal2', '불규칙 인장 2'], ['starburst', '별 폭발'], ['speech', '말풍선'], ['wedgeRectangleCallout', '사각 말풍선'], ['wedgeRoundRectangleCallout', '둥근 말풍선'], ['wedgeEllipseCallout', '타원 말풍선'], ['bracePair', '중괄호 쌍'], ['bracketPair', '대괄호 쌍'], ['leftBrace', '왼쪽 중괄호'], ['rightBrace', '오른쪽 중괄호'], ['leftBracket', '왼쪽 대괄호'], ['rightBracket', '오른쪽 대괄호'], ['horizontalScroll', '가로 스크롤'], ['verticalScroll', '세로 스크롤'], ['ellipseRibbon', '타원 리본'], ['ellipseRibbon2', '타원 리본 2']]],
+    ['순서도', [['flowChartProcess', '프로세스'], ['flowChartAlternateProcess', '대체 프로세스'], ['flowChartCollate', '수합'], ['flowChartDecision', '결정'], ['flowChartData', '데이터'], ['flowChartDocument', '문서'], ['flowChartMultidocument', '다중 문서'], ['flowChartExtract', '추출'], ['flowChartTerminator', '시작/끝'], ['flowChartPreparation', '준비'], ['flowChartManualInput', '수동 입력'], ['flowChartManualOperation', '수동 작업'], ['flowChartPredefinedProcess', '서브프로세스'], ['flowChartConnector', '커넥터'], ['flowChartOffpageConnector', '오프페이지 커넥터'], ['flowChartDelay', '지연'], ['flowChartDisplay', '표시'], ['flowChartMerge', '병합'], ['flowChartOr', 'OR'], ['flowChartSort', '정렬'], ['flowChartSummingJunction', '합류'], ['flowChartInternalStorage', '내부 저장소'], ['flowChartOnlineStorage', '온라인 저장소'], ['flowChartOfflineStorage', '오프라인 저장소'], ['flowChartMagneticDisk', '자기 디스크'], ['flowChartMagneticDrum', '자기 드럼'], ['flowChartMagneticTape', '자기 테이프'], ['flowChartPunchedCard', '천공 카드'], ['flowChartPunchedTape', '천공 테이프']]],
+    ['수식·기타', [['mathPlus', '더하기'], ['plus', '플러스'], ['mathMinus', '빼기'], ['mathMultiply', '곱하기'], ['mathDivide', '나누기'], ['mathEqual', '같음'], ['mathNotEqual', '같지 않음'], ['diagonalStripe', '대각선 띠'], ['homePlate', '홈 플레이트'], ['ribbon', '리본'], ['ribbon2', '리본 2'], ['wave', '물결'], ['doubleWave', '이중 물결'], ['teardrop', '물방울'], ['noSmoking', '금지'], ['custom', '사용자 정의']]],
+] as const;
+const SHAPE_GROUPS = ALL_SHAPE_GROUPS;
+const LINE_OPTIONS = [
+    ['straightLine', '직선'], ['arrowLine', '화살표 선'], ['doubleArrowLine', '양방향 화살표 선'],
+    ['elbowConnector', '꺾은 연결선'], ['bentConnector2', '꺾은 연결선 2'], ['bentConnector3', '꺾은 연결선 3'], ['bentConnector4', '꺾은 연결선 4'], ['bentConnector5', '꺾은 연결선 5'], ['elbowArrowConnector', '꺾은 화살표 연결선'],
+    ['curvedConnector2', '곡선 연결선 2'], ['curvedConnector3', '곡선 연결선 3'], ['curvedConnector4', '곡선 연결선 4'], ['curvedConnector5', '곡선 연결선 5'], ['curvedArrowConnector', '곡선 화살표 연결선'],
+    ['dashedLine', '점선'], ['dottedLine', '점선(원형)'],
+] as const;
+
+function shapeStyle(kind: string) {
+    const ink = '#202124';
+    if (kind.includes('Connector')) return kind.startsWith('curved') ? `width:420px;height:180px;border:8px solid ${ink};border-left:0;border-bottom:0;border-radius:0 180px 0 0;background:transparent;` : `width:420px;height:160px;border:8px solid ${ink};border-left:0;border-bottom:0;background:transparent;`;
+    if (/dashedLine|dottedLine/.test(kind)) return `width:420px;height:0;border-top:8px ${kind === 'dottedLine' ? 'dotted' : 'dashed'} ${ink};background:transparent;`;
+    if (kind === 'straightLine' || kind === 'straightConnector') return `width:420px;height:0;border-top:8px solid ${ink};background:transparent;`;
+    if (/arrowLine|ArrowConnector|doubleArrowLine/.test(kind)) return `width:420px;height:0;border-top:8px solid ${ink};background:transparent;`;
+    if (kind === 'leftRightArrow') return `width:360px;height:180px;background:${ink};clip-path:polygon(0 50%,24% 0,24% 30%,76% 30%,76% 0,100% 50%,76% 100%,76% 70%,24% 70%,24% 100%);`;
+    if (kind === 'arrow' || /Arrow$/.test(kind)) return `width:360px;height:180px;background:${ink};clip-path:polygon(0 32%,62% 32%,62% 0,100% 50%,62% 100%,62% 68%,0 68%);${kind.includes('left') || kind.includes('Left') ? 'transform:scaleX(-1);' : kind.includes('up') || kind.includes('Up') ? 'transform:rotate(-90deg);' : kind.includes('down') || kind.includes('Down') ? 'transform:rotate(90deg);' : ''}`;
+    if (/ellipse|donut|pie|chord|moon|sun|smiley|connector|or$|disk|drum/i.test(kind)) return `width:220px;height:220px;background:#fff;border:3px solid ${ink};border-radius:50%;`;
+    if (/diamond|decision|merge|sort|homePlate/i.test(kind)) return `width:220px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);`;
+    if (/triangle|offpage|preparation/i.test(kind)) return `width:260px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,100% 100%,0 100%);`;
+    if (/trapezoid|parallelogram|inputOutput|manualInput/i.test(kind)) return `width:320px;height:180px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(14% 0,100% 0,86% 100%,0 100%);`;
+    if (/pentagon/i.test(kind)) return `width:240px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%);`;
+    if (/hexagon/i.test(kind)) return `width:280px;height:200px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);`;
+    if (/heptagon|octagon|decagon|dodecagon/i.test(kind)) return `width:240px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,82% 10%,100% 38%,94% 72%,68% 100%,32% 100%,6% 72%,0 38%,18% 10%);`;
+    if (/star|seal|lightning/i.test(kind)) return `width:220px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,61% 34%,98% 35%,68% 57%,79% 92%,50% 70%,21% 92%,32% 57%,2% 35%,39% 34%);`;
+    if (/heart/i.test(kind)) return `width:230px;height:200px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 88%,8% 49%,0 25%,10% 4%,30% 0,50% 18%,70% 0,90% 4%,100% 25%,92% 49%);`;
+    if (/cloud/i.test(kind)) return `width:320px;height:170px;background:#fff;border:3px solid ${ink};border-radius:90px;`;
+    if (/speech/i.test(kind)) return `width:320px;height:180px;background:#fff;border:3px solid ${ink};border-radius:16px;`;
+    if (/round|terminator|scroll|can|bevel|plaque/i.test(kind)) return `width:320px;height:180px;background:#fff;border:3px solid ${ink};border-radius:32px;`;
+    if (/brace|bracket/i.test(kind)) return `width:180px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(45% 0,100% 0,70% 25%,70% 42%,45% 50%,70% 58%,70% 75%,100% 100%,45% 100%,0 75%,20% 50%,0 25%);`;
+    if (/mathPlus/i.test(kind)) return `width:220px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(38% 0,62% 0,62% 38%,100% 38%,100% 62%,62% 62%,62% 100%,38% 100%,38% 62%,0 62%,0 38%,38% 38%);`;
+    return `width:320px;height:180px;background:#fff;border:3px solid ${ink};`;
+}
+
+function shapePickerStyle(kind: string): CSSProperties {
+    const stroke = '1.5px solid #202124';
+    if (kind === 'straightLine' || kind === 'straightConnector') return { width: 24, borderTop: stroke };
+    if (kind.includes('Connector')) return { width: 22, height: 16, borderTop: stroke, borderRight: stroke, borderRadius: kind.startsWith('curved') ? '0 12px 0 0' : 0 };
+    if (/ellipse|donut|pie|chord|moon|sun|smiley|disk|drum/i.test(kind)) return { width: 20, height: 20, border: stroke, borderRadius: '999px' };
+    if (/diamond|decision|merge|sort|homePlate/i.test(kind)) return { width: 17, height: 17, border: stroke, transform: 'rotate(45deg)' };
+    if (/triangle|offpage|preparation/i.test(kind)) return { width: 22, height: 19, border: stroke, clipPath: 'polygon(50% 0,100% 100%,0 100%)' };
+    if (/trapezoid|parallelogram|inputOutput|manualInput/i.test(kind)) return { width: 24, height: 16, border: stroke, clipPath: 'polygon(14% 0,100% 0,86% 100%,0 100%)' };
+    if (/pentagon/i.test(kind)) return { width: 21, height: 20, border: stroke, clipPath: 'polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)' };
+    if (/hexagon/i.test(kind)) return { width: 23, height: 18, border: stroke, clipPath: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)' };
+    if (/heart/i.test(kind)) return { width: 22, height: 19, border: stroke, clipPath: 'polygon(50% 100%,0 45%,0 15%,25% 0,50% 20%,75% 0,100% 15%,100% 45%)' };
+    if (/star|seal|lightning/i.test(kind)) return { width: 21, height: 21, border: stroke, clipPath: 'polygon(50% 0,61% 34%,98% 35%,68% 57%,79% 92%,50% 70%,21% 92%,32% 57%,2% 35%,39% 34%)' };
+    if (/cloud/i.test(kind)) return { width: 25, height: 15, border: stroke, borderRadius: 9 };
+    if (/mathPlus|plus/i.test(kind)) return { width: 19, height: 19, border: stroke, clipPath: 'polygon(36% 0,64% 0,64% 36%,100% 36%,100% 64%,64% 64%,64% 100%,36% 100%,36% 64%,0 64%,0 36%,36% 36%)' };
+    return { width: 25, height: 16, border: stroke, borderRadius: /round|terminator|scroll|can|bevel|plaque/i.test(kind) ? 5 : 0 };
+}
+
+function ShapePickerGlyph({ kind }: { kind: string }) {
+    return <span aria-hidden="true" className="relative block h-6 w-7 overflow-hidden"><span ref={(node) => { if (node) node.style.cssText = `position:absolute;left:0;top:0;zoom:0.065;${shapeStyle(kind)}`; }} /></span>;
+}
+
+function addHtmlShape(html: string, kind = 'rectangle'): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const container = document.querySelector('.slide-container') || document.body;
+    const element = document.createElement('div');
+    element.dataset.object = 'true'; element.dataset.objectType = 'shape'; element.dataset.shapeType = kind;
+    element.style.cssText = `position:absolute;left:180px;top:180px;border:0 solid #312E81;z-index:100;${shapeStyle(kind)}`;
+    container.append(element);
+    return document.documentElement.outerHTML;
+}
+
+function ColorSwatches({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+    const [open, setOpen] = useState(false);
+    return <div className="relative text-xs"><button type="button" aria-label={`${label} 메뉴`} onClick={() => setOpen((visible) => !visible)} className="flex h-8 items-center gap-1 rounded px-2 hover:bg-gray-100"><span>{label}</span><span className="h-3 w-4 border-b-4" style={{ borderColor: value }} /></button>{open && <div className="absolute left-0 top-9 z-50 w-52 rounded-lg border bg-white p-2 shadow-xl"><div className="grid grid-cols-6 gap-1">{EDITOR_COLORS.map((color) => <button key={color} type="button" aria-label={`${label} ${color}`} title={color} onClick={() => { onChange(color); setOpen(false); }} className={`h-6 w-6 rounded border ${value.toLowerCase() === color.toLowerCase() ? 'ring-2 ring-purple-500 ring-offset-1' : ''}`} style={{ backgroundColor: color }} />)}</div><label className="mt-2 flex items-center justify-between text-xs text-gray-600">사용자 색상 <input aria-label={`${label} 사용자 색상`} type="color" value={value} onChange={(event) => onChange(event.target.value)} /></label></div>}</div>;
+}
+
+function deleteHtmlObject(html: string, index: number): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    htmlTextElements(document)[index]?.remove();
+    return document.documentElement.outerHTML;
+}
+
+function duplicateHtmlObject(html: string, index: number): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const source = htmlTextElements(document)[index];
+    if (!source?.dataset.object || !source.parentElement) return html;
+    const copy = source.cloneNode(true) as HTMLElement;
+    copy.style.left = `${(parseFloat(source.style.left) || 0) + 32}px`;
+    copy.style.top = `${(parseFloat(source.style.top) || 0) + 32}px`;
+    source.parentElement.append(copy);
+    return document.documentElement.outerHTML;
+}
+
+function setHtmlList(html: string, index: number, ordered: boolean): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const source = htmlTextElements(document)[index];
+    if (!source?.dataset.object || source.dataset.objectType !== 'textbox' || !source.parentElement) return html;
+    const list = document.createElement(ordered ? 'ol' : 'ul');
+    list.dataset.object = 'true'; list.dataset.objectType = 'textbox';
+    list.style.cssText = source.style.cssText;
+    list.style.paddingLeft ||= '40px';
+    const lines = Array.from(source.querySelectorAll(':scope > li')).map((item) => item.textContent || '')
+        .concat(source.querySelector('li') ? [] : source.innerHTML.split(/<br\s*\/?\s*>/i).map((part) => {
+            const node = document.createElement('div'); node.innerHTML = part; return node.textContent || '';
+        }))
+        .map((line) => line.trim()).filter(Boolean);
+    for (const line of lines.length ? lines : [source.textContent || '목록 항목']) {
+        const item = document.createElement('li'); item.textContent = line; list.append(item);
+    }
+    source.replaceWith(list);
+    return document.documentElement.outerHTML;
+}
+
+function addHtmlTable(html: string): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const container = document.querySelector('.slide-container') || document.body;
+    const table = document.createElement('table');
+    table.dataset.object = 'true'; table.dataset.objectType = 'table';
+    table.style.cssText = 'position:absolute;left:180px;top:220px;width:1000px;height:300px;border-collapse:collapse;background:#FFFFFF;border:1px solid #94A3B8;z-index:100';
+    table.innerHTML = '<tbody><tr><th style="border:1px solid #94A3B8;padding:16px;background:#E2E8F0">항목</th><th style="border:1px solid #94A3B8;padding:16px;background:#E2E8F0">내용</th></tr><tr><td style="border:1px solid #94A3B8;padding:16px">새 항목</td><td style="border:1px solid #94A3B8;padding:16px">내용 입력</td></tr></tbody>';
+    container.append(table);
+    return document.documentElement.outerHTML;
+}
+
+function addHtmlList(html: string, ordered: boolean): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const container = document.querySelector('.slide-container') || document.body;
+    const list = document.createElement(ordered ? 'ol' : 'ul');
+    list.dataset.object = 'true'; list.dataset.objectType = 'textbox';
+    list.style.cssText = 'position:absolute;left:180px;top:180px;width:720px;min-height:160px;padding-left:40px;font-size:28px;color:#1A1A1A;z-index:100';
+    list.innerHTML = '<li>첫 번째 항목</li><li>두 번째 항목</li><li>세 번째 항목</li>';
+    container.append(list);
+    return document.documentElement.outerHTML;
+}
+
+function addHtmlImage(html: string, source: string): string {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const container = document.querySelector('.slide-container') || document.body;
+    const image = document.createElement('img');
+    image.dataset.object = 'true'; image.dataset.objectType = 'image';
+    image.src = source; image.alt = '삽입 이미지';
+    image.style.cssText = 'position:absolute;left:180px;top:180px;width:640px;height:360px;object-fit:cover;z-index:100';
+    container.append(image);
     return document.documentElement.outerHTML;
 }
 
@@ -234,9 +427,17 @@ export default function EditorPage() {
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [shareUrl, setShareUrl] = useState('');
     const [rightTab, setRightTab] = useState<'edit' | 'chat'>('chat');
+    const [ribbonTab, setRibbonTab] = useState<'home' | 'insert'>('home');
+    const [showShapePicker, setShowShapePicker] = useState(false);
+    const [shapePickerGroup, setShapePickerGroup] = useState(0);
+    const [showLinePicker, setShowLinePicker] = useState(false);
+    const [isFocusMode, setIsFocusMode] = useState(false);
+    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
     const [aiChatInput, setAiChatInput] = useState('');
     const [aiChatBusy, setAiChatBusy] = useState(false);
     const aiEditAbortRef = useRef<AbortController | null>(null);
+    const imageInputRef = useRef<HTMLInputElement | null>(null);
     const [aiChatMessages, setAiChatMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
     const [isExporting, setIsExporting] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
@@ -251,7 +452,26 @@ export default function EditorPage() {
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
 
+    useEffect(() => {
+        if (window.innerWidth < 1180) setIsFocusMode(true);
+    }, []);
+
     const selectedSlide = presentation?.slides.find((s) => s.id === selectedSlideId);
+    const selectedHtmlObject = selectedSlide?.content?.html && selectedHtmlTextIndex !== null
+        ? getHtmlTextFields(selectedSlide.content.html)[selectedHtmlTextIndex] : null;
+    const navigateSlide = (direction: -1 | 1) => {
+        const index = presentation?.slides.findIndex((slide) => slide.id === selectedSlideId) ?? -1;
+        const target = presentation?.slides[index + direction];
+        if (!target) return;
+        setSelectedSlide(target.id);
+        setSelectedHtmlTextIndex(null);
+    };
+    const updateSelectedHtmlObject = (updates: Record<string, string>) => {
+        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
+        const content = { ...selectedSlide.content, html: updateHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex, updates) };
+        updateSlide(selectedSlide.id, { content });
+        handleSaveSlideDelayed(selectedSlide.id, { content });
+    };
 
     const loadPreview = useCallback((slideIndex: number) => {
         const key = `${previewVersion}:${slideIndex}`;
@@ -291,6 +511,7 @@ export default function EditorPage() {
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]')) return;
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault();
                 if (canUndo) undo();
@@ -302,13 +523,17 @@ export default function EditorPage() {
                 handleSave();
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
                 e.preventDefault();
-                if (selectedSlideId) handleDuplicateSlide();
+                if (selectedHtmlTextIndex !== null) duplicateSelectedHtmlObject();
+                else if (selectedSlideId) handleDuplicateSlide();
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                deleteSelectedHtmlObject();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [canUndo, canRedo, undo, redo]);
+    }, [canUndo, canRedo, undo, redo, selectedSlideId, selectedHtmlTextIndex, selectedSlide]);
 
     useEffect(() => {
         // Wait for hydration before checking auth
@@ -447,6 +672,54 @@ export default function EditorPage() {
         }, 500);
     };
 
+    const persistHistoryState = async () => {
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+        const restored = useEditorStore.getState().presentation;
+        if (!restored) return;
+        setSaving(true);
+        try {
+            const listed = await slidesApi.list(presentationId);
+            const serverSlides = listed.data as Array<{ id: string }>;
+            const restoredIds = new Set(restored.slides.map((slide) => slide.id));
+            const missingSlides = restored.slides.filter((slide) => !serverSlides.some((serverSlide) => serverSlide.id === slide.id));
+            const removedSlides = serverSlides.filter((serverSlide) => !restoredIds.has(serverSlide.id));
+
+            await Promise.all(removedSlides.map((slide) => slidesApi.delete(presentationId, slide.id)));
+            const recreated = await Promise.all(missingSlides.map(async (slide) => {
+                const response = await slidesApi.create(presentationId, {
+                    type: slide.type, title: slide.title, content: slide.content,
+                    layout: slide.layout, notes: slide.notes, order: slide.order,
+                });
+                return [slide.id, response.data.id] as const;
+            }));
+
+            if (recreated.length > 0) {
+                const ids = new Map(recreated);
+                const slides = restored.slides.map((slide) => ids.has(slide.id) ? { ...slide, id: ids.get(slide.id)! } : slide);
+                const currentSelectedSlideId = useEditorStore.getState().selectedSlideId;
+                const selectedSlideId = currentSelectedSlideId ? ids.get(currentSelectedSlideId) || currentSelectedSlideId : null;
+                setPresentation({ ...restored, slides });
+                setSelectedSlide(selectedSlideId);
+            }
+
+            const synchronized = useEditorStore.getState().presentation;
+            if (!synchronized) return;
+            await Promise.all(synchronized.slides.map((slide) => slidesApi.update(presentationId, slide.id, {
+                type: slide.type, title: slide.title, content: slide.content,
+                layout: slide.layout, notes: slide.notes, order: slide.order,
+            })));
+            setDirty(false);
+            setPreviewVersion((version) => version + 1);
+        } catch (error) {
+            toast({ title: '저장 실패', description: '실행 취소 내용을 저장하지 못했습니다.', variant: 'destructive' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleDeleteSlide = async () => {
         if (!selectedSlideId || !presentation) return;
         if (presentation.slides.length <= 1) {
@@ -455,8 +728,8 @@ export default function EditorPage() {
         }
 
         try {
-            await slidesApi.delete(presentationId, selectedSlideId);
             removeSlide(selectedSlideId);
+            await persistHistoryState();
             toast({ title: '삭제 완료', description: '슬라이드가 삭제되었습니다.' });
         } catch (error) {
             toast({ title: '삭제 실패', variant: 'destructive' });
@@ -575,6 +848,50 @@ export default function EditorPage() {
         }
     };
 
+    const insertHtmlObject = (mutate: (html: string) => string) => {
+        if (!selectedSlide?.content?.html) {
+            toast({ title: 'HTML 템플릿 슬라이드가 필요합니다', description: '현재 슬라이드는 편집 가능한 HTML 템플릿이 아닙니다.', variant: 'destructive' });
+            return;
+        }
+        const nextIndex = getHtmlTextFields(selectedSlide.content.html).length;
+        const content = { ...selectedSlide.content, html: mutate(selectedSlide.content.html) };
+        updateSlide(selectedSlide.id, { content });
+        handleSaveSlideDelayed(selectedSlide.id, { content });
+        setSelectedHtmlTextIndex(nextIndex);
+        setRibbonTab('home');
+    };
+
+    const handleImageInsert = (file: File | undefined) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = () => insertHtmlObject((html) => addHtmlImage(html, String(reader.result)));
+        reader.readAsDataURL(file);
+    };
+
+    const deleteSelectedHtmlObject = () => {
+        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
+        const content = { ...selectedSlide.content, html: deleteHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex) };
+        updateSlide(selectedSlide.id, { content });
+        handleSaveSlideDelayed(selectedSlide.id, { content });
+        setSelectedHtmlTextIndex(null);
+    };
+
+    const duplicateSelectedHtmlObject = () => {
+        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
+        const nextIndex = getHtmlTextFields(selectedSlide.content.html).length;
+        const content = { ...selectedSlide.content, html: duplicateHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex) };
+        updateSlide(selectedSlide.id, { content });
+        handleSaveSlideDelayed(selectedSlide.id, { content });
+        setSelectedHtmlTextIndex(nextIndex);
+    };
+
+    const setSelectedHtmlList = (ordered: boolean) => {
+        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
+        const content = { ...selectedSlide.content, html: setHtmlList(selectedSlide.content.html, selectedHtmlTextIndex, ordered) };
+        updateSlide(selectedSlide.id, { content });
+        handleSaveSlideDelayed(selectedSlide.id, { content });
+    };
+
     const handleCancelAiChat = () => aiEditAbortRef.current?.abort();
 
     // Duplicate slide handler
@@ -627,11 +944,14 @@ export default function EditorPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <UndoRedoButtons />
+                        <UndoRedoButtons onUndo={() => { void persistHistoryState(); }} onRedo={() => { void persistHistoryState(); }} />
                         <div className="w-px h-6 bg-gray-200" />
                         <Button variant={rightTab === 'edit' ? 'secondary' : 'outline'} size="sm" onClick={() => setRightTab('edit')}>
                             <Type className="h-4 w-4 mr-1" />
                             수동 편집
+                        </Button>
+                        <Button variant={isFocusMode ? 'secondary' : 'outline'} size="sm" onClick={() => setIsFocusMode((value) => !value)}>
+                            {isFocusMode ? '일반 보기' : '집중 보기'}
                         </Button>
                         <Button
                             variant={showVersionHistory ? 'secondary' : 'outline'}
@@ -700,7 +1020,43 @@ export default function EditorPage() {
                     </div>
                 </header>
 
+                <div className="flex min-h-14 shrink-0 items-center gap-3 overflow-visible border-b bg-white px-4 text-sm">
+                    <div className="flex self-stretch items-center gap-1 border-r pr-3">
+                        <button type="button" onClick={() => setRibbonTab('home')} className={`h-full px-2 font-medium ${ribbonTab === 'home' ? 'border-b-2 border-purple-600 text-purple-700' : 'text-gray-500'}`}>홈</button>
+                        <button type="button" onClick={() => setRibbonTab('insert')} className={`h-full px-2 font-medium ${ribbonTab === 'insert' ? 'border-b-2 border-purple-600 text-purple-700' : 'text-gray-500'}`}>삽입</button>
+                    </div>
+                    {ribbonTab === 'home' ? (selectedHtmlObject ? <>
+                        {selectedHtmlObject.objectType !== 'shape' && selectedHtmlObject.objectType !== 'image' && <>
+                            <select aria-label="글꼴" value={selectedHtmlObject.fontFamily} onChange={(event) => updateSelectedHtmlObject({ fontFamily: event.target.value })} className="h-8 rounded border px-2"><option value="Noto Sans KR">Noto Sans KR</option><option value="NanumGothic">나눔고딕</option><option value="나눔고딕">나눔고딕 (PPTX)</option><option value="HY헤드라인M">HY헤드라인M</option><option value="Arial">Arial</option><option value="Pretendard">Pretendard</option></select>
+                            <input aria-label="글자 크기" type="number" value={parseFloat(selectedHtmlObject.fontSize) || 24} onChange={(event) => updateSelectedHtmlObject({ fontSize: event.target.value })} className="h-8 w-16 rounded border px-2" />
+                            <Button aria-label="굵게" type="button" size="icon" variant={selectedHtmlObject.fontWeight === '700' || selectedHtmlObject.fontWeight === 'bold' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ fontWeight: selectedHtmlObject.fontWeight === '700' || selectedHtmlObject.fontWeight === 'bold' ? '400' : '700' })}><Bold className="h-4 w-4" /></Button>
+                            <Button aria-label="기울임" type="button" size="icon" variant={selectedHtmlObject.fontStyle === 'italic' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ fontStyle: selectedHtmlObject.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4" /></Button>
+                            <Button aria-label="밑줄" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('underline') ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textDecoration: selectedHtmlObject.textDecoration.includes('underline') ? 'none' : 'underline' })}><Underline className="h-4 w-4" /></Button>
+                            <Button aria-label="취소선" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('line-through') ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textDecoration: selectedHtmlObject.textDecoration.includes('line-through') ? 'none' : 'line-through' })}><Strikethrough className="h-4 w-4" /></Button>
+                            {selectedHtmlObject.objectType === 'textbox' && <><Button aria-label="글머리 목록" type="button" size="icon" variant="ghost" onClick={() => setSelectedHtmlList(false)}><List className="h-4 w-4" /></Button><Button aria-label="번호 목록" type="button" size="icon" variant="ghost" onClick={() => setSelectedHtmlList(true)}><ListOrdered className="h-4 w-4" /></Button></>}
+                            <Button aria-label="왼쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'left' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'left' })}><AlignLeft className="h-4 w-4" /></Button>
+                            <Button aria-label="가운데 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'center' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'center' })}><AlignCenter className="h-4 w-4" /></Button>
+                            <Button aria-label="오른쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'right' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'right' })}><AlignRight className="h-4 w-4" /></Button>
+                        </>}
+                        <ColorSwatches label="글자색" value={selectedHtmlObject.color} onChange={(color) => updateSelectedHtmlObject({ color })} />
+                        <ColorSwatches label="채우기" value={selectedHtmlObject.backgroundColor} onChange={(backgroundColor) => updateSelectedHtmlObject({ backgroundColor })} />
+                        <ColorSwatches label="윤곽선" value={selectedHtmlObject.borderColor} onChange={(borderColor) => updateSelectedHtmlObject({ borderColor })} />
+                        <Button aria-label="선택한 객체 복제" type="button" size="sm" variant="ghost" onClick={duplicateSelectedHtmlObject}><Copy className="mr-1 h-4 w-4" />복제</Button>
+                        <Button aria-label="선택한 객체 삭제" type="button" size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={deleteSelectedHtmlObject}><Trash2 className="mr-1 h-4 w-4" />삭제</Button>
+                    </> : <span className="text-xs text-gray-400">객체를 선택하면 글꼴, 목록, 정렬, 색상 서식을 적용할 수 있습니다.</span>) : <>
+                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
+                        <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-white shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
+                        <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
+                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, false))}><List className="mr-1 h-4 w-4" />글머리</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, true))}><ListOrdered className="mr-1 h-4 w-4" />번호 목록</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject(addHtmlTable)}><Table2 className="mr-1 h-4 w-4" />표</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => imageInputRef.current?.click()}><ImageIcon className="mr-1 h-4 w-4" />그림</Button>
+                        <input ref={imageInputRef} aria-label="그림 파일 선택" type="file" accept="image/*" className="hidden" onChange={(event) => { handleImageInsert(event.target.files?.[0]); event.currentTarget.value = ''; }} />
+                    </>}
+                </div>
+
                 <div className="flex-1 flex overflow-hidden">
+                    {!isFocusMode && isLeftPanelOpen ? <>
                     {/* Slide List Panel */}
                     <aside className="shrink-0 bg-white border-r p-3 overflow-auto" style={{ width: leftPanelWidth }}>
                         <div className="flex items-center justify-between mb-3">
@@ -736,11 +1092,14 @@ export default function EditorPage() {
                             ))}
                         </div>
                     </aside>
-                    <div role="separator" aria-label="슬라이드 목록 너비 조절" aria-orientation="vertical" onPointerDown={startPanelResize('left')} className="w-1.5 shrink-0 cursor-col-resize bg-gray-200 hover:bg-purple-400 active:bg-purple-500" />
+                    <div role="separator" aria-label="슬라이드 목록 너비 조절" aria-orientation="vertical" onPointerDown={startPanelResize('left')} className="relative w-1.5 shrink-0 cursor-col-resize bg-gray-200 hover:bg-purple-400 active:bg-purple-500">
+                        <button type="button" aria-label="슬라이드 패널 접기" title="슬라이드 패널 접기" onPointerDown={(event) => event.stopPropagation()} onClick={() => setIsLeftPanelOpen(false)} className="absolute left-1/2 top-1/2 z-10 flex h-7 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded border bg-white text-gray-500 shadow-sm hover:bg-gray-50"><PanelLeftClose className="h-3.5 w-3.5" /></button>
+                    </div>
+                    </> : !isFocusMode ? <div className="flex w-8 shrink-0 items-start justify-center border-r bg-white pt-3"><button type="button" aria-label="슬라이드 패널 펼치기" title="슬라이드 패널 펼치기" onClick={() => setIsLeftPanelOpen(true)} className="flex h-8 w-7 items-center justify-center rounded text-gray-500 hover:bg-gray-100"><PanelLeftOpen className="h-4 w-4" /></button></div> : null}
 
                     {/* Main Editor Area */}
-                    <main className="flex-1 p-6 overflow-auto">
-                        <div className="max-w-4xl mx-auto">
+                    <main className="flex-1 min-w-0 overflow-auto p-4">
+                        <div className={isFocusMode ? 'mx-auto w-full max-w-[1280px]' : 'mx-auto w-[1100px] min-w-[960px]'}>
                             {/* Slide Preview */}
                             <div className="editor-canvas bg-white shadow-lg rounded-lg overflow-hidden">
                                 {selectedSlide ? (
@@ -750,6 +1109,7 @@ export default function EditorPage() {
                                         previewUrl={previewUrl}
                                         selectedHtmlTextIndex={selectedHtmlTextIndex}
                                         onSelectHtmlText={setSelectedHtmlTextIndex}
+                                        onNavigate={navigateSlide}
                                         onUpdate={(updates) => {
                                             updateSlide(selectedSlide.id, updates);
                                             if (updates.content?.html) handleSaveSlideDelayed(selectedSlide.id, updates);
@@ -788,7 +1148,10 @@ export default function EditorPage() {
                         </div>
                     </main>
 
-                    <div role="separator" aria-label="AI 패널 너비 조절" aria-orientation="vertical" onPointerDown={startPanelResize('right')} className="w-1.5 shrink-0 cursor-col-resize bg-gray-200 hover:bg-purple-400 active:bg-purple-500" />
+                    {!isFocusMode && isRightPanelOpen ? <>
+                    <div role="separator" aria-label="AI 패널 너비 조절" aria-orientation="vertical" onPointerDown={startPanelResize('right')} className="relative w-1.5 shrink-0 cursor-col-resize bg-gray-200 hover:bg-purple-400 active:bg-purple-500">
+                        <button type="button" aria-label="AI 패널 접기" title="AI 패널 접기" onPointerDown={(event) => event.stopPropagation()} onClick={() => setIsRightPanelOpen(false)} className="absolute left-1/2 top-1/2 z-10 flex h-7 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded border bg-white text-gray-500 shadow-sm hover:bg-gray-50"><PanelRightClose className="h-3.5 w-3.5" /></button>
+                    </div>
 
                     {/* AI Chat / Manual Edit Panel */}
                     <aside className="flex shrink-0 flex-col bg-white border-l p-4 overflow-hidden" style={{ width: rightPanelWidth }}>
@@ -833,6 +1196,11 @@ export default function EditorPage() {
                                 >
                                     <Plus className="mr-1 h-4 w-4" /> 텍스트 추가
                                 </Button>
+                                <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => {
+                                    const content = { ...selectedSlide.content, html: addHtmlShape(selectedSlide.content.html) };
+                                    updateSlide(selectedSlide.id, { content }); handleSaveSlideDelayed(selectedSlide.id, { content });
+                                    setSelectedHtmlTextIndex(getHtmlTextFields(selectedSlide.content.html).length);
+                                }}><Layout className="mr-1 h-4 w-4" /> 도형 추가</Button>
                                 <select
                                     value={selectedHtmlTextIndex ?? ''}
                                     onChange={(event) => setSelectedHtmlTextIndex(event.target.value === '' ? null : Number(event.target.value))}
@@ -840,11 +1208,11 @@ export default function EditorPage() {
                                 >
                                     <option value="">편집할 텍스트 선택</option>
                                     {getHtmlTextFields(selectedSlide.content.html).map((item, index) => (
-                                        <option key={index} value={index}>{item.positionable ? '텍스트' : '표 셀'} {index + 1}: {item.text.slice(0, 28)}</option>
+                                        <option key={index} value={index}>{item.generated ? 'AI 텍스트' : item.positionable ? '텍스트' : '표 셀'} {index + 1}: {item.text.slice(0, 28)}</option>
                                     ))}
                                 </select>
                                 {selectedHtmlTextIndex === null ? (
-                                    <p className="text-sm text-gray-500">미리보기에서 텍스트를 선택하면 내용과 위치를 수정할 수 있습니다.</p>
+                                    <p className="text-sm text-gray-500">AI 텍스트와 템플릿 텍스트를 선택해 내용을 수정할 수 있습니다.</p>
                                 ) : getHtmlTextFields(selectedSlide.content.html).map((item, index) => index === selectedHtmlTextIndex ? (
                                     <div key={index}>
                                         <label className="mb-1 block text-xs font-medium text-gray-600">텍스트 {index + 1}</label>
@@ -858,6 +1226,13 @@ export default function EditorPage() {
                                             }}
                                             className="w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                                         />
+                                        <div className="mt-2 grid grid-cols-2 gap-2">
+                                            {(['fontFamily', 'fontSize', 'color', 'backgroundColor', 'borderColor', 'borderWidth'] as const).map((property) => (
+                                                <label key={property} className="text-xs text-gray-600">{property}
+                                                    <input type={property.includes('Color') || property === 'color' ? 'color' : property === 'fontFamily' ? 'text' : 'number'} value={property.includes('Color') || property === 'color' ? item[property] : property === 'fontFamily' ? item[property] : parseFloat(item[property]) || 0} onChange={(event) => { const content = { ...selectedSlide.content, html: updateHtmlObject(selectedSlide.content.html, index, { [property]: event.target.value }) }; updateSlide(selectedSlide.id, { content }); handleSaveSlideDelayed(selectedSlide.id, { content }); }} className="mt-1 w-full rounded border px-2 py-1 text-sm" />
+                                                </label>
+                                            ))}
+                                        </div>
                                         {item.positionable && <div className="mt-2 grid grid-cols-2 gap-2">
                                             {(['left', 'top', 'width', 'height'] as const).map((property) => (
                                                 <label key={property} className="text-xs text-gray-600">
@@ -875,6 +1250,7 @@ export default function EditorPage() {
                                                 </label>
                                             ))}
                                         </div>}
+                                        <Button type="button" variant="destructive" size="sm" className="mt-3 w-full" onClick={deleteSelectedHtmlObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제</Button>
                                     </div>
                                 ) : null)}
                                 </div>
@@ -980,6 +1356,7 @@ export default function EditorPage() {
                         )}
                         </div>)}
                     </aside>
+                    </> : !isFocusMode ? <div className="flex w-8 shrink-0 items-start justify-center border-l bg-white pt-3"><button type="button" aria-label="AI 패널 펼치기" title="AI 패널 펼치기" onClick={() => setIsRightPanelOpen(true)} className="flex h-8 w-7 items-center justify-center rounded text-gray-500 hover:bg-gray-100"><PanelRightOpen className="h-4 w-4" /></button></div> : null}
 
                     {/* Version History Panel */}
                     {showVersionHistory && (
@@ -1049,11 +1426,12 @@ interface EditableSlidePreviewProps {
     previewUrl?: string | null;
     selectedHtmlTextIndex: number | null;
     onSelectHtmlText: (index: number | null) => void;
+    onNavigate: (direction: -1 | 1) => void;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, onUpdate, onSave }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, onNavigate, onUpdate, onSave }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1062,6 +1440,167 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
     const previewStyle = getTemplatePreviewStyle(template);
     const htmlTextFields = typeof content.html === 'string' ? getHtmlTextFields(content.html) : [];
     const htmlSelectionAreas = typeof content.html === 'string' ? getHtmlSelectionAreas(content.html) : [];
+    const [inlineTextIndex, setInlineTextIndex] = useState<number | null>(null);
+    const htmlFrameRef = useRef<HTMLIFrameElement>(null);
+    const htmlCanvasRef = useRef<HTMLDivElement>(null);
+    const latestContentRef = useRef(content);
+    const latestOnUpdateRef = useRef(onUpdate);
+    const latestOnSelectRef = useRef(onSelectHtmlText);
+    const lastFrameHtmlRef = useRef<string | null>(null);
+    const [frameHtml, setFrameHtml] = useState(() => typeof content.html === 'string' ? editorFrameHtml(content.html) : '');
+    const [frameScale, setFrameScale] = useState(1);
+
+    useEffect(() => { latestContentRef.current = content; latestOnUpdateRef.current = onUpdate; latestOnSelectRef.current = onSelectHtmlText; }, [content, onUpdate, onSelectHtmlText]);
+    useEffect(() => {
+        if (typeof content.html === 'string' && content.html !== lastFrameHtmlRef.current) setFrameHtml(editorFrameHtml(content.html));
+    }, [slide.id, content.html]);
+    useEffect(() => {
+        const canvas = htmlCanvasRef.current;
+        if (!canvas || !content.html) return;
+        const resize = () => setFrameScale(Math.min(canvas.clientWidth / 1920, canvas.clientHeight / 1080));
+        resize();
+        const observer = new ResizeObserver(resize);
+        observer.observe(canvas);
+        return () => observer.disconnect();
+    }, [content.html]);
+
+    const startSlideSwipe = (event: any) => {
+        if ((event.target as HTMLElement).closest('[data-editable-object]')) return;
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const stop = (endEvent: PointerEvent) => {
+            const dx = endEvent.clientX - startX;
+            const dy = endEvent.clientY - startY;
+            if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy)) onNavigate(dx < 0 ? 1 : -1);
+            window.removeEventListener('pointerup', stop);
+        };
+        window.addEventListener('pointerup', stop, { once: true });
+    };
+
+    const startHtmlFrameEditing = () => {
+        const document = htmlFrameRef.current?.contentDocument;
+        if (!document) return;
+        document.body.contentEditable = 'true';
+        document.body.spellcheck = false;
+        document.body.setAttribute('data-taeslide-editing-surface', 'true');
+        let selectedElement: HTMLElement | null = null;
+        const editableSelector = 'th,td,h1,h2,h3,h4,h5,h6,p,li,span';
+        const targetFor = (node: EventTarget | null): HTMLElement | null => {
+            const candidate = node as Node | null;
+            let element = candidate?.nodeType === 1 ? candidate as HTMLElement : candidate?.nodeType === 3 ? candidate.parentElement : null;
+            if (!element) return null;
+            const indexed = element.closest<HTMLElement>('[data-taeslide-editor-index]');
+            if (indexed) return indexed;
+            const cell = element.closest<HTMLElement>('th,td');
+            if (cell) return cell;
+            while (element && element !== document.body) {
+                if (element.matches(editableSelector) || (!element.querySelector(editableSelector) && !!element.textContent?.trim())) return element;
+                element = element.parentElement;
+            }
+            return null;
+        };
+        const persist = () => {
+            const copy = document.documentElement.cloneNode(true) as HTMLElement;
+            copy.querySelectorAll('[data-taeslide-selected], [data-taeslide-editing], [data-taeslide-editor-index]').forEach((element) => {
+                element.removeAttribute('data-taeslide-selected'); element.removeAttribute('data-taeslide-editing');
+                element.removeAttribute('data-taeslide-editor-index');
+                (element as HTMLElement).contentEditable = 'inherit';
+            });
+            const html = `<!doctype html>${copy.outerHTML}`;
+            lastFrameHtmlRef.current = html;
+            latestOnUpdateRef.current({ content: { ...latestContentRef.current, html } });
+        };
+        const select = (element: HTMLElement | null) => {
+            document.querySelectorAll('[data-taeslide-selected]').forEach((item) => item.removeAttribute('data-taeslide-selected'));
+            element?.setAttribute('data-taeslide-selected', 'true');
+            selectedElement = element;
+            const index = Number(element?.dataset.taeslideEditorIndex);
+            latestOnSelectRef.current(Number.isInteger(index) ? index : null);
+        };
+        const styles = document.createElement('style');
+        styles.textContent = '[data-taeslide-selected="true"]{outline:2px solid #7c3aed!important;outline-offset:2px;box-shadow:0 0 0 2px rgba(124,58,237,.28)!important}[data-taeslide-selected="true"][data-object-type="shape"], [data-taeslide-selected="true"][data-object-type="image"]{cursor:move!important}[data-taeslide-editing="true"]{cursor:text!important;caret-color:#111827}';
+        document.head.append(styles);
+        if (selectedHtmlTextIndex !== null) {
+            select(document.querySelector<HTMLElement>(`[data-taeslide-editor-index="${selectedHtmlTextIndex}"]`));
+        }
+        document.addEventListener('pointerdown', (event) => {
+            const element = targetFor(event.target);
+            select(element);
+            if (!event.altKey || !element || element.dataset.object !== 'true') return;
+            event.preventDefault();
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const left = parseFloat(element.style.left) || 0;
+            const top = parseFloat(element.style.top) || 0;
+            const width = element.offsetWidth;
+            const height = element.offsetHeight;
+            const move = (moveEvent: PointerEvent) => {
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+                if (moveEvent.shiftKey) {
+                    element.style.width = `${Math.max(24, width + dx)}px`;
+                    element.style.height = `${Math.max(24, height + dy)}px`;
+                } else {
+                    element.style.left = `${left + dx}px`;
+                    element.style.top = `${top + dy}px`;
+                }
+            };
+            const stop = () => { document.removeEventListener('pointermove', move); persist(); };
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', stop, { once: true });
+        });
+        document.addEventListener('dblclick', (event) => {
+            const element = targetFor(event.target);
+            if (!element) return;
+            event.preventDefault();
+            select(element);
+            element.contentEditable = 'true';
+            element.setAttribute('data-taeslide-editing', 'true');
+            element.focus();
+        });
+        document.addEventListener('input', persist);
+        document.addEventListener('focusout', (event) => {
+            const element = event.target as HTMLElement;
+            if (element?.getAttribute('contenteditable') === 'true') {
+                element.contentEditable = 'inherit'; element.removeAttribute('data-taeslide-editing'); persist();
+            }
+        });
+        document.addEventListener('selectionchange', () => select(targetFor(document.getSelection()?.anchorNode ?? null)));
+        document.addEventListener('keydown', (event) => {
+            if ((event.key === 'Delete' || event.key === 'Backspace') && selectedElement?.dataset.objectType && ['shape', 'image'].includes(selectedElement.dataset.objectType)) {
+                event.preventDefault();
+                selectedElement.remove();
+                selectedElement = null;
+                persist();
+                return;
+            }
+            if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) {
+                event.preventDefault();
+                document.execCommand(event.key.toLowerCase() === 'b' ? 'bold' : event.key.toLowerCase() === 'i' ? 'italic' : 'underline');
+                persist();
+                return;
+            }
+            if (event.key !== 'Escape') return;
+            const element = targetFor(event.target);
+            if (element?.getAttribute('contenteditable') === 'true') { element.contentEditable = 'inherit'; element.blur(); }
+        });
+    };
+
+    if (content.html) {
+        return (
+            <div ref={htmlCanvasRef} className="relative h-full w-full overflow-hidden bg-white" data-html-canvas onPointerDown={startSlideSwipe}>
+                <iframe
+                    ref={htmlFrameRef}
+                    data-html-editor-frame
+                    title={slide.title || '슬라이드 편집 캔버스'}
+                    srcDoc={frameHtml}
+                    onLoad={startHtmlFrameEditing}
+                    className="absolute left-0 top-0 border-0 bg-white"
+                    style={{ width: 1920, height: 1080, transform: `scale(${frameScale})`, transformOrigin: 'top left' }}
+                />
+            </div>
+        );
+    }
 
     const startHtmlTransform = (event: any, index: number, resizing: boolean) => {
         event.preventDefault();
@@ -1094,22 +1633,44 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         window.addEventListener('pointerup', stop, { once: true });
     };
 
-    if (previewUrl && content.html) {
+    if (previewUrl && !content.html) {
         return (
-            <div className="relative h-full w-full" data-html-canvas>
+            <div className="relative h-full w-full touch-pan-y" data-html-canvas onPointerDown={startSlideSwipe}>
                 <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
                 {htmlSelectionAreas.map((area) => {
                     const field = htmlTextFields[area.index];
                     return field && (
                     <div
                         key={area.index}
+                        data-editable-object
                         className={`absolute ${field.positionable ? 'cursor-move' : 'cursor-pointer'} ${selectedHtmlTextIndex === area.index ? 'border border-purple-500/70 bg-purple-500/5 hover:bg-purple-500/15' : ''}`}
                         style={{ left: `${(parseFloat(area.left) || 0) / 19.2}%`, top: `${(parseFloat(area.top) || 0) / 10.8}%`, width: `${Math.max(1, parseFloat(area.width) || 0) / 19.2}%`, height: `${Math.max(1, parseFloat(area.height) || 0) / 10.8}%` }}
                         onPointerDown={(event) => {
                             onSelectHtmlText(area.index);
                             if (field.positionable) startHtmlTransform(event, area.index, false);
                         }}
+                        onDoubleClick={(event) => {
+                            if (field.objectType === 'shape' || field.objectType === 'image') return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onSelectHtmlText(area.index);
+                            setInlineTextIndex(area.index);
+                        }}
                     >
+                        {inlineTextIndex === area.index && <textarea
+                            autoFocus
+                            aria-label="슬라이드 텍스트 직접 편집"
+                            value={field.text}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onChange={(event) => onUpdate({ content: { ...content, html: updateHtmlText(content.html, area.index, { text: event.target.value }) } })}
+                            onBlur={() => { setInlineTextIndex(null); }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape') { setInlineTextIndex(null); (event.currentTarget as HTMLTextAreaElement).blur(); }
+                                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { setInlineTextIndex(null); (event.currentTarget as HTMLTextAreaElement).blur(); }
+                            }}
+                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white/95 p-1 text-inherit leading-tight outline-none"
+                            style={{ color: field.color, fontFamily: field.fontFamily, fontSize: `${Math.max(12, (parseFloat(field.fontSize) || 24) / 4)}px`, textAlign: field.textAlign as any }}
+                        />}
                         {selectedHtmlTextIndex === area.index && field.positionable && <button
                             type="button"
                             aria-label="텍스트 크기 조절"

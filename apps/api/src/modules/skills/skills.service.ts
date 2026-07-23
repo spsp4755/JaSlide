@@ -44,18 +44,17 @@ export class SkillsService {
 
     async importPptx(user: SkillUser, file: Express.Multer.File, name?: string) {
         if (!file ||
-            file.mimetype !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
             !file.originalname.toLowerCase().endsWith('.pptx') ||
             !file.size || file.size > 20 * 1024 * 1024) {
             throw new BadRequestException('PPTX file up to 20MB required');
         }
 
         const form = new FormData();
-        form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
+        form.append('file', new Blob([new Uint8Array(file.buffer)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), file.originalname);
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
         let config: unknown;
         try {
-            const response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 15000 });
+            const response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 60000 });
             config = response.data?.config;
         } catch {
             throw new BadRequestException('Failed to extract PPTX style');

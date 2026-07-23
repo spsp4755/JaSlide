@@ -388,6 +388,13 @@ Return JSON with "layout" field only.`;
             }, { signal });
             return res.choices[0]?.message?.content || '';
         } catch (error: any) {
+            if (/Engine protocol predict request failed: fetch failed/i.test(error?.message || '')) {
+                const res = await client.chat.completions.create({
+                    ...params,
+                    response_format: { type: 'json_object' },
+                }, { signal });
+                return res.choices[0]?.message?.content || '';
+            }
             if (error?.status === 400 && /response_format|peg-native/i.test(error?.message || '')) {
                 const res = await client.chat.completions.create(params, { signal });
                 return res.choices[0]?.message?.content || '';

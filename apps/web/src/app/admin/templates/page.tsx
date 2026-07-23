@@ -241,13 +241,16 @@ export default function AdminTemplatesPage() {
                 method: 'POST',
                 body: formData,
             });
-            if (!res.ok) throw new Error('Import failed');
+            if (!res.ok) {
+                const error = await res.json().catch(() => null);
+                throw new Error(error?.message || error?.detail || 'Import failed');
+            }
 
-            showToast('Template created from PPTX style.');
+            showToast('PPTX 템플릿을 만들고 원본 파일도 보관했습니다.');
             setShowPptxImportModal(false);
             fetchData();
-        } catch {
-            showToast('Unable to import the PPTX template.', 'error');
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Unable to import the PPTX template.', 'error');
         } finally {
             setImportingPptx(false);
         }
@@ -654,7 +657,7 @@ export default function AdminTemplatesPage() {
                             <label className="block text-sm font-medium text-gray-700">PPTX file *
                                 <input type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" onChange={(e) => setPptxImportForm({ ...pptxImportForm, file: e.target.files?.[0] || null })} className="mt-1 block w-full text-sm" />
                             </label>
-                            <p className="text-xs text-gray-500">PPTX files up to 20 MB. Only style tokens are extracted.</p>
+                            <p className="text-xs text-gray-500">PPTX files up to 20 MB. Layout, objects, visual tokens, and the original file are retained.</p>
                         </div>
                         <div className="flex justify-end gap-2 border-t p-4">
                             <button onClick={() => setShowPptxImportModal(false)} disabled={importingPptx} className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>

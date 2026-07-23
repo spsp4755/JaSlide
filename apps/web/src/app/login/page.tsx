@@ -37,7 +37,7 @@ export default function LoginPage() {
                 {/* Wordmark */}
                 <div className="text-center mb-10">
                     <h1 className="font-display text-4xl font-black tracking-tight text-foreground">
-                        JaSlide
+                        TaeSlide
                     </h1>
                     <p className="mt-3 text-muted-foreground">
                         누구나 전문가처럼 덱을 만들 수 있도록.

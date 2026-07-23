@@ -104,6 +104,14 @@ describe('LlmService contracts', () => {
         expect(create).toHaveBeenCalledTimes(2);
     });
 
+    it('retries a transient internal-engine failure before failing an outline', async () => {
+        const create = await createService([JSON.stringify(outline)]);
+        create.mockRejectedValueOnce(Object.assign(new Error('Engine protocol predict request failed: fetch failed'), { status: 400 }));
+
+        await expect(service.generateOutline({ content: 'internal model retry', slideCount: 2, language: 'en' })).resolves.toEqual(outline);
+        expect(create).toHaveBeenCalledTimes(2);
+    });
+
     it('rejects an outline with a different slide count after retries', async () => {
         const invalid = { ...outline, slides: [outline.slides[0]] };
         const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid), JSON.stringify(invalid), JSON.stringify(invalid)]);

@@ -5,6 +5,7 @@ WORKDIR /app
 # Install LibreOffice and Korean Noto fonts for PDF conversion.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-impress \
+    fonts-nanum \
     fonts-noto-cjk \
     poppler-utils \
     && printf '%s\n' \

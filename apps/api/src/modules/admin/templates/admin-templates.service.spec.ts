@@ -11,9 +11,9 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 const pptxType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 describe('AdminTemplatesService PPTX import', () => {
-    const prisma = { template: { create: jest.fn() } };
+    const prisma = { template: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn() } };
     const config = { get: jest.fn().mockReturnValue('http://renderer.internal') };
-    const storage = { upload: jest.fn() };
+    const storage = { upload: jest.fn(), delete: jest.fn() };
     let service: AdminTemplatesService;
 
     const file = (overrides: Partial<Express.Multer.File> = {}) => ({
@@ -33,9 +33,12 @@ describe('AdminTemplatesService PPTX import', () => {
         const extracted = {
             colors: { background: '#112233', primary: '#445566' },
             typography: { titleFont: 'Noto Sans KR', bodyFont: 'Noto Sans KR' },
+            htmlSlides: ['<div class="slide-container" />'],
+            archive: { slides: ['slide-01'] },
         };
         mockedAxios.post.mockResolvedValue({ data: { config: extracted } } as any);
         prisma.template.create.mockResolvedValue({ id: 'template-1', name: 'Brand' });
+        storage.upload.mockResolvedValue({ key: 'templates/brand.pptx' });
 
         await expect(service.importPptx(file(), { name: 'Brand', category: 'CUSTOM' }))
             .resolves.toEqual({ id: 'template-1', name: 'Brand' });
@@ -43,21 +46,32 @@ describe('AdminTemplatesService PPTX import', () => {
         expect(mockedAxios.post).toHaveBeenCalledWith(
             'http://renderer.internal/api/extract/style',
             expect.any(FormData),
-            expect.objectContaining({ timeout: 15000 }),
+            expect.objectContaining({ timeout: 60000 }),
         );
         expect(prisma.template.create).toHaveBeenCalledWith({
-            data: expect.objectContaining({ name: 'Brand', category: 'CUSTOM', config: extracted }),
+            data: expect.objectContaining({
+                name: 'Brand', category: 'CUSTOM',
+                config: expect.objectContaining({ ...extracted, pptxTemplate: { storageKey: 'templates/brand.pptx', originalname: 'brand.pptx' } }),
+            }),
         });
     });
 
     it.each([
         file({ originalname: 'brand.pdf' }),
-        file({ mimetype: 'application/pdf' }),
         file({ size: 20 * 1024 * 1024 + 1 }),
     ])('rejects an invalid PPTX upload before forwarding it', async (upload) => {
         await expect(service.importPptx(upload, { name: 'Brand', category: 'CUSTOM' }))
             .rejects.toThrow(BadRequestException);
         expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('accepts a browser upload with a generic MIME type and normalizes it for the renderer', async () => {
+        mockedAxios.post.mockResolvedValue({ data: { config: { colors: {}, typography: {}, htmlSlides: ['<div/>'], archive: {} } } } as any);
+        storage.upload.mockResolvedValue({ key: 'templates/brand.pptx' });
+        prisma.template.create.mockResolvedValue({ id: 'template-1' });
+
+        await expect(service.importPptx(file({ mimetype: 'application/octet-stream' }), { name: 'Brand', category: 'CUSTOM' })).resolves.toEqual({ id: 'template-1' });
+        expect(storage.upload).toHaveBeenCalledWith(expect.objectContaining({ mimetype: pptxType }), 'templates');
     });
 
     it('rejects a renderer response that is not template tokens', async () => {
@@ -110,5 +124,14 @@ describe('AdminTemplatesService PPTX import', () => {
 
         await service.create({ name: 'Private deck', category: 'CUSTOM', config: {}, isPublic: 'false' as any });
         expect(prisma.template.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublic: false }) }));
+    });
+
+    it('removes the retained source file when an unused PPTX template is deleted', async () => {
+        prisma.template.findUnique.mockResolvedValue({ id: 'template-1', config: { pptxTemplate: { storageKey: 'templates/brand.pptx' } }, _count: { presentations: 0 } });
+        prisma.template.delete.mockResolvedValue({ id: 'template-1' });
+        storage.delete.mockResolvedValue(undefined);
+
+        await expect(service.delete('template-1')).resolves.toEqual({ success: true });
+        expect(storage.delete).toHaveBeenCalledWith('templates/brand.pptx');
     });
 });

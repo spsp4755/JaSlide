@@ -114,21 +114,24 @@ def test_extract_content_returns_text_by_slide_without_style_tokens():
     }
 
 
-@pytest.mark.parametrize(
-    ("filename", "content_type"),
-    [
-        ("example.txt", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
-        ("example.pptx", "text/plain"),
-    ],
-)
-def test_extract_style_rejects_non_pptx_name_or_content(filename, content_type):
+@pytest.mark.parametrize("filename", ["example.txt", "example.pdf"])
+def test_extract_style_rejects_non_pptx_name(filename):
     response = TestClient(app).post(
         "/api/extract/style",
-        files={"file": (filename, _example_pptx(), content_type)},
+        files={"file": (filename, _example_pptx(), "application/octet-stream")},
     )
 
     assert response.status_code == 400
     assert response.json() == {"detail": "PPTX file required"}
+
+
+def test_extract_style_accepts_generic_browser_pptx_mime_type():
+    response = TestClient(app).post(
+        "/api/extract/style",
+        files={"file": ("example.pptx", _example_pptx(), "application/octet-stream")},
+    )
+
+    assert response.status_code == 200
 
 
 def _zip_package(entries):

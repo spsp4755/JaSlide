@@ -30,3 +30,54 @@ def test_converts_pptx_shapes_and_text_to_positioned_html_slides():
     assert "left:192px" in result["htmlSlides"][0]
     assert "안전 &lt;검증&gt;" in result["htmlSlides"][0]
     assert "background:#445566" in result["htmlSlides"][0]
+
+
+def test_preserves_pptx_font_family_in_html():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1))
+    run = box.text_frame.paragraphs[0].add_run()
+    run.text = "Weekly report"
+    run.font.name = "NanumGothic"
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    assert "font-family:NanumGothic" in result["htmlSlides"][0]
+
+
+def test_converts_tables_without_assuming_a_shape_fill():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(4), Inches(2)).table
+    table.cell(0, 0).text = "Header"
+    table.cell(1, 1).text = "Value"
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    assert 'data-object-type="table"' in result["htmlSlides"][0]
+    assert "Header" in result["htmlSlides"][0]
+
+
+def test_preserves_table_cell_dimensions_and_formatting():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(4), Inches(2)).table
+    table.columns[0].width = Inches(3)
+    table.cell(0, 0).fill.solid()
+    table.cell(0, 0).fill.fore_color.rgb = RGBColor(0x11, 0x22, 0x33)
+    run = table.cell(0, 0).text_frame.paragraphs[0].add_run()
+    run.text = "Header"
+    run.font.name = "NanumGothic"
+    run.font.size = Pt(18)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    assert "width:75.0%" in result["htmlSlides"][0]
+    assert "background:#112233" in result["htmlSlides"][0]
+    assert "font-family:NanumGothic" in result["htmlSlides"][0]

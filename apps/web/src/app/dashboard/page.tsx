@@ -9,7 +9,6 @@ import { useAuthStore } from '@/stores/auth-store';
 import { generationApi, skillsApi, templatesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { GenerationProgress } from '@/components/generation-progress';
-import { PURPOSE_OPTIONS, PurposeOption } from '@/components/purpose-onboarding';
 import {
     Plus, Send, Settings2, X, FileText, Check, Loader2, ArrowUp, ArrowDown, Trash2,
 } from 'lucide-react';
@@ -53,7 +52,6 @@ function DashboardContent() {
 
     // Prompt state
     const [textContent, setTextContent] = useState('');
-    const [selectedPurpose, setSelectedPurpose] = useState<PurposeOption>(PURPOSE_OPTIONS[0]);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
     const [pptxMode, setPptxMode] = useState<'content' | 'skill'>('content');
 
@@ -91,6 +89,8 @@ function DashboardContent() {
 
     useEffect(() => {
         if (searchParams.get('focus')) inputRef.current?.focus();
+        const prompt = searchParams.get('prompt');
+        if (prompt) setTextContent(prompt);
         setSelectedSkillId(searchParams.get('skillId'));
     }, [searchParams]);
 
@@ -116,7 +116,10 @@ function DashboardContent() {
     }, []);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
-        if (acceptedFiles.length > 0) setUploadedFile(acceptedFiles[0]);
+        const file = acceptedFiles[0];
+        if (!file) return;
+        setUploadedFile(file);
+        setPptxMode(file.name.toLowerCase().endsWith('.pptx') ? 'skill' : 'content');
     }, []);
 
     const { getRootProps, getInputProps, open: openFilePicker } = useDropzone({
@@ -136,11 +139,10 @@ function DashboardContent() {
         noKeyboard: true,
     });
 
-    // ponytail: '자동' = 목적별 추천 장수. 콘텐츠 기반 자동 산정이 필요해지면 백엔드로 이동
-    const effectiveSlideCount = slideCount ?? selectedPurpose.recommendedSlideCount ?? 10;
+    const optionSlideCount = slideCount ?? 8;
 
-    const handleImportSkill = async () => {
-        if (!uploadedFile) return;
+    const handleImportSkill = async (): Promise<Skill | null> => {
+        if (!uploadedFile) return null;
         setGenerationStatus('generating');
         try {
             const response = await skillsApi.importPptx(uploadedFile);
@@ -149,29 +151,32 @@ function DashboardContent() {
             setSelectedSkillId(skill.id);
             setUploadedFile(null);
             setPptxMode('content');
-            toast({ title: 'Skill 등록 완료', description: `"${skill.name}" Skill이 생성되어 선택되었습니다.` });
+            toast({ title: 'Skill 등록 완료', description: `"${skill.name}" Skill이 선택되었습니다.` });
+            return skill;
         } catch (error: any) {
-            toast({
-                title: 'Skill 등록 실패',
-                description: error.response?.data?.message || 'PPTX에서 Skill을 만들지 못했습니다.',
-                variant: 'destructive',
-            });
+            toast({ title: 'Skill 등록 실패', description: error.response?.data?.message || 'PPTX에서 Skill을 만들지 못했습니다.', variant: 'destructive' });
+            return null;
         } finally {
             setGenerationStatus('idle');
         }
     };
 
     const handleGenerate = async () => {
+        let generationSkillId = selectedSkillId;
+        let sourceFile = uploadedFile;
         if (uploadedFile?.name.toLowerCase().endsWith('.pptx') && pptxMode === 'skill') {
-            return handleImportSkill();
+            const importedSkill = await handleImportSkill();
+            if (!importedSkill) return;
+            generationSkillId = importedSkill.id;
+            if (textContent.trim()) sourceFile = null;
         }
-        if (!textContent.trim() && !uploadedFile) {
+        if (!textContent.trim() && !sourceFile) {
             toast({ title: '오류', description: '내용을 입력하거나 파일을 첨부해주세요.', variant: 'destructive' });
             return;
         }
         setOutlineLoading(true);
         try {
-            const extracted = uploadedFile ? await generationApi.extractSource(uploadedFile) : null;
+            const extracted = sourceFile ? await generationApi.extractSource(sourceFile) : null;
             const content = extracted
                 ? extracted.data.chunks.map((chunk: { locator: string; content: string }) => `[${chunk.locator}]\n${chunk.content}`).join('\n\n')
                 : textContent;
@@ -179,16 +184,16 @@ function DashboardContent() {
             const response = await generationApi.outline({
                 sourceType: 'TEXT',
                 content,
-                slideCount: effectiveSlideCount,
+                ...(slideCount ? { slideCount } : {}),
                 language,
-                skillId: selectedSkillId,
+                skillId: generationSkillId,
                 templateId: selectedTemplateId,
                 options: {
                     includeImages,
                     includeCharts,
                     style: 'professional',
                     tone: 'informative',
-                    purpose: selectedPurpose.id,
+                    purpose: 'general',
                 },
             });
             setOutline(response.data);
@@ -236,7 +241,7 @@ function DashboardContent() {
                     includeCharts,
                     style: 'professional',
                     tone: 'informative',
-                    purpose: selectedPurpose.id,
+                    purpose: 'general',
                 },
                 outline: cleaned,
             });
@@ -433,25 +438,8 @@ function DashboardContent() {
 
                 {/* Hero */}
                 <div className="text-center mb-8">
-                    <h1 className="font-display text-5xl font-black tracking-tight text-foreground mb-3">JaSlide AI 슬라이드</h1>
+                    <h1 className="font-display text-5xl font-black tracking-tight text-foreground mb-3">TaeSlide AI 슬라이드</h1>
                     <p className="text-gray-500">누구나 전문가처럼 덱을 만들 수 있도록.</p>
-                </div>
-
-                {/* Purpose tabs */}
-                <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-                    {PURPOSE_OPTIONS.map((purpose) => (
-                        <button
-                            key={purpose.id}
-                            onClick={() => setSelectedPurpose(purpose)}
-                            className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
-                                selectedPurpose.id === purpose.id
-                                    ? 'bg-foreground text-background border-foreground'
-                                    : 'bg-card text-muted-foreground border-border hover:border-foreground/40'
-                            }`}
-                        >
-                            {purpose.title}
-                        </button>
-                    ))}
                 </div>
 
                 {/* Prompt box */}
@@ -487,20 +475,20 @@ function DashboardContent() {
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <label className="text-sm font-medium text-gray-700">
-                                                    슬라이드 수{slideCount === null ? ` · 자동 (${effectiveSlideCount}장 예상)` : `: ${slideCount}장`}
+                                                    슬라이드 수{slideCount === null ? ' · 자동' : `: ${slideCount}장`}
                                                 </label>
                                                 <label className="flex items-center gap-1.5 text-sm text-gray-600">
                                                     <input
                                                         type="checkbox"
                                                         checked={slideCount === null}
-                                                        onChange={(e) => setSlideCount(e.target.checked ? null : effectiveSlideCount)}
+                                    onChange={(e) => setSlideCount(e.target.checked ? null : optionSlideCount)}
                                                         className="rounded accent-gray-900"
                                                     />
                                                     자동
                                                 </label>
                                             </div>
                                             <input
-                                                type="range" min={3} max={30} value={effectiveSlideCount}
+                                                type="range" min={3} max={30} value={optionSlideCount}
                                                 onChange={(e) => setSlideCount(Number(e.target.value))}
                                                 className="w-full accent-foreground"
                                             />

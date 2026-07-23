@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <aside className="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
                 <Link href="/dashboard" className="flex items-center gap-2 px-4 py-4 border-b">
                     <Sparkles className="h-6 w-6 text-foreground" />
-                    <span className="text-lg font-bold font-display tracking-tight">JaSlide</span>
+                    <span className="text-lg font-bold font-display tracking-tight">TaeSlide</span>
                 </Link>
 
                 <div className="p-3">

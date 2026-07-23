@@ -11,7 +11,7 @@ export default function RootPage() {
 
     useEffect(() => {
         if (!hasHydrated) return;
-        router.replace(isAuthenticated ? '/dashboard' : '/login');
+        router.replace(isAuthenticated ? '/home' : '/login');
     }, [hasHydrated, isAuthenticated, router]);
 
     return (

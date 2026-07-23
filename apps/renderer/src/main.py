@@ -130,11 +130,7 @@ def _extract_pptx_content(content: bytes) -> dict:
 
 @app.post("/api/extract/style")
 async def extract_style(file: UploadFile = File(...)):
-    if (
-        not (file.filename or "").lower().endswith(".pptx")
-        or file.content_type
-        != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    ):
+    if not (file.filename or "").lower().endswith(".pptx"):
         raise HTTPException(status_code=400, detail="PPTX file required")
     content = await file.read()
     if not _is_safe_pptx_package(content):
@@ -159,11 +155,7 @@ async def extract_html_template(file: UploadFile = File(...)):
 
 @app.post("/api/extract/content")
 async def extract_content(file: UploadFile = File(...)):
-    if (
-        not (file.filename or "").lower().endswith(".pptx")
-        or file.content_type
-        != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    ):
+    if not (file.filename or "").lower().endswith(".pptx"):
         raise HTTPException(status_code=400, detail="PPTX file required")
     content = await file.read()
     if not _is_safe_pptx_package(content):

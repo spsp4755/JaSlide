@@ -11,6 +11,13 @@ export function defaultLayoutForSlideType(type: string): string {
     return type === 'TWO_COLUMN' ? 'two-column' : 'center';
 }
 
+export function preservesTemplateStructure(template: string, candidate: string): boolean {
+    const count = (html: string, pattern: RegExp) => (html.match(pattern) || []).length;
+    return count(candidate, /<table\b/gi) >= count(template, /<table\b/gi)
+        && count(candidate, /<(?:td|th)\b/gi) >= count(template, /<(?:td|th)\b/gi)
+        && count(candidate, /data-object\s*=\s*["']true["']/gi) >= count(template, /data-object\s*=\s*["']true["']/gi);
+}
+
 @Injectable()
 export class GenerationService implements OnModuleInit {
     private readonly logger = new Logger(GenerationService.name);
@@ -58,8 +65,15 @@ export class GenerationService implements OnModuleInit {
     private async templateSlides(templateId?: string | null): Promise<string[]> {
         if (!templateId) return [];
         const template = await this.prisma.template.findUnique({ where: { id: templateId }, select: { config: true } });
-        const slides = (template?.config as any)?.zipTemplate?.slides;
-        return Array.isArray(slides) ? slides.filter((slide): slide is string => typeof slide === 'string') : [];
+        const config = (template?.config as any) || {};
+        const slides = config.zipTemplate?.slides;
+        if (Array.isArray(slides)) return slides.filter((slide): slide is string => typeof slide === 'string');
+        // PPTX imports store positioned HTML, not ZIP filenames.  Give the outline
+        // model a compact text catalog so it can select the matching layout.
+        return Array.isArray(config.htmlSlides)
+            ? config.htmlSlides.filter((slide: unknown): slide is string => typeof slide === 'string').map((slide: string) =>
+                slide.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180) || 'Visual layout')
+            : [];
     }
 
     private async templateHtmlSlides(templateId?: string | null): Promise<string[]> {
@@ -67,6 +81,11 @@ export class GenerationService implements OnModuleInit {
         const template = await this.prisma.template.findUnique({ where: { id: templateId }, select: { config: true } });
         const slides = (template?.config as any)?.htmlSlides;
         return Array.isArray(slides) ? slides.filter((slide): slide is string => typeof slide === 'string' && slide.trim().length > 0) : [];
+    }
+
+    private automaticSlideCount(content: string): number {
+        // ponytail: length heuristic; add an LLM planning pass only if content structure needs finer sizing.
+        return Math.min(30, Math.max(3, Math.ceil(content.replace(/\s/g, '').length / 350)));
     }
 
     // Reused outline generation shared by the outline endpoint and (implicitly) the pipeline.
@@ -82,7 +101,7 @@ export class GenerationService implements OnModuleInit {
         const language = dto.language || (await this.llmService.detectLanguage(guidedContent));
         return this.llmService.generateOutline({
             content: guidedContent,
-            slideCount: dto.slideCount ?? 10,
+            slideCount: dto.slideCount ?? this.automaticSlideCount(guidedContent),
             language,
             style: dto.options?.style,
             templateSlides,
@@ -230,16 +249,22 @@ export class GenerationService implements OnModuleInit {
                     keyPoints: slideOutline.keyPoints,
                     language,
                 });
-                const templateIndex = Number.isInteger(slideOutline.templateIndex) ? slideOutline.templateIndex as number : -1;
-                let html: string | undefined;
-                if (htmlTemplates[templateIndex]) {
+                const requestedTemplateIndex = Number.isInteger(slideOutline.templateIndex) ? slideOutline.templateIndex as number : -1;
+                const templateIndex = htmlTemplates.length
+                    ? (htmlTemplates[requestedTemplateIndex] ? requestedTemplateIndex : i % htmlTemplates.length)
+                    : -1;
+                let html = templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
+                if (html) {
                     try {
-                        html = await this.llmService.generateSlideHtml({
+                        const generatedHtml = await this.llmService.generateSlideHtml({
                             templateHtml: htmlTemplates[templateIndex], title: slideOutline.title,
                             type: slideOutline.type, keyPoints: slideOutline.keyPoints, language,
                         });
+                        html = preservesTemplateStructure(htmlTemplates[templateIndex], generatedHtml)
+                            ? generatedHtml
+                            : htmlTemplates[templateIndex];
                     } catch (error) {
-                        this.logger.warn(`HTML generation failed for slide ${i + 1}; using structured fallback`);
+                        this.logger.warn(`HTML generation failed for slide ${i + 1}; retaining the selected template`);
                     }
                 }
 
@@ -247,7 +272,7 @@ export class GenerationService implements OnModuleInit {
                     order: i,
                     type: slideOutline.type as any,
                     title: slideOutline.title,
-                    content: { ...content, ...(html ? { html } : {}), ...(Number.isInteger(slideOutline.templateIndex) ? { templateIndex: slideOutline.templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
+                    content: { ...content, ...(html ? { html } : {}), ...(templateIndex >= 0 ? { templateIndex } : {}) } as unknown as Prisma.InputJsonValue,
                     layout: defaultLayoutForSlideType(slideOutline.type),
                 });
 

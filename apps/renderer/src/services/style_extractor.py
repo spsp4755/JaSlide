@@ -10,7 +10,7 @@ from pptx.oxml.ns import qn
 
 
 def _solid_color(fill):
-    if fill.type != MSO_FILL_TYPE.SOLID:
+    if not fill or fill.type != MSO_FILL_TYPE.SOLID:
         return None
     try:
         value = str(fill.fore_color.rgb)
@@ -33,7 +33,7 @@ def _font_name(run):
 def _html_layout(slide):
     text_shapes = [
         shape for shape in slide.shapes
-        if shape.has_text_frame and shape.text_frame.text.strip()
+        if getattr(shape, "has_text_frame", False) and shape.text_frame.text.strip()
     ]
     if not text_shapes:
         return None
@@ -76,10 +76,10 @@ def extract_template_tokens(pptx_bytes: bytes) -> dict:
         if background:
             backgrounds.append(background)
         for shape in slide.shapes:
-            color = _solid_color(shape.fill)
+            color = _solid_color(getattr(shape, "fill", None))
             if color:
                 fills.append(color)
-            if shape.has_text_frame:
+            if getattr(shape, "has_text_frame", False):
                 for paragraph in shape.text_frame.paragraphs:
                     for run in paragraph.runs:
                         font = _font_name(run)

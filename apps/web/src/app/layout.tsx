@@ -13,7 +13,7 @@ const serifDisplay = localFont({
 });
 
 export const metadata: Metadata = {
-    title: 'JaSlide - AI 프레젠테이션 자동 생성',
+    title: 'TaeSlide - AI 프레젠테이션 자동 생성',
     description: 'AI 기반 프레젠테이션 자동 생성 시스템',
     keywords: ['프레젠테이션', 'AI', '슬라이드', 'PPT', '자동 생성'],
 };
