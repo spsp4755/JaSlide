@@ -382,7 +382,7 @@ def test_pptx_template_keeps_native_text_and_table_objects_editable():
     template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(source_buffer.getvalue()).decode("ascii")))
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
         "objectEdits": [
-            {"slide": 0, "objectId": str(title.shape_id), "text": "Updated title", "left": 240, "top": 180, "width": 720, "height": 120},
+            {"slide": 0, "objectId": str(title.shape_id), "text": "Updated title", "left": 240, "top": 180, "width": 720, "height": 120, "fontSize": 28, "color": "#112233", "bold": True, "italic": True},
             {"slide": 0, "objectId": str(table_shape.shape_id), "cells": [["Updated cell"]]},
         ],
     })))
@@ -392,5 +392,7 @@ def test_pptx_template_keeps_native_text_and_table_objects_editable():
     assert generated.slides[0].shapes[0].text == "Updated title"
     assert generated.slides[0].shapes[0].left == generated.slide_width * 240 // 1920
     assert generated.slides[0].shapes[0].top == generated.slide_height * 180 // 1080
+    run = generated.slides[0].shapes[0].text_frame.paragraphs[0].runs[0]
+    assert run.font.size == Pt(28) and str(run.font.color.rgb) == "112233" and run.font.bold and run.font.italic
     assert generated.slides[0].shapes[1].has_table
     assert generated.slides[0].shapes[1].table.cell(0, 0).text == "Updated cell"

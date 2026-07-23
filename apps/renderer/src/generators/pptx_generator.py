@@ -151,6 +151,19 @@ class PPTXGenerator:
             return
         if isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             shape.text = edit["text"]
+        if getattr(shape, "has_text_frame", False):
+            for paragraph in shape.text_frame.paragraphs:
+                for run in paragraph.runs:
+                    if isinstance(edit.get("fontFamily"), str):
+                        run.font.name = edit["fontFamily"]
+                    if isinstance(edit.get("fontSize"), (int, float)):
+                        run.font.size = Pt(edit["fontSize"])
+                    if isinstance(edit.get("color"), str) and len(edit["color"].lstrip("#")) == 6:
+                        run.font.color.rgb = RGBColor.from_string(edit["color"].lstrip("#").upper())
+                    if isinstance(edit.get("bold"), bool):
+                        run.font.bold = edit["bold"]
+                    if isinstance(edit.get("italic"), bool):
+                        run.font.italic = edit["italic"]
         for key, size in (("left", self.prs.slide_width), ("width", self.prs.slide_width), ("top", self.prs.slide_height), ("height", self.prs.slide_height)):
             if isinstance(edit.get(key), (int, float)):
                 setattr(shape, key, int(edit[key] * size / (1920 if key in ("left", "width") else 1080)))

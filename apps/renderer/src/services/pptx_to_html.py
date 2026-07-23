@@ -68,6 +68,19 @@ def _text_html(source) -> tuple[str, int, str | None]:
     return "<br>".join(paragraphs), size, color
 
 
+def _text_style(shape) -> dict:
+    run = next((run for paragraph in shape.text_frame.paragraphs for run in paragraph.runs), None)
+    if not run:
+        return {}
+    return {
+        "fontSize": round(run.font.size.pt) if run.font.size else 18,
+        "color": _font_color(run.font.color) or "#1A1A1A",
+        "fontFamily": _font_name(run) or "",
+        "bold": bool(run.font.bold),
+        "italic": bool(run.font.italic),
+    }
+
+
 def _table_html(shape) -> str:
     widths = [column.width for column in shape.table.columns]
     total_width = sum(widths) or 1
@@ -118,7 +131,7 @@ def pptx_to_html(content: bytes) -> dict:
                 objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape)}</div>')
             elif getattr(shape, "has_text_frame", False) and shape.text.strip():
                 text, font_size, color = _text_html(shape)
-                source_objects.append({**source_object, "kind": "text", "text": shape.text})
+                source_objects.append({**source_object, "kind": "text", "text": shape.text, **_text_style(shape)})
                 fill = _color(getattr(shape, "fill", None))
                 surface = f"background:{fill};" if fill else ""
                 objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
