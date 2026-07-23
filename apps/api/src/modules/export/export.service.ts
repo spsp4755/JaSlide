@@ -4,6 +4,7 @@ import axios from 'axios';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../assets/storage.service';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const fontkit = require('fontkit');
@@ -20,6 +21,7 @@ export class ExportService {
     constructor(
         private prisma: PrismaService,
         private configService: ConfigService,
+        private storage: StorageService,
     ) {
         this.rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
     }
@@ -38,12 +40,7 @@ export class ExportService {
             const response = await axios.post(
                 `${this.rendererUrl}/api/render/pptx`,
                 {
-                    presentation: {
-                        id: presentation.id,
-                        title: presentation.title,
-                        slides: presentation.slides,
-                        template: presentation.template,
-                    },
+                    presentation: await this.rendererPresentation(presentation),
                 },
                 {
                     responseType: 'arraybuffer',
@@ -60,6 +57,16 @@ export class ExportService {
             this.logger.error(`PPTX export failed: ${this.rendererError(error)}`);
             throw new ServiceUnavailableException('Presentation renderer is unavailable');
         }
+    }
+
+    private async rendererPresentation(presentation: any) {
+        const template = presentation.template;
+        const config = { ...(template?.config as any) };
+        const source = config.source as { kind?: string; storageKey?: string } | undefined;
+        if ((source?.kind === 'pptx' || config.pptxTemplate?.storageKey) && (source?.storageKey || config.pptxTemplate?.storageKey)) {
+            config.sourcePptx = (await this.storage.getBuffer(source?.storageKey || config.pptxTemplate.storageKey)).toString('base64');
+        }
+        return { id: presentation.id, title: presentation.title, slides: presentation.slides, template: template ? { ...template, config } : null };
     }
 
     private async generatePptxNative(presentation: any) {

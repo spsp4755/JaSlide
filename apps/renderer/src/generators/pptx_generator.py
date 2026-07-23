@@ -12,6 +12,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from io import BytesIO
+import base64
 from typing import Optional, Any
 from ..services.html_template import extract_html_template_style, parse_html_layout, parse_html_objects
 from ..services.html_renderer import render_slide_png
@@ -114,6 +115,16 @@ class PPTXGenerator:
 
     def generate(self, presentation: Any, slide_index: Optional[int] = None) -> bytes:
         """Generate PPTX from presentation data"""
+        config = self._as_dict(getattr(self.template_config, "config", self.template_config))
+        source = config.get("sourcePptx")
+        if isinstance(source, str) and source:
+            self.prs = PPTXPresentation(BytesIO(base64.b64decode(source)))
+            for slide_data in presentation.slides:
+                for edit in self._as_dict(getattr(slide_data, "content", {})).get("objectEdits", []):
+                    self._apply_native_edit(edit)
+            buffer = BytesIO()
+            self.prs.save(buffer)
+            return buffer.getvalue()
         self._reset_presentation()
         slides = list(enumerate(presentation.slides))
         if slide_index is not None:
@@ -129,6 +140,25 @@ class PPTXGenerator:
         self.prs.save(buffer)
         buffer.seek(0)
         return buffer.read()
+
+    def _apply_native_edit(self, edit: dict) -> None:
+        if not isinstance(edit, dict) or not isinstance(edit.get("slide"), int):
+            return
+        if edit["slide"] < 0 or edit["slide"] >= len(self.prs.slides):
+            return
+        shape = next((item for item in self.prs.slides[edit["slide"]].shapes if str(item.shape_id) == str(edit.get("objectId"))), None)
+        if not shape:
+            return
+        if isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
+            shape.text = edit["text"]
+        cells = edit.get("cells")
+        if isinstance(cells, list) and getattr(shape, "has_table", False):
+            for row_index, row in enumerate(cells):
+                if not isinstance(row, list) or row_index >= len(shape.table.rows):
+                    continue
+                for column_index, value in enumerate(row):
+                    if column_index < len(shape.table.columns) and isinstance(value, str):
+                        shape.table.cell(row_index, column_index).text = value
 
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""

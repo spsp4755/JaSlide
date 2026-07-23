@@ -57,6 +57,7 @@ class TemplateConfig(BaseModel):
     htmlTemplate: Optional[str] = None
     htmlSlides: Optional[List[str]] = None
     zipTemplate: Optional[dict] = None
+    sourcePptx: Optional[str] = None
 
 
 class Template(BaseModel):

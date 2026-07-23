@@ -367,3 +367,28 @@ def test_reusing_a_generator_does_not_accumulate_prior_slides():
     second_output = generator.generate(presentation)
 
     assert len(Presentation(BytesIO(second_output)).slides) == 1
+
+
+def test_pptx_template_keeps_native_text_and_table_objects_editable():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    title = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    title.text = "Original title"
+    table_shape = slide.shapes.add_table(1, 1, Inches(1), Inches(2), Inches(4), Inches(1))
+    table_shape.table.cell(0, 0).text = "Original cell"
+    source_buffer = BytesIO()
+    source.save(source_buffer)
+
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(source_buffer.getvalue()).decode("ascii")))
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [
+            {"slide": 0, "objectId": str(title.shape_id), "text": "Updated title"},
+            {"slide": 0, "objectId": str(table_shape.shape_id), "cells": [["Updated cell"]]},
+        ],
+    })))
+
+    generated = Presentation(BytesIO(output))
+    assert generated.slides[0].shapes[0].has_text_frame
+    assert generated.slides[0].shapes[0].text == "Updated title"
+    assert generated.slides[0].shapes[1].has_table
+    assert generated.slides[0].shapes[1].table.cell(0, 0).text == "Updated cell"

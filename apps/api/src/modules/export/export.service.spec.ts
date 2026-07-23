@@ -13,11 +13,27 @@ describe('ExportService', () => {
     let prisma: { presentation: { findFirst: jest.Mock } };
 
     beforeEach(() => {
+        presentation.template = null;
         prisma = { presentation: { findFirst: jest.fn().mockResolvedValue(presentation) } };
         service = new ExportService(
             prisma as any,
             { get: jest.fn().mockReturnValue('http://renderer.internal') } as any,
+            { getBuffer: jest.fn() } as any,
         );
+    });
+
+    it('passes a retained PPTX template to the renderer for native export', async () => {
+        const source = Buffer.from('native-pptx');
+        presentation.template = { id: 'template-1', config: { source: { kind: 'pptx', storageKey: 'templates/source.pptx' } } } as any;
+        (service as any).storage.getBuffer.mockResolvedValue(source);
+        jest.spyOn(axios, 'post').mockResolvedValueOnce({ data: Buffer.from('export') } as any);
+
+        await service.exportToPptx('presentation-1', 'user-1');
+
+        expect((service as any).storage.getBuffer).toHaveBeenCalledWith('templates/source.pptx');
+        expect(axios.post).toHaveBeenCalledWith('http://renderer.internal/api/render/pptx', expect.objectContaining({
+            presentation: expect.objectContaining({ template: expect.objectContaining({ config: expect.objectContaining({ sourcePptx: source.toString('base64') }) }) }),
+        }), expect.any(Object));
     });
 
     it.each([

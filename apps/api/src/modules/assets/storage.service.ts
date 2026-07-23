@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
-import { mkdir, unlink, writeFile } from 'fs/promises';
+import { mkdir, unlink, writeFile, readFile } from 'fs/promises';
 import { basename, dirname, join, resolve, sep } from 'path';
 
 export interface UploadResult {
@@ -140,6 +140,13 @@ export class StorageService {
             this.logger.error('Failed to upload from URL', error);
             throw error;
         }
+    }
+
+    async getBuffer(key: string): Promise<Buffer> {
+        if (this.useLocal) return readFile(this.localPath(key));
+        const response = await this.s3Client!.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+        if (!response.Body) throw new Error('Stored file is empty');
+        return Buffer.from(await response.Body.transformToByteArray());
     }
 
     private localPath(key: string): string {
