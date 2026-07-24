@@ -464,6 +464,9 @@ export default function EditorPage() {
         ? (presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || [])
         : [];
     const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
+    const selectedNativeCells = selectedNativeObject?.kind === 'table'
+        ? ((selectedSlide?.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || selectedNativeObject.cells || [])
+        : [];
     const navigateSlide = (direction: -1 | 1) => {
         const index = presentation?.slides.findIndex((slide) => slide.id === selectedSlideId) ?? -1;
         const target = presentation?.slides[index + direction];
@@ -1215,8 +1218,13 @@ export default function EditorPage() {
                                         value={selectedNativeObject.kind === 'table' ? ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || selectedNativeObject.cells || []).map((row: string[]) => row.join(' | ')).join('\n') : ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.text ?? selectedNativeObject.text ?? '')}
                                         rows={selectedNativeObject.kind === 'table' ? 6 : 4}
                                         onChange={(event) => updateNativeObject(selectedNativeObject.id, selectedNativeObject.kind === 'table' ? { cells: event.target.value.split('\n').map((row) => row.split('|').map((cell) => cell.trim())) } : { text: event.target.value })}
-                                        className="w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        className={selectedNativeObject.kind === 'table' ? 'hidden' : 'w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500'}
                                     />
+                                    </div>}
+                                    {selectedNativeObject.kind === 'table' && <div className="overflow-auto rounded border p-2">
+                                        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(...selectedNativeCells.map((row: string[]) => row.length), 1)}, minmax(96px, 1fr))` }}>
+                                            {selectedNativeCells.flatMap((row: string[], rowIndex: number) => row.map((cell: string, cellIndex: number) => <input key={`${rowIndex}-${cellIndex}`} value={cell} onChange={(event) => { const cells = selectedNativeCells.map((source: string[]) => [...source]); cells[rowIndex][cellIndex] = event.target.value; updateNativeObject(selectedNativeObject.id, { cells }); }} className="min-w-0 rounded border px-2 py-1 text-sm" />))}
+                                        </div>
                                     </div>}
                                     {selectedNativeObject.kind === 'text' && <div className="grid grid-cols-2 gap-2">
                                         <label className="text-xs text-gray-600">글꼴<input value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontFamily ?? selectedNativeObject.fontFamily ?? ''} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontFamily: event.target.value })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
