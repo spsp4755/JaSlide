@@ -489,6 +489,11 @@ export default function EditorPage() {
         updateSlide(selectedSlide.id, { content });
         handleSaveSlideDelayed(selectedSlide.id, { content });
     };
+    const deleteNativeObject = () => {
+        if (!selectedNativeObjectId) return;
+        updateNativeObject(selectedNativeObjectId, { delete: true });
+        setSelectedNativeObjectId(null);
+    };
 
     const loadPreview = useCallback((slideIndex: number) => {
         const key = `${previewVersion}:${slideIndex}`;
@@ -1201,10 +1206,10 @@ export default function EditorPage() {
                                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">원본 PPTX 객체를 선택해 텍스트, 표, 위치와 크기를 직접 수정합니다.</div>
                                 <select value={selectedNativeObjectId ?? ''} onChange={(event) => setSelectedNativeObjectId(event.target.value || null)} className="w-full rounded-lg border px-3 py-2 text-sm">
                                     <option value="">수정할 PPTX 객체 선택</option>
-                                    {nativeObjects.filter((item: any) => item.kind === 'text' || item.kind === 'table' || item.kind === 'shape').map((item: any, index: number) => <option key={item.id} value={item.id}>{item.kind === 'table' ? '표' : item.kind === 'shape' ? '도형' : '텍스트'} {index + 1}</option>)}
+                                    {nativeObjects.filter((item: any) => item.kind === 'text' || item.kind === 'table' || item.kind === 'shape' || item.kind === 'image').map((item: any, index: number) => <option key={item.id} value={item.id}>{item.kind === 'table' ? '표' : item.kind === 'shape' ? '도형' : item.kind === 'image' ? '이미지' : '텍스트'} {index + 1}</option>)}
                                 </select>
                                 {selectedNativeObject ? <div className="space-y-3">
-                                    {selectedNativeObject.kind !== 'shape' && <div className="space-y-2">
+                                    {selectedNativeObject.kind !== 'shape' && selectedNativeObject.kind !== 'image' && <div className="space-y-2">
                                     <label className="block text-xs font-medium text-gray-600">{selectedNativeObject.kind === 'table' ? '표 내용 (줄마다 첫 번째 열)' : '텍스트'}</label>
                                     <textarea
                                         value={selectedNativeObject.kind === 'table' ? ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || selectedNativeObject.cells || []).map((row: string[]) => row.join(' | ')).join('\n') : ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.text ?? selectedNativeObject.text ?? '')}
@@ -1224,6 +1229,7 @@ export default function EditorPage() {
                                         <label className="text-xs text-gray-600">테두리<input type="color" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.lineColor ?? selectedNativeObject.lineColor ?? '#202124'} onChange={(event) => updateNativeObject(selectedNativeObject.id, { lineColor: event.target.value })} className="mt-1 h-8 w-full rounded border p-1" /></label>
                                         <label className="text-xs text-gray-600">선 굵기<input type="number" min="0" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.lineWidth ?? selectedNativeObject.lineWidth ?? 1} onChange={(event) => updateNativeObject(selectedNativeObject.id, { lineWidth: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
                                     </div>}
+                                    <Button type="button" variant="destructive" size="sm" className="w-full" onClick={deleteNativeObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제</Button>
                                     <div className="grid grid-cols-2 gap-2">
                                         {(['left', 'top', 'width', 'height'] as const).map((property) => <label key={property} className="text-xs text-gray-600">{{ left: 'X', top: 'Y', width: 'W', height: 'H' }[property]}<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.[property] ?? selectedNativeObject[property] ?? 0} onChange={(event) => updateNativeObject(selectedNativeObject.id, { [property]: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>)}
                                     </div>
@@ -1720,6 +1726,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                 <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
                 {nativeObjects.map((object: any) => {
                     const edit = (content.objectEdits || []).find((item: any) => item.objectId === object.id) || {};
+                    if (edit.delete) return null;
                     const left = edit.left ?? object.left ?? 0;
                     const top = edit.top ?? object.top ?? 0;
                     const width = edit.width ?? object.width ?? 0;

@@ -86,5 +86,8 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /fillColor/);
     assert.match(editor, /lineColor/);
     assert.match(editor, /lineWidth/);
+    assert.match(editor, /deleteNativeObject/);
+    assert.match(editor, /edit\.delete/);
+    assert.match(editor, /item\.kind === 'image'/);
     assert.match(layout, /TaeSlide/);
 });

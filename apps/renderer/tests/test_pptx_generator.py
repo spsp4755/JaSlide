@@ -412,3 +412,15 @@ def test_pptx_template_applies_native_shape_colors():
     assert str(generated.fill.fore_color.rgb) == "112233"
     assert str(generated.line.color.rgb) == "445566"
     assert generated.line.width == 3 * 12700
+
+
+def test_pptx_template_deletes_a_native_object():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(shape.shape_id), "delete": True}]})))
+
+    assert len(Presentation(BytesIO(output)).slides[0].shapes) == 0

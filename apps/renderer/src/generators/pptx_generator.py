@@ -149,6 +149,9 @@ class PPTXGenerator:
         shape = next((item for item in self.prs.slides[edit["slide"]].shapes if str(item.shape_id) == str(edit.get("objectId"))), None)
         if not shape:
             return
+        if edit.get("delete") is True:
+            shape._element.getparent().remove(shape._element)
+            return
         if isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             shape.text = edit["text"]
         if getattr(shape, "has_text_frame", False):
