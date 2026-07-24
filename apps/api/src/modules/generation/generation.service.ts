@@ -390,6 +390,20 @@ export class GenerationService implements OnModuleInit {
         const editedContent = typeof currentContent.html === 'string'
             ? { ...currentContent, html: await this.llmService.editSlideHtml(currentContent.html, instruction, signal) }
             : await this.llmService.editSlideContent(currentContent, instruction, slide.type, signal);
+        if (Array.isArray(currentContent.objectEdits)) {
+            const text = [editedContent.heading, editedContent.body || editedContent.bullets?.map((item: any) => item.text).join('\n') || ''];
+            let index = 0;
+            return {
+                id: slideId,
+                content: {
+                    ...currentContent,
+                    ...editedContent,
+                    objectEdits: currentContent.objectEdits.map((item: any) => typeof item.text === 'string'
+                        ? { ...item, text: text[Math.min(index++, text.length - 1)] }
+                        : item),
+                },
+            };
+        }
         if (signal?.aborted) throw new GenerationCancelledError();
         return { id: slideId, content: editedContent };
     }

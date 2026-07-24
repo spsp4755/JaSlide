@@ -314,6 +314,17 @@ describe('GenerationService cancellation', () => {
         });
     });
 
+    it('keeps native PPTX object edits when AI chat changes slide content', async () => {
+        const updated = { id: 'slide-pptx' };
+        const editPrisma = { slide: { findUnique: jest.fn().mockResolvedValue({ id: 'slide-pptx', type: 'CONTENT', content: { objectEdits: [{ objectId: '1', text: 'Old title' }, { objectId: '2', text: 'Old body' }, { objectId: '3', cells: [['KPI', '']] }] }, presentation: { userId: 'user-1' } }), update: jest.fn().mockResolvedValue(updated) } };
+        const llm = { editSlideContent: jest.fn().mockResolvedValue({ heading: 'New title', body: 'New body' }) };
+        const svc = new GenerationService(editPrisma as any, llm as any, {} as any);
+
+        await svc.aiEdit('user-1', { slideId: 'slide-pptx', instruction: '내용을 새로 써줘' } as any);
+
+        expect(editPrisma.slide.update).toHaveBeenCalledWith({ where: { id: 'slide-pptx' }, data: { content: expect.objectContaining({ objectEdits: [{ objectId: '1', text: 'New title' }, { objectId: '2', text: 'New body' }, { objectId: '3', cells: [['KPI', '']] }] }) } });
+    });
+
     it('stores native object edits instead of HTML for PPTX templates', async () => {
         const pipelinePrisma = {
             generationJob: { findUnique: jest.fn().mockResolvedValueOnce({ id: 'job-pptx', status: 'QUEUED', presentationId: 'presentation-pptx', input: { content: 'weekly report', slideCount: 1, language: 'en', templateId: 'template-pptx' } }).mockResolvedValueOnce({ status: 'GENERATING_CONTENT' }), updateMany: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn() },
