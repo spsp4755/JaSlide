@@ -13,6 +13,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from io import BytesIO
 import base64
+import copy
 from typing import Optional, Any
 from ..services.html_template import extract_html_template_style, parse_html_layout, parse_html_objects
 from ..services.html_renderer import render_slide_png
@@ -119,9 +120,40 @@ class PPTXGenerator:
         source = config.get("sourcePptx")
         if isinstance(source, str) and source:
             self.prs = PPTXPresentation(BytesIO(base64.b64decode(source)))
-            for slide_data in presentation.slides:
-                for edit in self._as_dict(getattr(slide_data, "content", {})).get("objectEdits", []):
-                    self._apply_native_edit(edit)
+            original_slide_count = len(self.prs.slides)
+            slides_to_process = list(presentation.slides)
+            if slide_index is not None:
+                if slide_index < 0 or slide_index >= len(slides_to_process):
+                    raise ValueError("Slide index is out of range")
+                slides_to_process = [slides_to_process[slide_index]]
+
+            used_slide_ids = set()
+            kept_slide_ids = []
+            for slide_data in slides_to_process:
+                edits = self._as_dict(getattr(slide_data, "content", {})).get("objectEdits", [])
+                if not original_slide_count:
+                    continue
+                target = next(
+                    (edit["slide"] for edit in edits if isinstance(edit, dict) and isinstance(edit.get("slide"), int)),
+                    0,
+                )
+                target = max(0, min(target, original_slide_count - 1))
+                original_slide = self.prs.slides[target]
+                if original_slide.slide_id in used_slide_ids:
+                    slide = self._clone_slide(target)
+                else:
+                    slide = original_slide
+                    used_slide_ids.add(slide.slide_id)
+                for edit in edits:
+                    self._apply_native_edit(edit, slide)
+                kept_slide_ids.append(slide.slide_id)
+
+            if slide_index is not None:
+                # Single-slide export (e.g. a preview request): drop every
+                # other slide so the resulting deck contains exactly the
+                # requested slide, not the whole original template.
+                self._keep_only_slides(kept_slide_ids)
+
             buffer = BytesIO()
             self.prs.save(buffer)
             return buffer.getvalue()
@@ -141,12 +173,47 @@ class PPTXGenerator:
         buffer.seek(0)
         return buffer.read()
 
-    def _apply_native_edit(self, edit: dict) -> None:
-        if not isinstance(edit, dict) or not isinstance(edit.get("slide"), int):
+    def _clone_slide(self, index: int) -> Any:
+        """Duplicate an original template slide so a later generated slide's
+        edits land on their own physical slide instead of overwriting an
+        already-used one. Shape ids are preserved (deep-copied) so objectId
+        based edit targeting still resolves on the clone."""
+        source = self.prs.slides[index]
+        dest = self.prs.slides.add_slide(source.slide_layout)
+        for shape in list(dest.shapes):
+            shape._element.getparent().remove(shape._element)
+        for shape in source.shapes:
+            new_element = copy.deepcopy(shape._element)
+            for blip in new_element.iter(qn("a:blip")):
+                old_rid = blip.get(qn("r:embed"))
+                if old_rid and old_rid in source.part.rels:
+                    rel = source.part.rels[old_rid]
+                    new_rid = dest.part.rels._add_relationship(rel.reltype, rel.target_part)
+                    blip.set(qn("r:embed"), new_rid)
+            dest.shapes._spTree.append(new_element)
+        return dest
+
+    def _keep_only_slides(self, keep_slide_ids: list) -> None:
+        keep = set(keep_slide_ids)
+        sld_id_lst = self.prs.slides._sldIdLst
+        for sld in list(sld_id_lst):
+            if int(sld.get("id")) not in keep:
+                self.prs.part.drop_rel(sld.get(qn("r:id")))
+                sld_id_lst.remove(sld)
+
+    @staticmethod
+    def _safe_rgb(color: Any):
+        """python-pptx raises AttributeError reading .rgb off a theme/scheme
+        color (common in real-world decks); treat that as "no explicit color"
+        instead of crashing the whole render."""
+        try:
+            return color.rgb if color.type is not None else None
+        except AttributeError:
+            return None
+
+    def _apply_native_edit(self, edit: dict, slide: Any) -> None:
+        if not isinstance(edit, dict):
             return
-        if edit["slide"] < 0 or edit["slide"] >= len(self.prs.slides):
-            return
-        slide = self.prs.slides[edit["slide"]]
         shape = next((item for item in slide.shapes if str(item.shape_id) == str(edit.get("objectId"))), None)
         if edit.get("delete") is True:
             if shape:
@@ -200,9 +267,11 @@ class PPTXGenerator:
                     paragraph.level = max(0, item["level"])
         elif isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             levels = [paragraph.level for paragraph in shape.text_frame.paragraphs]
+            alignments = [paragraph.alignment for paragraph in shape.text_frame.paragraphs]
             shape.text = edit["text"]
             for index, paragraph in enumerate(shape.text_frame.paragraphs):
                 paragraph.level = levels[min(index, len(levels) - 1)] if levels else 0
+                paragraph.alignment = alignments[min(index, len(alignments) - 1)] if alignments else None
         if getattr(shape, "has_text_frame", False):
             for paragraph in shape.text_frame.paragraphs:
                 for run in paragraph.runs:
@@ -235,11 +304,13 @@ class PPTXGenerator:
                     if column_index < len(shape.table.columns) and isinstance(value, str):
                         cell = shape.table.cell(row_index, column_index)
                         source = cell.text_frame.paragraphs
-                        source_runs = [{"name": run.font.name, "size": run.font.size, "bold": run.font.bold, "italic": run.font.italic, "color": run.font.color.rgb if run.font.color.type is not None else None} if (run := (paragraph.runs[0] if paragraph.runs else None)) else None for paragraph in source]
+                        source_runs = [{"name": run.font.name, "size": run.font.size, "bold": run.font.bold, "italic": run.font.italic, "color": self._safe_rgb(run.font.color)} if (run := (paragraph.runs[0] if paragraph.runs else None)) else None for paragraph in source]
                         levels = [paragraph.level for paragraph in source]
+                        alignments = [paragraph.alignment for paragraph in source]
                         cell.text = value
                         for index, paragraph in enumerate(cell.text_frame.paragraphs):
                             paragraph.level = levels[min(index, len(levels) - 1)] if levels else 0
+                            paragraph.alignment = alignments[min(index, len(alignments) - 1)] if alignments else None
                             source_run = source_runs[min(index, len(source_runs) - 1)] if source_runs else None
                             if source_run and paragraph.runs:
                                 run = paragraph.runs[0]

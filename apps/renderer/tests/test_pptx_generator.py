@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.dml import MSO_THEME_COLOR
 from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
@@ -483,6 +484,102 @@ def test_pptx_template_preserves_paragraph_indent_when_text_changes():
     template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(text.shape_id), "text": "Changed\nStill nested"}]})))
     assert Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[1].level == 1
+
+
+def test_pptx_text_replace_preserves_paragraph_alignment():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    text.text = "Original"
+    text.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": str(text.shape_id), "text": "Changed"}],
+    })))
+
+    paragraph = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[0]
+    assert paragraph.text == "Changed"
+    assert paragraph.alignment == PP_ALIGN.CENTER
+
+
+def test_pptx_table_cell_replace_preserves_paragraph_alignment():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(2))
+    cell = table.table.cell(0, 0); cell.text = "Original"
+    cell.text_frame.paragraphs[0].alignment = PP_ALIGN.RIGHT
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]]}],
+    })))
+
+    paragraph = Presentation(BytesIO(output)).slides[0].shapes[0].table.cell(0, 0).text_frame.paragraphs[0]
+    assert paragraph.text == "Updated"
+    assert paragraph.alignment == PP_ALIGN.RIGHT
+
+
+def test_sourcepptx_clones_the_template_slide_when_generated_slides_outnumber_it():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    title = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    title.text = "Original"
+    keep = slide.shapes.add_textbox(Inches(1), Inches(3), Inches(4), Inches(1))
+    keep.text = "Keep"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(
+        _slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(title.shape_id), "text": "First"}]}),
+        _slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(title.shape_id), "text": "Second"}]}),
+    ))
+
+    generated = Presentation(BytesIO(output))
+    assert len(generated.slides) == 2
+    first_texts = {shape.text for shape in generated.slides[0].shapes if shape.has_text_frame}
+    second_texts = {shape.text for shape in generated.slides[1].shapes if shape.has_text_frame}
+    assert first_texts == {"First", "Keep"}
+    assert second_texts == {"Second", "Keep"}
+
+
+def test_sourcepptx_preview_for_a_later_slide_returns_only_that_slides_own_edit():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    title = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    title.text = "Original"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    presentation = _presentation(
+        _slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(title.shape_id), "text": "First"}]}),
+        _slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(title.shape_id), "text": "Second"}]}),
+    )
+
+    output = PPTXGenerator(template).generate(presentation, slide_index=0)
+
+    generated = Presentation(BytesIO(output))
+    assert len(generated.slides) == 1
+    assert generated.slides[0].shapes[0].text == "First"
+
+
+def test_pptx_table_edits_survive_a_theme_colored_source_cell():
+    # Many real-world decks color table text via a theme/scheme reference
+    # (design-system driven) instead of an explicit RGB value. Reading
+    # `.rgb` off such a run raises AttributeError, which must not crash the
+    # whole render — the edit should still land, just without copying color.
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(2))
+    cell = table.table.cell(0, 0); cell.text = "Original"
+    cell.text_frame.paragraphs[0].runs[0].font.color.theme_color = MSO_THEME_COLOR.ACCENT_1
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]]}],
+    })))
+
+    assert Presentation(BytesIO(output)).slides[0].shapes[0].table.cell(0, 0).text == "Updated"
 
 
 def test_pptx_table_edits_keep_cell_text_style():
