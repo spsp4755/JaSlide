@@ -463,7 +463,7 @@ export default function EditorPage() {
     const nativeObjects = presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide
         ? [
             ...(presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || []),
-            ...(selectedSlide.content?.objectEdits || []).filter((item: any) => item.kind === 'image' && item.imageData && !item.delete),
+            ...(selectedSlide.content?.objectEdits || []).filter((item: any) => item.kind && (item.imageData || item.addText) && !item.delete),
         ]
         : [];
     const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
@@ -499,6 +499,13 @@ export default function EditorPage() {
         if (!selectedNativeObjectId) return;
         updateNativeObject(selectedNativeObjectId, { delete: true });
         setSelectedNativeObjectId(null);
+    };
+    const insertNativeText = () => {
+        if (!selectedSlide) return;
+        const objectId = `new-text-${crypto.randomUUID()}`;
+        updateNativeObject(objectId, { kind: 'text', addText: '새 텍스트', text: '새 텍스트', left: 180, top: 180, width: 640, height: 100, fontSize: 24, color: '#1A1A1A' });
+        setSelectedNativeObjectId(objectId);
+        setRibbonTab('home');
     };
 
     const loadPreview = useCallback((slideIndex: number) => {
@@ -1081,7 +1088,7 @@ export default function EditorPage() {
                         <Button aria-label="선택한 객체 복제" type="button" size="sm" variant="ghost" onClick={duplicateSelectedHtmlObject}><Copy className="mr-1 h-4 w-4" />복제</Button>
                         <Button aria-label="선택한 객체 삭제" type="button" size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={deleteSelectedHtmlObject}><Trash2 className="mr-1 h-4 w-4" />삭제</Button>
                     </> : <span className="text-xs text-gray-400">객체를 선택하면 글꼴, 목록, 정렬, 색상 서식을 적용할 수 있습니다.</span>) : <>
-                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeText() : insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
                         <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-white shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
                         <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, false))}><List className="mr-1 h-4 w-4" />글머리</Button>

@@ -437,3 +437,14 @@ def test_pptx_template_adds_a_native_image():
 
     generated = Presentation(BytesIO(output)).slides[0].shapes[0]
     assert generated.shape_type == 13 and generated.left == Presentation(BytesIO(output)).slide_width * 200 // 1920
+
+
+def test_pptx_template_adds_editable_native_text():
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": "new-text", "addText": "Initial", "text": "Edited", "fontSize": 24, "bold": True}]})))
+
+    generated = Presentation(BytesIO(output)).slides[0].shapes[0]
+    assert generated.text == "Edited" and generated.text_frame.paragraphs[0].runs[0].font.size == Pt(24) and generated.text_frame.paragraphs[0].runs[0].font.bold

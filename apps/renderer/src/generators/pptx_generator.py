@@ -152,6 +152,13 @@ class PPTXGenerator:
             if shape:
                 shape._element.getparent().remove(shape._element)
             return
+        if isinstance(edit.get("addText"), str):
+            left = int((edit.get("left", 180)) * self.prs.slide_width / 1920)
+            top = int((edit.get("top", 180)) * self.prs.slide_height / 1080)
+            width = int((edit.get("width", 640)) * self.prs.slide_width / 1920)
+            height = int((edit.get("height", 100)) * self.prs.slide_height / 1080)
+            shape = slide.shapes.add_textbox(left, top, width, height)
+            shape.text = edit.get("text", edit["addText"])
         if isinstance(edit.get("imageData"), str) and "," in edit["imageData"]:
             try:
                 image = base64.b64decode(edit["imageData"].split(",", 1)[1])
