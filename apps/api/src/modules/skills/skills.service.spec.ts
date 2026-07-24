@@ -9,6 +9,7 @@ describe('SkillsService', () => {
         presentationSkill: {
             create: jest.fn(),
             findMany: jest.fn(),
+            deleteMany: jest.fn(),
         },
         template: {
             create: jest.fn(),
@@ -53,6 +54,16 @@ describe('SkillsService', () => {
             recommendedSlideCount: 8,
             packageUrl: 'skill.zip',
         } as any)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('bulk deletes only the current user\'s Skills', async () => {
+        prisma.presentationSkill.deleteMany.mockResolvedValue({ count: 2 });
+
+        await expect(service.removeMany('user-1', ['skill-a', 'skill-a', 'skill-b'])).resolves.toEqual({ deleted: 2 });
+
+        expect(prisma.presentationSkill.deleteMany).toHaveBeenCalledWith({
+            where: { id: { in: ['skill-a', 'skill-b'] }, userId: 'user-1' },
+        });
     });
 
     it('creates a reusable private Skill from extracted PPTX style tokens', async () => {

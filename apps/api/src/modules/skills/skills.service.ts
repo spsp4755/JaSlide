@@ -44,6 +44,16 @@ export class SkillsService {
         });
     }
 
+    async removeMany(userId: string, ids: string[]) {
+        const uniqueIds = [...new Set((ids || []).filter((id) => typeof id === 'string' && id))];
+        if (!uniqueIds.length) throw new BadRequestException('Select at least one Skill');
+
+        const result = await this.prisma.presentationSkill.deleteMany({
+            where: { id: { in: uniqueIds }, userId },
+        });
+        return { deleted: result.count };
+    }
+
     async importPptx(user: SkillUser, file: Express.Multer.File, name?: string) {
         if (!file ||
             !file.originalname.toLowerCase().endsWith('.pptx') ||

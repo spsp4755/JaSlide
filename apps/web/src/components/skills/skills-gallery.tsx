@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, FileUp, LayoutTemplate, PencilLine, Plus, Sparkles, X } from 'lucide-react';
+import { BookOpen, FileUp, LayoutTemplate, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { skillsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
@@ -33,6 +33,9 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
     const [showCreator, setShowCreator] = useState(false);
     const [creating, setCreating] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [query, setQuery] = useState('');
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [deleting, setDeleting] = useState(false);
     const pptxInputRef = useRef<HTMLInputElement>(null);
     const [form, setForm] = useState({
         name: '', category: '기업 전략', audience: '의사결정자', tone: '명확하고 단정하게',
@@ -50,9 +53,26 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
     // preview (logged-out demo) shows static examples; authenticated view uses only real, usable Skills
     const displayedSkills = useMemo(() => {
         const all = preview ? [...skills, ...RECOMMENDED_SKILLS] : skills;
-        if (selectedCategory === '전체' || selectedCategory === '추천') return all;
-        return all.filter((skill) => skill.category === selectedCategory);
-    }, [selectedCategory, skills, preview]);
+        const categorized = selectedCategory === '전체' || selectedCategory === '추천' ? all : all.filter((skill) => skill.category === selectedCategory);
+        const needle = query.trim().toLowerCase();
+        return needle ? categorized.filter((skill) => `${skill.name} ${skill.description || ''} ${skill.category} ${skill.purpose}`.toLowerCase().includes(needle)) : categorized;
+    }, [selectedCategory, skills, preview, query]);
+
+    const deleteSelected = async () => {
+        if (!selectedIds.length || !window.confirm(`선택한 ${selectedIds.length}개 Skill을 삭제할까요?`)) return;
+        setDeleting(true);
+        try {
+            const response = await skillsApi.deleteMany(selectedIds);
+            const deleted = Number(response.data?.deleted || 0);
+            setSkills((current) => current.filter((skill) => !selectedIds.includes(skill.id)));
+            setSelectedIds([]);
+            toast({ title: `${deleted}개 Skill을 삭제했습니다.` });
+        } catch (error: any) {
+            toast({ title: 'Skill 삭제 실패', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     const createSkill = async () => {
         if (!form.name.trim() || !form.purpose.trim()) {
@@ -116,6 +136,12 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                     {CATEGORIES.map((category) => <button key={category} type="button" onClick={() => setSelectedCategory(category)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition ${selectedCategory === category ? 'border-foreground bg-foreground text-background' : 'border-border bg-card text-muted-foreground hover:border-foreground/40'}`}>{category}</button>)}
                 </div>
 
+                {!preview && <div className="mb-7 flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
+                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Skill 검색" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground sm:max-w-sm" />
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={displayedSkills.length > 0 && displayedSkills.every((skill) => selectedIds.includes(skill.id))} onChange={(event) => setSelectedIds(event.target.checked ? displayedSkills.map((skill) => skill.id) : [])} /> 현재 목록 전체 선택</label>
+                    <button type="button" disabled={!selectedIds.length || deleting} onClick={deleteSelected} className="inline-flex items-center justify-center gap-2 rounded-lg border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive disabled:opacity-40 sm:ml-auto"><Trash2 className="h-4 w-4" /> 선택 삭제{selectedIds.length ? ` (${selectedIds.length})` : ''}</button>
+                </div>}
+
                 <section aria-labelledby="new-skill" className="mb-10">
                     <h2 id="new-skill" className="mb-4 font-display text-xl font-bold">새 Skill</h2>
                     <div className="grid gap-4 md:grid-cols-3">
@@ -133,7 +159,8 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                     <div className="mb-4 flex items-center gap-2"><BookOpen className="h-5 w-5" /><h2 id="recommended-skills" className="font-display text-xl font-bold">추천 Skill</h2></div>
                     {loading ? <p className="py-10 text-sm text-muted-foreground">Skills를 불러오는 중입니다.</p> : (
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                            {displayedSkills.map((skill) => <article key={skill.id} className="overflow-hidden rounded-2xl border border-border bg-card">
+                            {displayedSkills.map((skill) => <article key={skill.id} className="relative overflow-hidden rounded-2xl border border-border bg-card">
+                                {!preview && <label className="absolute right-3 top-3 z-10 rounded bg-card/90 p-1.5"><input type="checkbox" checked={selectedIds.includes(skill.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, skill.id] : current.filter((id) => id !== skill.id))} aria-label={`${skill.name} 선택`} /></label>}
                                 <div className="h-32 bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4"><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-white/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">JaSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></div>
                                 <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link>}</div>
                             </article>)}

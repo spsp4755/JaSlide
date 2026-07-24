@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -19,6 +19,11 @@ export class SkillsController {
     @Post()
     create(@CurrentUser() user: { id: string; organizationId?: string }, @Body() dto: CreateSkillDto) {
         return this.skillsService.create(user, dto);
+    }
+
+    @Delete()
+    removeMany(@CurrentUser() user: { id: string }, @Body('ids') ids: string[]) {
+        return this.skillsService.removeMany(user.id, ids);
     }
 
     @Post('import-pptx')

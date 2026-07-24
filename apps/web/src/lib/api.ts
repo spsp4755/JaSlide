@@ -118,6 +118,7 @@ export const skillsApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
     },
+    deleteMany: (ids: string[]) => api.delete('/skills', { data: { ids } }),
 };
 
 // Export
