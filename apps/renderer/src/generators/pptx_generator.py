@@ -189,8 +189,20 @@ class PPTXGenerator:
             return
         if not shape:
             return
-        if isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
+        if getattr(shape, "has_text_frame", False) and isinstance(edit.get("paragraphs"), list):
+            shape.text_frame.clear()
+            for index, item in enumerate(edit["paragraphs"]):
+                if not isinstance(item, dict):
+                    continue
+                paragraph = shape.text_frame.paragraphs[0] if index == 0 else shape.text_frame.add_paragraph()
+                paragraph.text = str(item.get("text", ""))
+                if isinstance(item.get("level"), int):
+                    paragraph.level = max(0, item["level"])
+        elif isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
+            levels = [paragraph.level for paragraph in shape.text_frame.paragraphs]
             shape.text = edit["text"]
+            for index, paragraph in enumerate(shape.text_frame.paragraphs):
+                paragraph.level = levels[min(index, len(levels) - 1)] if levels else 0
         if getattr(shape, "has_text_frame", False):
             for paragraph in shape.text_frame.paragraphs:
                 for run in paragraph.runs:

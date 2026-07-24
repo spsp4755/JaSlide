@@ -131,7 +131,7 @@ def pptx_to_html(content: bytes) -> dict:
                 objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape)}</div>')
             elif getattr(shape, "has_text_frame", False) and shape.text.strip():
                 text, font_size, color = _text_html(shape)
-                source_objects.append({**source_object, "kind": "text", "text": shape.text, **_text_style(shape)})
+                source_objects.append({**source_object, "kind": "text", "text": shape.text, "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape)})
                 fill = _color(getattr(shape, "fill", None))
                 surface = f"background:{fill};" if fill else ""
                 objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')

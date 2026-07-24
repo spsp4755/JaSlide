@@ -474,3 +474,12 @@ def test_pptx_template_preserves_unedited_table_and_shape():
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]]}]})))
     generated = Presentation(BytesIO(output)).slides[0]
     assert generated.shapes[0].table.cell(0, 0).text == "Updated" and str(generated.shapes[1].fill.fore_color.rgb) == "112233"
+
+
+def test_pptx_template_preserves_paragraph_indent_when_text_changes():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2)); text.text = "First"; text.text_frame.add_paragraph().text = "Nested"; text.text_frame.paragraphs[1].level = 1
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(text.shape_id), "text": "Changed\nStill nested"}]})))
+    assert Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[1].level == 1
