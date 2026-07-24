@@ -1762,6 +1762,8 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                     const height = edit.height ?? object.height ?? 0;
                     const selected = selectedNativeObjectId === object.id;
                     return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}>
+                        {object.addText && <span className="block h-full w-full overflow-hidden whitespace-pre-wrap" style={{ fontFamily: edit.fontFamily ?? object.fontFamily, fontSize: `${(edit.fontSize ?? object.fontSize ?? 24) / 1.35}px`, color: edit.color ?? object.color ?? '#1A1A1A', fontWeight: edit.bold ?? object.bold ? 700 : 400, fontStyle: edit.italic ?? object.italic ? 'italic' : 'normal' }}>{edit.text ?? object.text ?? object.addText}</span>}
+                        {object.imageData && <img src={object.imageData} alt="삽입한 이미지" className="h-full w-full object-fill pointer-events-none" />}
                         {selected && <button type="button" aria-label="native object resize" className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-sm border border-purple-700 bg-white" onPointerDown={(event) => startNativeTransform(event, object, true)} />}
                     </div>;
                 })}

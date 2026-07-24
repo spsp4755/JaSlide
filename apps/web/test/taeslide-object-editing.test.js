@@ -96,5 +96,7 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /insertNativeText/);
     assert.match(editor, /new-text-\$\{crypto\.randomUUID\(\)\}/);
     assert.match(editor, /id: item\.objectId/);
+    assert.match(editor, /object\.addText/);
+    assert.match(editor, /object\.imageData/);
     assert.match(layout, /TaeSlide/);
 });
