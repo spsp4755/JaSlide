@@ -83,5 +83,8 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /fontSize: Number/);
     assert.match(editor, /bold:/);
     assert.match(editor, /italic:/);
+    assert.match(editor, /fillColor/);
+    assert.match(editor, /lineColor/);
+    assert.match(editor, /lineWidth/);
     assert.match(layout, /TaeSlide/);
 });

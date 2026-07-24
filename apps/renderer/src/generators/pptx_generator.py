@@ -167,6 +167,13 @@ class PPTXGenerator:
         for key, size in (("left", self.prs.slide_width), ("width", self.prs.slide_width), ("top", self.prs.slide_height), ("height", self.prs.slide_height)):
             if isinstance(edit.get(key), (int, float)):
                 setattr(shape, key, int(edit[key] * size / (1920 if key in ("left", "width") else 1080)))
+        if isinstance(edit.get("fillColor"), str) and len(edit["fillColor"].lstrip("#")) == 6:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = RGBColor.from_string(edit["fillColor"].lstrip("#").upper())
+        if isinstance(edit.get("lineColor"), str) and len(edit["lineColor"].lstrip("#")) == 6:
+            shape.line.color.rgb = RGBColor.from_string(edit["lineColor"].lstrip("#").upper())
+        if isinstance(edit.get("lineWidth"), (int, float)):
+            shape.line.width = int(max(0, edit["lineWidth"]) * 12700)
         cells = edit.get("cells")
         if isinstance(cells, list) and getattr(shape, "has_table", False):
             for row_index, row in enumerate(cells):

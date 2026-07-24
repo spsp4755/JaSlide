@@ -136,8 +136,8 @@ def pptx_to_html(content: bytes) -> dict:
                 surface = f"background:{fill};" if fill else ""
                 objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
             else:
-                source_objects.append({**source_object, "kind": "shape"})
                 fill = _color(getattr(shape, "fill", None))
+                source_objects.append({**source_object, "kind": "shape", "fillColor": fill or "#FFFFFF", "lineColor": _color(getattr(shape, "line", None)) or "#202124", "lineWidth": max(1, round((getattr(shape.line, "width", 12700) or 12700) / 12700))})
                 surface = f"background:{fill};" if fill else "background:transparent;"
                 objects.append(f'<div data-object="true" data-object-type="shape" style="{position};box-sizing:border-box;{surface}{_line_style(shape)}"></div>')
         html_slides.append(f'<div class="slide-container" style="position:relative;width:{CANVAS_WIDTH}px;height:{CANVAS_HEIGHT}px;overflow:hidden;background:{background}">{"".join(objects)}</div>')

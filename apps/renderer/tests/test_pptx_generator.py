@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.shapes import MSO_SHAPE
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
@@ -396,3 +397,18 @@ def test_pptx_template_keeps_native_text_and_table_objects_editable():
     assert run.font.size == Pt(28) and str(run.font.color.rgb) == "112233" and run.font.bold and run.font.italic
     assert generated.slides[0].shapes[1].has_table
     assert generated.slides[0].shapes[1].table.cell(0, 0).text == "Updated cell"
+
+
+def test_pptx_template_applies_native_shape_colors():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(shape.shape_id), "fillColor": "#112233", "lineColor": "#445566", "lineWidth": 3}]})))
+
+    generated = Presentation(BytesIO(output)).slides[0].shapes[0]
+    assert str(generated.fill.fore_color.rgb) == "112233"
+    assert str(generated.line.color.rgb) == "445566"
+    assert generated.line.width == 3 * 12700
