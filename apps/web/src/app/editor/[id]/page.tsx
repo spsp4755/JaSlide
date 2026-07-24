@@ -47,6 +47,8 @@ import {
     AlignCenter,
     AlignRight,
     ListOrdered,
+    IndentIncrease,
+    IndentDecrease,
     Table2,
     PanelLeftClose,
     PanelLeftOpen,
@@ -1096,7 +1098,7 @@ export default function EditorPage() {
                             <Button aria-label="기울임" type="button" size="icon" variant={activeHtmlTextStyle?.fontStyle === 'italic' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontStyle: activeHtmlTextStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4" /></Button>
                             <Button aria-label="밑줄" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('underline') ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ textDecoration: selectedHtmlObject.textDecoration.includes('underline') ? 'none' : 'underline' })}><Underline className="h-4 w-4" /></Button>
                             <Button aria-label="취소선" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('line-through') ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ textDecoration: selectedHtmlObject.textDecoration.includes('line-through') ? 'none' : 'line-through' })}><Strikethrough className="h-4 w-4" /></Button>
-                            {selectedHtmlObject.objectType === 'textbox' && <><Button aria-label="글머리 목록" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ listStyleType: 'disc' })}><List className="h-4 w-4" /></Button><Button aria-label="번호 목록" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ listStyleType: 'decimal' })}><ListOrdered className="h-4 w-4" /></Button></>}
+                            {selectedHtmlObject.objectType === 'textbox' && <><Button aria-label="글머리 목록" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ listStyleType: 'disc' })}><List className="h-4 w-4" /></Button><Button aria-label="번호 목록" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ listStyleType: 'decimal' })}><ListOrdered className="h-4 w-4" /></Button><Button aria-label="들여쓰기 증가" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ indent: 'increase' })}><IndentIncrease className="h-4 w-4" /></Button><Button aria-label="들여쓰기 감소" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ indent: 'decrease' })}><IndentDecrease className="h-4 w-4" /></Button></>}
                             <Button aria-label="왼쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'left' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'left' })}><AlignLeft className="h-4 w-4" /></Button>
                             <Button aria-label="가운데 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'center' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'center' })}><AlignCenter className="h-4 w-4" /></Button>
                             <Button aria-label="오른쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'right' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'right' })}><AlignRight className="h-4 w-4" /></Button>
@@ -1632,6 +1634,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
             if (!range) return;
             selection.removeAllRanges(); selection.addRange(range);
             if (updates.listStyleType) { document.execCommand(updates.listStyleType === 'decimal' ? 'insertOrderedList' : 'insertUnorderedList'); persist(); return; }
+            if (updates.indent) { document.execCommand(updates.indent === 'increase' ? 'indent' : 'outdent'); persist(); return; }
             const span = document.createElement('span');
             Object.assign(span.style, updates);
             if (updates.fontSize) span.style.fontSize = `${Math.max(1, Number(updates.fontSize) || 24)}px`;
@@ -1716,6 +1719,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                 persist();
                 return;
             }
+            if (event.key === 'Tab' && selectedElement?.closest('li')) { event.preventDefault(); document.execCommand(event.shiftKey ? 'outdent' : 'indent'); persist(); return; }
             if (event.key !== 'Escape') return;
             const element = targetFor(event.target);
             if (element?.getAttribute('contenteditable') === 'true') { element.contentEditable = 'inherit'; element.blur(); }

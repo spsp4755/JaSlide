@@ -101,5 +101,8 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /taeslide-format/);
     assert.match(editor, /range\.surroundContents/);
     assert.match(editor, /span\.style\.fontSize/);
+    assert.match(editor, /insertOrderedList/);
+    assert.match(editor, /IndentIncrease/);
+    assert.match(editor, /event\.key === 'Tab'/);
     assert.match(layout, /TaeSlide/);
 });
