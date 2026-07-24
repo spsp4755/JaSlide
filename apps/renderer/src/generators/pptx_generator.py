@@ -233,7 +233,22 @@ class PPTXGenerator:
                     continue
                 for column_index, value in enumerate(row):
                     if column_index < len(shape.table.columns) and isinstance(value, str):
-                        shape.table.cell(row_index, column_index).text = value
+                        cell = shape.table.cell(row_index, column_index)
+                        source = cell.text_frame.paragraphs
+                        source_runs = [{"name": run.font.name, "size": run.font.size, "bold": run.font.bold, "italic": run.font.italic, "color": run.font.color.rgb if run.font.color.type is not None else None} if (run := (paragraph.runs[0] if paragraph.runs else None)) else None for paragraph in source]
+                        levels = [paragraph.level for paragraph in source]
+                        cell.text = value
+                        for index, paragraph in enumerate(cell.text_frame.paragraphs):
+                            paragraph.level = levels[min(index, len(levels) - 1)] if levels else 0
+                            source_run = source_runs[min(index, len(source_runs) - 1)] if source_runs else None
+                            if source_run and paragraph.runs:
+                                run = paragraph.runs[0]
+                                run.font.name = source_run["name"]
+                                run.font.size = source_run["size"]
+                                run.font.bold = source_run["bold"]
+                                run.font.italic = source_run["italic"]
+                                if source_run["color"]:
+                                    run.font.color.rgb = source_run["color"]
 
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""

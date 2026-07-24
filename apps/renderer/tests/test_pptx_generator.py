@@ -483,3 +483,12 @@ def test_pptx_template_preserves_paragraph_indent_when_text_changes():
     template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(text.shape_id), "text": "Changed\nStill nested"}]})))
     assert Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[1].level == 1
+
+
+def test_pptx_table_edits_keep_cell_text_style():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6]); table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(2))
+    cell = table.table.cell(0, 0); cell.text = "Original"; run = cell.text_frame.paragraphs[0].runs[0]; run.font.size = Pt(18); run.font.bold = True
+    buffer = BytesIO(); source.save(buffer); template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]]}]})))
+    updated = Presentation(BytesIO(output)).slides[0].shapes[0].table.cell(0, 0).text_frame.paragraphs[0].runs[0]
+    assert updated.font.size == Pt(18) and updated.font.bold
