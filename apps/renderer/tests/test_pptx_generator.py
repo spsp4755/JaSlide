@@ -448,3 +448,17 @@ def test_pptx_template_adds_editable_native_text():
 
     generated = Presentation(BytesIO(output)).slides[0].shapes[0]
     assert generated.text == "Edited" and generated.text_frame.paragraphs[0].runs[0].font.size == Pt(24) and generated.text_frame.paragraphs[0].runs[0].font.bold
+
+
+def test_pptx_template_adds_native_shapes_and_lines():
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [
+        {"slide": 0, "objectId": "triangle", "addShape": "triangle", "left": 100, "top": 100, "width": 400, "height": 300, "fillColor": "#FF0000"},
+        {"slide": 0, "objectId": "line", "addLine": "straightLine", "left": 600, "top": 200, "width": 500, "height": 80, "lineColor": "#00AA00", "lineWidth": 3},
+    ]})))
+
+    shapes = Presentation(BytesIO(output)).slides[0].shapes
+    assert len(shapes) == 2 and shapes[0].auto_shape_type == MSO_SHAPE.ISOSCELES_TRIANGLE and shapes[1].shape_type == 9

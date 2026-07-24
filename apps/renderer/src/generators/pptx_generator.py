@@ -8,7 +8,7 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.oxml.ns import qn
-from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from io import BytesIO
@@ -152,11 +152,28 @@ class PPTXGenerator:
             if shape:
                 shape._element.getparent().remove(shape._element)
             return
-        if isinstance(edit.get("addText"), str):
-            left = int((edit.get("left", 180)) * self.prs.slide_width / 1920)
-            top = int((edit.get("top", 180)) * self.prs.slide_height / 1080)
-            width = int((edit.get("width", 640)) * self.prs.slide_width / 1920)
-            height = int((edit.get("height", 100)) * self.prs.slide_height / 1080)
+        left = int((edit.get("left", 180)) * self.prs.slide_width / 1920)
+        top = int((edit.get("top", 180)) * self.prs.slide_height / 1080)
+        width = int((edit.get("width", 640)) * self.prs.slide_width / 1920)
+        height = int((edit.get("height", 100)) * self.prs.slide_height / 1080)
+        if isinstance(edit.get("addShape"), str):
+            shapes = {
+                "rectangle": MSO_SHAPE.RECTANGLE, "rounded": MSO_SHAPE.ROUNDED_RECTANGLE,
+                "ellipse": MSO_SHAPE.OVAL, "triangle": MSO_SHAPE.ISOSCELES_TRIANGLE,
+                "rightTriangle": MSO_SHAPE.RIGHT_TRIANGLE, "diamond": MSO_SHAPE.DIAMOND,
+                "trapezoid": MSO_SHAPE.TRAPEZOID, "parallelogram": MSO_SHAPE.PARALLELOGRAM,
+                "pentagon": MSO_SHAPE.PENTAGON, "hexagon": MSO_SHAPE.HEXAGON,
+                "arrow": MSO_SHAPE.RIGHT_ARROW, "leftArrow": MSO_SHAPE.LEFT_ARROW,
+                "upArrow": MSO_SHAPE.UP_ARROW, "downArrow": MSO_SHAPE.DOWN_ARROW,
+                "cloud": MSO_SHAPE.CLOUD, "heart": MSO_SHAPE.HEART,
+                "star5": MSO_SHAPE.STAR_5_POINT, "flowChartProcess": MSO_SHAPE.FLOWCHART_PROCESS,
+                "flowChartDecision": MSO_SHAPE.FLOWCHART_DECISION, "flowChartDocument": MSO_SHAPE.FLOWCHART_DOCUMENT,
+            }
+            shape = slide.shapes.add_shape(shapes.get(edit["addShape"], MSO_SHAPE.RECTANGLE), left, top, width, height)
+        elif isinstance(edit.get("addLine"), str):
+            connector = MSO_CONNECTOR.CURVE if edit["addLine"].startswith("curved") else MSO_CONNECTOR.ELBOW if "Connector" in edit["addLine"] else MSO_CONNECTOR.STRAIGHT
+            shape = slide.shapes.add_connector(connector, left, top + height // 2, left + width, top + height // 2)
+        elif isinstance(edit.get("addText"), str):
             shape = slide.shapes.add_textbox(left, top, width, height)
             shape.text = edit.get("text", edit["addText"])
         if isinstance(edit.get("imageData"), str) and "," in edit["imageData"]:
