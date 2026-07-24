@@ -6,6 +6,7 @@ from io import BytesIO
 
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 
 from .style_extractor import extract_template_tokens
@@ -81,6 +82,12 @@ def _text_style(shape) -> dict:
     }
 
 
+def _text_align(shape) -> str:
+    paragraph = next(iter(shape.text_frame.paragraphs), None)
+    alignment = paragraph.alignment if paragraph is not None else None
+    return {PP_ALIGN.CENTER: "center", PP_ALIGN.RIGHT: "right"}.get(alignment, "left")
+
+
 def _table_html(shape) -> str:
     widths = [column.width for column in shape.table.columns]
     total_width = sum(widths) or 1
@@ -127,11 +134,17 @@ def pptx_to_html(content: bytes) -> dict:
                 encoded = base64.b64encode(image.blob).decode("ascii")
                 objects.append(f'<img data-object="true" data-object-type="image" src="data:{image.content_type};base64,{encoded}" style="{position}">')
             elif getattr(shape, "has_table", False):
-                source_objects.append({**source_object, "kind": "table", "cells": [[cell.text for cell in row.cells] for row in shape.table.rows]})
+                row_heights = [_px(row.height, presentation.slide_height, CANVAS_HEIGHT) for row in shape.table.rows]
+                column_widths = [_px(column.width, presentation.slide_width, CANVAS_WIDTH) for column in shape.table.columns]
+                source_objects.append({
+                    **source_object, "kind": "table",
+                    "cells": [[cell.text for cell in row.cells] for row in shape.table.rows],
+                    "rowHeights": row_heights, "columnWidths": column_widths,
+                })
                 objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape)}</div>')
             elif getattr(shape, "has_text_frame", False) and shape.text.strip():
                 text, font_size, color = _text_html(shape)
-                source_objects.append({**source_object, "kind": "text", "text": shape.text, "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape)})
+                source_objects.append({**source_object, "kind": "text", "text": shape.text, "align": _text_align(shape), "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape)})
                 fill = _color(getattr(shape, "fill", None))
                 surface = f"background:{fill};" if fill else ""
                 objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')

@@ -3,6 +3,7 @@ from io import BytesIO
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
 from apps.renderer.src.services.pptx_to_html import pptx_to_html
@@ -86,3 +87,54 @@ def test_preserves_table_cell_dimensions_and_formatting():
     assert "width:75.0%" in result["htmlSlides"][0]
     assert "background:#112233" in result["htmlSlides"][0]
     assert "font-family:NanumGothic" in result["htmlSlides"][0]
+
+
+def test_extracts_real_row_and_column_geometry_for_a_table():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(6), Inches(3)).table
+    table.rows[0].height = Inches(1)
+    table.rows[1].height = Inches(2)
+    table.columns[0].width = Inches(4)
+    table.columns[1].width = Inches(2)
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+    table_object = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "table")
+
+    assert table_object["rowHeights"][0] < table_object["rowHeights"][1]
+    assert table_object["columnWidths"][0] > table_object["columnWidths"][1]
+    assert round(table_object["rowHeights"][0] / sum(table_object["rowHeights"]), 2) == round(1 / 3, 2)
+
+
+def test_extracts_alignment_for_a_text_object():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    box.text = "Heading"
+    box.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+    text_object = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "text")
+
+    assert text_object["align"] == "center"
+
+
+def test_defaults_alignment_to_left_when_unset():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    box.text = "Body"
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+    text_object = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "text")
+
+    assert text_object["align"] == "left"
