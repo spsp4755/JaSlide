@@ -37,6 +37,13 @@ function presentationText(content: { body?: string; bullets?: { text: string; le
     return content.body || keyPoints.map((point) => `• ${point}`).join('\n');
 }
 
+function removePromptEcho(value: string | undefined, instruction: string): string | undefined {
+    if (!value) return value;
+    const normalizedInstruction = instruction.replace(/\s+/g, ' ').trim();
+    const cleaned = value.split('\n').filter((line) => line.replace(/\s+/g, ' ').trim() !== normalizedInstruction).join('\n').trim();
+    return cleaned || undefined;
+}
+
 @Injectable()
 export class GenerationService implements OnModuleInit {
     private readonly logger = new Logger(GenerationService.name);
@@ -406,8 +413,11 @@ export class GenerationService implements OnModuleInit {
         const editedContent = typeof currentContent.html === 'string'
             ? { ...currentContent, html: await this.llmService.editSlideHtml(currentContent.html, instruction, signal) }
             : await this.llmService.editSlideContent(currentContent, instruction, slide.type, signal);
+        if (typeof editedContent.heading === 'string') editedContent.heading = removePromptEcho(editedContent.heading, instruction);
+        if (typeof editedContent.body === 'string') editedContent.body = removePromptEcho(editedContent.body, instruction);
+        if (Array.isArray(editedContent.bullets)) editedContent.bullets = editedContent.bullets.filter((item: any) => removePromptEcho(item.text, instruction)).map((item: any) => ({ ...item, text: removePromptEcho(item.text, instruction) }));
         if (Array.isArray(currentContent.objectEdits)) {
-            const text = [editedContent.heading, editedContent.body || editedContent.bullets?.map((item: any) => item.text).join('\n') || ''];
+            const text = [editedContent.heading, presentationText(editedContent, [])];
             let index = 0;
             return {
                 id: slideId,
@@ -416,7 +426,8 @@ export class GenerationService implements OnModuleInit {
                     ...editedContent,
                     objectEdits: currentContent.objectEdits.map((item: any) => typeof item.text === 'string'
                         ? { ...item, text: text[Math.min(index++, text.length - 1)] }
-                        : item),
+                        : Array.isArray(item.cells) ? { ...item, cells: populatePptxTableCells(item.cells, [presentationText(editedContent, [])]) }
+                            : item),
                 },
             };
         }

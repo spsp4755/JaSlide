@@ -92,7 +92,7 @@ ${currentContent}
 ---
 Apply this instruction: ${instruction}
 
-Return the COMPLETE edited slide as JSON with the same fields (heading, subheading, body, bullets, chart). Keep any field you are not changing. Favor concise, scannable bullets over long paragraphs. Return JSON only:
+Return the COMPLETE edited slide as JSON with the same fields (heading, subheading, body, bullets, chart). Keep any field you are not changing. Favor concise, scannable bullets over long paragraphs. Do not repeat the instruction or describe the editing task in any slide field. Return JSON only:
 {
   "heading": "Main heading",
   "subheading": "Optional subheading",

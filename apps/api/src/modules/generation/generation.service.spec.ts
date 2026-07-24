@@ -322,7 +322,7 @@ describe('GenerationService cancellation', () => {
 
         await svc.aiEdit('user-1', { slideId: 'slide-pptx', instruction: '내용을 새로 써줘' } as any);
 
-        expect(editPrisma.slide.update).toHaveBeenCalledWith({ where: { id: 'slide-pptx' }, data: { content: expect.objectContaining({ objectEdits: [{ objectId: '1', text: 'New title' }, { objectId: '2', text: 'New body' }, { objectId: '3', cells: [['KPI', '']] }] }) } });
+        expect(editPrisma.slide.update).toHaveBeenCalledWith({ where: { id: 'slide-pptx' }, data: { content: expect.objectContaining({ objectEdits: [{ objectId: '1', text: 'New title' }, { objectId: '2', text: 'New body' }, { objectId: '3', cells: [['KPI', 'New body']] }] }) } });
     });
 
     it('stores native object edits instead of HTML for PPTX templates', async () => {
