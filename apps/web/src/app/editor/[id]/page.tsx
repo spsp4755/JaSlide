@@ -1627,12 +1627,15 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         let savedRange: Range | null = null;
         const formatSelection = (updates: Record<string, string>) => {
             const selection = document.getSelection();
-            if (!selection || !savedRange || savedRange.collapsed) return;
-            selection.removeAllRanges(); selection.addRange(savedRange);
+            if (!selection) return;
+            const range = savedRange && !savedRange.collapsed ? savedRange : (() => { if (!selectedElement) return null; const whole = document.createRange(); whole.selectNodeContents(selectedElement); return whole; })();
+            if (!range) return;
+            selection.removeAllRanges(); selection.addRange(range);
             const span = document.createElement('span');
             Object.assign(span.style, updates);
-            try { savedRange.surroundContents(span); } catch { const fragment = savedRange.extractContents(); span.append(fragment); savedRange.insertNode(span); }
-            const range = document.createRange(); range.selectNodeContents(span); selection.removeAllRanges(); selection.addRange(range); savedRange = range;
+            if (updates.fontSize) span.style.fontSize = `${Math.max(1, Number(updates.fontSize) || 24)}px`;
+            try { range.surroundContents(span); } catch { const fragment = range.extractContents(); span.append(fragment); range.insertNode(span); }
+            const formatted = document.createRange(); formatted.selectNodeContents(span); selection.removeAllRanges(); selection.addRange(formatted); savedRange = formatted;
             persist();
         };
         const select = (element: HTMLElement | null) => {
