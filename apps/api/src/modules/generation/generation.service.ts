@@ -276,7 +276,9 @@ export class GenerationService implements OnModuleInit {
                 const templateIndex = htmlTemplates.length
                     ? (htmlTemplates[requestedTemplateIndex] ? requestedTemplateIndex : i % htmlTemplates.length)
                     : -1;
-                let html = templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
+                // PPTX has its own object map and renderer preview. Keeping the
+                // extracted HTML here makes the editor choose the lossy HTML path.
+                let html = !pptxSource && templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
                 const objects = pptxSource?.slides?.[templateIndex]?.objects || [];
                 const richText = presentationText(content, slideOutline.keyPoints);
                 const objectEdits = pptxSource ? objects

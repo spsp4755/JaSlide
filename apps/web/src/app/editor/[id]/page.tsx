@@ -1726,7 +1726,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         });
     };
 
-    if (content.html) {
+    if (content.html && !nativeObjects.length) {
         return (
             <div ref={htmlCanvasRef} className="relative h-full w-full overflow-hidden bg-white" data-html-canvas onPointerDown={startSlideSwipe}>
                 <iframe
@@ -1798,7 +1798,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         window.addEventListener('pointerup', stop, { once: true });
     };
 
-    if (previewUrl && !content.html) {
+    if (previewUrl && (!content.html || nativeObjects.length)) {
         return (
             <div className="relative h-full w-full touch-pan-y" data-html-canvas onPointerDown={startSlideSwipe}>
                 <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
@@ -1870,7 +1870,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         return <img src={previewUrl} alt={`${slide.title || '슬라이드'} 미리보기`} className="h-full w-full object-contain" />;
     }
 
-    if (content.html) {
+    if (content.html && !nativeObjects.length) {
         return <div className="flex h-full items-center justify-center bg-gray-50 text-sm text-gray-400">템플릿 미리보기 불러오는 중…</div>;
     }
 

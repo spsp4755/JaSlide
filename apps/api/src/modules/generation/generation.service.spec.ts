@@ -334,6 +334,7 @@ describe('GenerationService cancellation', () => {
         const llm = { generateOutline: jest.fn().mockResolvedValue({ title: 'Weekly', slides: [{ title: 'Status', type: 'CONTENT', keyPoints: ['Done'] }] }), generateSlideContent: jest.fn().mockResolvedValue({ heading: 'Status', body: 'Done' }) };
         await new GenerationService(pipelinePrisma as any, llm as any, {} as any).processGeneration('job-pptx');
         expect(pipelinePrisma.slide.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ content: expect.objectContaining({ objectEdits: expect.arrayContaining([expect.objectContaining({ objectId: '7', text: 'Status' })]) }) }) }));
+        expect(pipelinePrisma.slide.create.mock.calls[0][0].data.content.html).toBeUndefined();
     });
 });
 
