@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
@@ -462,3 +463,14 @@ def test_pptx_template_adds_native_shapes_and_lines():
 
     shapes = Presentation(BytesIO(output)).slides[0].shapes
     assert len(shapes) == 2 and shapes[0].auto_shape_type == MSO_SHAPE.ISOSCELES_TRIANGLE and shapes[1].shape_type == 9
+
+
+def test_pptx_template_preserves_unedited_table_and_shape():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(3), Inches(1)); table.table.cell(0, 0).text = "Keep"
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5), Inches(1), Inches(2), Inches(1)); shape.fill.fore_color.rgb = RGBColor(0x11, 0x22, 0x33)
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]}]})))
+    generated = Presentation(BytesIO(output)).slides[0]
+    assert generated.shapes[0].table.cell(0, 0).text == "Updated" and str(generated.shapes[1].fill.fore_color.rgb) == "112233"
