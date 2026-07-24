@@ -463,7 +463,9 @@ export default function EditorPage() {
     const nativeObjects = presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide
         ? [
             ...(presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || []),
-            ...(selectedSlide.content?.objectEdits || []).filter((item: any) => item.kind && (item.imageData || item.addText) && !item.delete),
+            ...(selectedSlide.content?.objectEdits || [])
+                .filter((item: any) => item.kind && (item.imageData || item.addText) && !item.delete)
+                .map((item: any) => ({ ...item, id: item.objectId })),
         ]
         : [];
     const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
