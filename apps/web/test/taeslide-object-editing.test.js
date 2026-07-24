@@ -98,5 +98,7 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /id: item\.objectId/);
     assert.match(editor, /object\.addText/);
     assert.match(editor, /object\.imageData/);
+    assert.match(editor, /taeslide-format/);
+    assert.match(editor, /savedRange\.surroundContents/);
     assert.match(layout, /TaeSlide/);
 });

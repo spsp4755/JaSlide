@@ -449,6 +449,7 @@ export default function EditorPage() {
     const previewPendingRef = useRef(new Map<string, Promise<string | null>>());
     const previewSlideIdRef = useRef<string | null>(null);
     const [selectedHtmlTextIndex, setSelectedHtmlTextIndex] = useState<number | null>(null);
+    const [htmlTextFormatCommand, setHtmlTextFormatCommand] = useState<{ id: number; updates: Record<string, string> } | null>(null);
     const [selectedNativeObjectId, setSelectedNativeObjectId] = useState<string | null>(null);
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
@@ -486,6 +487,7 @@ export default function EditorPage() {
         updateSlide(selectedSlide.id, { content });
         handleSaveSlideDelayed(selectedSlide.id, { content });
     };
+    const formatSelectedHtmlText = (updates: Record<string, string>) => setHtmlTextFormatCommand((current) => ({ id: (current?.id || 0) + 1, updates }));
     const updateNativeObject = (objectId: string, updates: Record<string, any>) => {
         if (!selectedSlide) return;
         const objectEdits = [...(selectedSlide.content?.objectEdits || [])];
@@ -1079,18 +1081,18 @@ export default function EditorPage() {
                     </div>
                     {ribbonTab === 'home' ? (selectedHtmlObject ? <>
                         {selectedHtmlObject.objectType !== 'shape' && selectedHtmlObject.objectType !== 'image' && <>
-                            <select aria-label="글꼴" value={selectedHtmlObject.fontFamily} onChange={(event) => updateSelectedHtmlObject({ fontFamily: event.target.value })} className="h-8 rounded border px-2"><option value="Noto Sans KR">Noto Sans KR</option><option value="NanumGothic">나눔고딕</option><option value="나눔고딕">나눔고딕 (PPTX)</option><option value="HY헤드라인M">HY헤드라인M</option><option value="Arial">Arial</option><option value="Pretendard">Pretendard</option></select>
-                            <input aria-label="글자 크기" type="number" value={parseFloat(selectedHtmlObject.fontSize) || 24} onChange={(event) => updateSelectedHtmlObject({ fontSize: event.target.value })} className="h-8 w-16 rounded border px-2" />
-                            <Button aria-label="굵게" type="button" size="icon" variant={selectedHtmlObject.fontWeight === '700' || selectedHtmlObject.fontWeight === 'bold' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ fontWeight: selectedHtmlObject.fontWeight === '700' || selectedHtmlObject.fontWeight === 'bold' ? '400' : '700' })}><Bold className="h-4 w-4" /></Button>
-                            <Button aria-label="기울임" type="button" size="icon" variant={selectedHtmlObject.fontStyle === 'italic' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ fontStyle: selectedHtmlObject.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4" /></Button>
-                            <Button aria-label="밑줄" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('underline') ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textDecoration: selectedHtmlObject.textDecoration.includes('underline') ? 'none' : 'underline' })}><Underline className="h-4 w-4" /></Button>
-                            <Button aria-label="취소선" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('line-through') ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textDecoration: selectedHtmlObject.textDecoration.includes('line-through') ? 'none' : 'line-through' })}><Strikethrough className="h-4 w-4" /></Button>
+                            <select aria-label="글꼴" value={selectedHtmlObject.fontFamily} onChange={(event) => formatSelectedHtmlText({ fontFamily: event.target.value })} className="h-8 rounded border px-2"><option value="Noto Sans KR">Noto Sans KR</option><option value="NanumGothic">나눔고딕</option><option value="나눔고딕">나눔고딕 (PPTX)</option><option value="HY헤드라인M">HY헤드라인M</option><option value="Arial">Arial</option><option value="Pretendard">Pretendard</option></select>
+                            <input aria-label="글자 크기" type="number" value={parseFloat(selectedHtmlObject.fontSize) || 24} onChange={(event) => formatSelectedHtmlText({ fontSize: event.target.value })} className="h-8 w-16 rounded border px-2" />
+                            <Button aria-label="굵게" type="button" size="icon" variant={selectedHtmlObject.fontWeight === '700' || selectedHtmlObject.fontWeight === 'bold' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontWeight: selectedHtmlObject.fontWeight === '700' || selectedHtmlObject.fontWeight === 'bold' ? '400' : '700' })}><Bold className="h-4 w-4" /></Button>
+                            <Button aria-label="기울임" type="button" size="icon" variant={selectedHtmlObject.fontStyle === 'italic' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontStyle: selectedHtmlObject.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4" /></Button>
+                            <Button aria-label="밑줄" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('underline') ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ textDecoration: selectedHtmlObject.textDecoration.includes('underline') ? 'none' : 'underline' })}><Underline className="h-4 w-4" /></Button>
+                            <Button aria-label="취소선" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('line-through') ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ textDecoration: selectedHtmlObject.textDecoration.includes('line-through') ? 'none' : 'line-through' })}><Strikethrough className="h-4 w-4" /></Button>
                             {selectedHtmlObject.objectType === 'textbox' && <><Button aria-label="글머리 목록" type="button" size="icon" variant="ghost" onClick={() => setSelectedHtmlList(false)}><List className="h-4 w-4" /></Button><Button aria-label="번호 목록" type="button" size="icon" variant="ghost" onClick={() => setSelectedHtmlList(true)}><ListOrdered className="h-4 w-4" /></Button></>}
                             <Button aria-label="왼쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'left' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'left' })}><AlignLeft className="h-4 w-4" /></Button>
                             <Button aria-label="가운데 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'center' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'center' })}><AlignCenter className="h-4 w-4" /></Button>
                             <Button aria-label="오른쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'right' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'right' })}><AlignRight className="h-4 w-4" /></Button>
                         </>}
-                        <ColorSwatches label="글자색" value={selectedHtmlObject.color} onChange={(color) => updateSelectedHtmlObject({ color })} />
+                        <ColorSwatches label="글자색" value={selectedHtmlObject.color} onChange={(color) => formatSelectedHtmlText({ color })} />
                         <ColorSwatches label="채우기" value={selectedHtmlObject.backgroundColor} onChange={(backgroundColor) => updateSelectedHtmlObject({ backgroundColor })} />
                         <ColorSwatches label="윤곽선" value={selectedHtmlObject.borderColor} onChange={(borderColor) => updateSelectedHtmlObject({ borderColor })} />
                         <Button aria-label="선택한 객체 복제" type="button" size="sm" variant="ghost" onClick={duplicateSelectedHtmlObject}><Copy className="mr-1 h-4 w-4" />복제</Button>
@@ -1170,6 +1172,7 @@ export default function EditorPage() {
                                             if (updates.content) handleSaveSlideDelayed(selectedSlide.id, updates);
                                         }}
                                         onSave={() => handleSaveSlide(selectedSlide)}
+                                        htmlTextFormatCommand={htmlTextFormatCommand}
                                     />
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-gray-400">
@@ -1526,9 +1529,10 @@ interface EditableSlidePreviewProps {
     onNavigate: (direction: -1 | 1) => void;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
+    htmlTextFormatCommand: { id: number; updates: Record<string, string> } | null;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1551,6 +1555,10 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
     useEffect(() => {
         if (typeof content.html === 'string' && content.html !== lastFrameHtmlRef.current) setFrameHtml(editorFrameHtml(content.html));
     }, [slide.id, content.html]);
+    useEffect(() => {
+        if (!htmlTextFormatCommand) return;
+        htmlFrameRef.current?.contentDocument?.dispatchEvent(new CustomEvent('taeslide-format', { detail: htmlTextFormatCommand.updates }));
+    }, [htmlTextFormatCommand]);
     useEffect(() => {
         const canvas = htmlCanvasRef.current;
         if (!canvas || !content.html) return;
@@ -1607,6 +1615,17 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
             lastFrameHtmlRef.current = html;
             latestOnUpdateRef.current({ content: { ...latestContentRef.current, html } });
         };
+        let savedRange: Range | null = null;
+        const formatSelection = (updates: Record<string, string>) => {
+            const selection = document.getSelection();
+            if (!selection || !savedRange || savedRange.collapsed) return;
+            selection.removeAllRanges(); selection.addRange(savedRange);
+            const span = document.createElement('span');
+            Object.assign(span.style, updates);
+            try { savedRange.surroundContents(span); } catch { const fragment = savedRange.extractContents(); span.append(fragment); savedRange.insertNode(span); }
+            const range = document.createRange(); range.selectNodeContents(span); selection.removeAllRanges(); selection.addRange(range); savedRange = range;
+            persist();
+        };
         const select = (element: HTMLElement | null) => {
             document.querySelectorAll('[data-taeslide-selected]').forEach((item) => item.removeAttribute('data-taeslide-selected'));
             element?.setAttribute('data-taeslide-selected', 'true');
@@ -1662,7 +1681,8 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                 element.contentEditable = 'inherit'; element.removeAttribute('data-taeslide-editing'); persist();
             }
         });
-        document.addEventListener('selectionchange', () => select(targetFor(document.getSelection()?.anchorNode ?? null)));
+        document.addEventListener('selectionchange', () => { const selection = document.getSelection(); if (selection?.rangeCount) savedRange = selection.getRangeAt(0).cloneRange(); select(targetFor(selection?.anchorNode ?? null)); });
+        document.addEventListener('taeslide-format', ((event: CustomEvent<Record<string, string>>) => formatSelection(event.detail)) as EventListener);
         document.addEventListener('keydown', (event) => {
             if ((event.key === 'Delete' || event.key === 'Backspace') && selectedElement?.dataset.objectType && ['shape', 'image'].includes(selectedElement.dataset.objectType)) {
                 event.preventDefault();
