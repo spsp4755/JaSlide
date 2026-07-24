@@ -328,13 +328,14 @@ describe('GenerationService cancellation', () => {
     it('stores native object edits instead of HTML for PPTX templates', async () => {
         const pipelinePrisma = {
             generationJob: { findUnique: jest.fn().mockResolvedValueOnce({ id: 'job-pptx', status: 'QUEUED', presentationId: 'presentation-pptx', input: { content: 'weekly report', slideCount: 1, language: 'en', templateId: 'template-pptx' } }).mockResolvedValueOnce({ status: 'GENERATING_CONTENT' }), updateMany: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn() },
-            template: { findUnique: jest.fn().mockResolvedValue({ config: { source: { kind: 'pptx', slides: [{ objects: [{ id: '7', kind: 'text' }, { id: '8', kind: 'table' }] }] }, htmlSlides: ['<div/>'] } }) },
+            template: { findUnique: jest.fn().mockResolvedValue({ config: { source: { kind: 'pptx', slides: [{ objects: [{ id: '7', kind: 'text' }, { id: '9', kind: 'text' }, { id: '8', kind: 'table' }] }] }, htmlSlides: ['<div/>'] } }) },
             slide: { deleteMany: jest.fn(), create: jest.fn() }, presentation: { update: jest.fn() }, $transaction: jest.fn().mockResolvedValue([]),
         };
         const llm = { generateOutline: jest.fn().mockResolvedValue({ title: 'Weekly', slides: [{ title: 'Status', type: 'CONTENT', keyPoints: ['Done'] }] }), generateSlideContent: jest.fn().mockResolvedValue({ heading: 'Status', body: 'Done' }) };
         await new GenerationService(pipelinePrisma as any, llm as any, {} as any).processGeneration('job-pptx');
         expect(pipelinePrisma.slide.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ content: expect.objectContaining({ objectEdits: expect.arrayContaining([expect.objectContaining({ objectId: '7', text: 'Status' })]) }) }) }));
         expect(pipelinePrisma.slide.create.mock.calls[0][0].data.content.html).toBeUndefined();
+        expect(pipelinePrisma.slide.create.mock.calls[0][0].data.content.objectEdits.filter((edit: any) => edit.objectId === '9')).toEqual([]);
     });
 });
 

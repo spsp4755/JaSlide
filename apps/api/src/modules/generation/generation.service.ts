@@ -281,9 +281,12 @@ export class GenerationService implements OnModuleInit {
                 let html = !pptxSource && templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
                 const objects = pptxSource?.slides?.[templateIndex]?.objects || [];
                 const richText = presentationText(content, slideOutline.keyPoints);
-                const objectEdits = pptxSource ? objects
-                    .filter((item: any) => item.kind === 'text')
-                    .map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : richText }))
+                const textObjects = objects.filter((item: any) => item.kind === 'text');
+                const hasTable = objects.some((item: any) => item.kind === 'table');
+                // A PPTX table owns its cell text. Writing the generated body into
+                // every text box duplicates content on top of the table.
+                const objectEdits = pptxSource
+                    ? textObjects.slice(0, hasTable ? 1 : 2).map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : richText }))
                     : [];
                 if (pptxSource) objectEdits.push(...objects.filter((item: any) => item.kind === 'table').map((item: any) => ({ objectId: item.id, slide: templateIndex, cells: populatePptxTableCells(item.cells, [richText, ...slideOutline.keyPoints]) })));
                 if (html && !pptxSource) {
