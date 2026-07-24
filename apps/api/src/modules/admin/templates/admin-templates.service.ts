@@ -44,6 +44,20 @@ export class AdminTemplatesService {
         });
     }
 
+    async reextractPptx(id: string) {
+        const template = await this.prisma.template.findUnique({ where: { id }, select: { config: true } });
+        const config = template?.config as any;
+        const storageKey = config?.source?.storageKey || config?.pptxTemplate?.storageKey;
+        if (!storageKey || config?.source?.kind !== 'pptx') throw new BadRequestException('PPTX source file is unavailable');
+        const form = new FormData();
+        const source = await this.storage.getBuffer(storageKey);
+        form.append('file', new Blob([new Uint8Array(source)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), config?.pptxTemplate?.originalname || 'template.pptx');
+        const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
+        const response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 60000 });
+        if (!this.isTemplateConfig(response.data?.config)) throw new BadRequestException('PPTX extraction produced an invalid template');
+        return this.prisma.template.update({ where: { id }, data: { config: { ...(response.data.config as any), pptxTemplate: config.pptxTemplate, source: { ...(response.data.config as any).source, storageKey } } } });
+    }
+
     async importHtmlZip(
         file: Express.Multer.File,
         data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },

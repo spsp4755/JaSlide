@@ -41,6 +41,11 @@ export class AdminTemplatesController {
         return this.templatesService.importPptx(file, data);
     }
 
+    @Post(':id/reextract-pptx')
+    async reextractPptx(@Param('id') id: string) {
+        return this.templatesService.reextractPptx(id);
+    }
+
     @Post('import-html-zip')
     @UseInterceptors(FileInterceptor('file', {
         limits: { fileSize: 20 * 1024 * 1024 },
