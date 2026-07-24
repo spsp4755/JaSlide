@@ -471,6 +471,6 @@ def test_pptx_template_preserves_unedited_table_and_shape():
     shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5), Inches(1), Inches(2), Inches(1)); shape.fill.fore_color.rgb = RGBColor(0x11, 0x22, 0x33)
     buffer = BytesIO(); source.save(buffer)
     template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
-    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]}]})))
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]]}]})))
     generated = Presentation(BytesIO(output)).slides[0]
     assert generated.shapes[0].table.cell(0, 0).text == "Updated" and str(generated.shapes[1].fill.fore_color.rgb) == "112233"
