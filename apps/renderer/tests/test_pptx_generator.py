@@ -424,3 +424,16 @@ def test_pptx_template_deletes_a_native_object():
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(shape.shape_id), "delete": True}]})))
 
     assert len(Presentation(BytesIO(output)).slides[0].shapes) == 0
+
+
+def test_pptx_template_adds_a_native_image():
+    source = Presentation()
+    source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL1nQAAAABJRU5ErkJggg=="
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": "new-image", "imageData": image, "left": 200, "top": 100, "width": 400, "height": 200}]})))
+
+    generated = Presentation(BytesIO(output)).slides[0].shapes[0]
+    assert generated.shape_type == 13 and generated.left == Presentation(BytesIO(output)).slide_width * 200 // 1920

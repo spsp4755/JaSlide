@@ -91,5 +91,7 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /item\.kind === 'image'/);
     assert.match(editor, /selectedNativeCells/);
     assert.match(editor, /flatMap\(\(row: string\[\]/);
+    assert.match(editor, /new-image-\$\{crypto\.randomUUID\(\)\}/);
+    assert.match(editor, /imageData/);
     assert.match(layout, /TaeSlide/);
 });

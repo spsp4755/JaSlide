@@ -146,11 +146,24 @@ class PPTXGenerator:
             return
         if edit["slide"] < 0 or edit["slide"] >= len(self.prs.slides):
             return
-        shape = next((item for item in self.prs.slides[edit["slide"]].shapes if str(item.shape_id) == str(edit.get("objectId"))), None)
-        if not shape:
-            return
+        slide = self.prs.slides[edit["slide"]]
+        shape = next((item for item in slide.shapes if str(item.shape_id) == str(edit.get("objectId"))), None)
         if edit.get("delete") is True:
-            shape._element.getparent().remove(shape._element)
+            if shape:
+                shape._element.getparent().remove(shape._element)
+            return
+        if isinstance(edit.get("imageData"), str) and "," in edit["imageData"]:
+            try:
+                image = base64.b64decode(edit["imageData"].split(",", 1)[1])
+                left = int((edit.get("left", 180)) * self.prs.slide_width / 1920)
+                top = int((edit.get("top", 180)) * self.prs.slide_height / 1080)
+                width = int((edit.get("width", 640)) * self.prs.slide_width / 1920)
+                height = int((edit.get("height", 360)) * self.prs.slide_height / 1080)
+                slide.shapes.add_picture(BytesIO(image), left, top, width, height)
+            except Exception:
+                pass
+            return
+        if not shape:
             return
         if isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             shape.text = edit["text"]

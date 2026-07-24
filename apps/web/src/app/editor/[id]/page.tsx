@@ -461,7 +461,10 @@ export default function EditorPage() {
     const selectedHtmlObject = selectedSlide?.content?.html && selectedHtmlTextIndex !== null
         ? getHtmlTextFields(selectedSlide.content.html)[selectedHtmlTextIndex] : null;
     const nativeObjects = presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide
-        ? (presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || [])
+        ? [
+            ...(presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || []),
+            ...(selectedSlide.content?.objectEdits || []).filter((item: any) => item.kind === 'image' && item.imageData && !item.delete),
+        ]
         : [];
     const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
     const selectedNativeCells = selectedNativeObject?.kind === 'table'
@@ -889,7 +892,16 @@ export default function EditorPage() {
     const handleImageInsert = (file: File | undefined) => {
         if (!file || !file.type.startsWith('image/')) return;
         const reader = new FileReader();
-        reader.onload = () => insertHtmlObject((html) => addHtmlImage(html, String(reader.result)));
+        reader.onload = () => {
+            const imageData = String(reader.result);
+            if (presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide) {
+                const objectId = `new-image-${crypto.randomUUID()}`;
+                updateNativeObject(objectId, { kind: 'image', imageData, left: 180, top: 180, width: 640, height: 360 });
+                setSelectedNativeObjectId(objectId);
+                return;
+            }
+            insertHtmlObject((html) => addHtmlImage(html, imageData));
+        };
         reader.readAsDataURL(file);
     };
 
