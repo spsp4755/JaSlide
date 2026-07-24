@@ -22,9 +22,19 @@ export function populatePptxTableCells(cells: unknown, values: string[]): string
     if (!Array.isArray(cells)) return [];
     const replacements = values.filter(Boolean);
     return cells.map((row) => Array.isArray(row) ? row.map((cell) => {
-        if (typeof cell === 'string' && cell.trim()) return cell;
-        return replacements.shift() || '';
+        const text = typeof cell === 'string' ? cell.trim() : '';
+        // Keep compact labels, but replace the long content regions that make a
+        // report/table template useful. Existing blank placeholders still work.
+        if (text && !text.includes('\n') && text.length <= 60) return text;
+        return replacements.shift() || text;
     }) : []);
+}
+
+function presentationText(content: { body?: string; bullets?: { text: string; level?: number }[] }, keyPoints: string[]) {
+    if (content.bullets?.length) {
+        return content.bullets.map((bullet) => `${'  '.repeat(Math.max(0, bullet.level || 0))}• ${bullet.text}`).join('\n');
+    }
+    return content.body || keyPoints.map((point) => `• ${point}`).join('\n');
 }
 
 @Injectable()
@@ -268,11 +278,12 @@ export class GenerationService implements OnModuleInit {
                     : -1;
                 let html = templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
                 const objects = pptxSource?.slides?.[templateIndex]?.objects || [];
+                const richText = presentationText(content, slideOutline.keyPoints);
                 const objectEdits = pptxSource ? objects
                     .filter((item: any) => item.kind === 'text')
-                    .map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : content.body || slideOutline.keyPoints.join('\n') }))
+                    .map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : richText }))
                     : [];
-                if (pptxSource) objectEdits.push(...objects.filter((item: any) => item.kind === 'table').map((item: any) => ({ objectId: item.id, slide: templateIndex, cells: populatePptxTableCells(item.cells, [slideOutline.title, content.body || '', ...slideOutline.keyPoints]) })));
+                if (pptxSource) objectEdits.push(...objects.filter((item: any) => item.kind === 'table').map((item: any) => ({ objectId: item.id, slide: templateIndex, cells: populatePptxTableCells(item.cells, [richText, ...slideOutline.keyPoints]) })));
                 if (html && !pptxSource) {
                     try {
                         const generatedHtml = await this.llmService.generateSlideHtml({

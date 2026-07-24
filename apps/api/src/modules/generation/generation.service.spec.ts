@@ -342,4 +342,9 @@ describe('populatePptxTableCells', () => {
         expect(populatePptxTableCells([['KPI', ''], ['Owner', '']], ['Status', 'Done']))
             .toEqual([['KPI', 'Status'], ['Owner', 'Done']]);
     });
+
+    it('replaces a long template content area while preserving compact labels', () => {
+        expect(populatePptxTableCells([['추진실적', '추진계획'], ['기존 보고 내용\n두 번째 줄\n세 번째 줄', '']], ['• 완료\n  • 세부 작업', '• 다음 계획']))
+            .toEqual([['추진실적', '추진계획'], ['• 완료\n  • 세부 작업', '• 다음 계획']]);
+    });
 });
