@@ -16,6 +16,7 @@ import { CommentsPanel } from '@/components/editor/comments-panel';
 import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
+import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import {
     ArrowLeft,
     Save,
@@ -474,9 +475,6 @@ export default function EditorPage() {
         ]
         : [];
     const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
-    const selectedNativeCells = selectedNativeObject?.kind === 'table'
-        ? ((selectedSlide?.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || selectedNativeObject.cells || [])
-        : [];
     const navigateSlide = (direction: -1 | 1) => {
         const index = presentation?.slides.findIndex((slide) => slide.id === selectedSlideId) ?? -1;
         const target = presentation?.slides[index + direction];
@@ -700,39 +698,37 @@ export default function EditorPage() {
         }
     };
 
-    // Debounced save for select/dropdown changes
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const handleSaveSlideDelayed = (slideId: string, updates: Partial<any>) => {
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-        saveTimeoutRef.current = setTimeout(async () => {
+    // Debounced save for select/dropdown changes. Scheduled per-slide so
+    // editing slide A and then slide B within the debounce window no longer
+    // cancels A's pending save (each slide id gets its own timer).
+    const saveSchedulerRef = useRef<ReturnType<typeof createSlideSaveScheduler> | null>(null);
+    if (!saveSchedulerRef.current) {
+        saveSchedulerRef.current = createSlideSaveScheduler(async (slideId: string, updates: Partial<any>) => {
             const slide = presentation?.slides.find((s) => s.id === slideId);
-            if (slide) {
-                try {
-                    // Only send allowed fields to the API
-                    await slidesApi.update(presentationId, slideId, {
-                        type: updates.type ?? slide.type,
-                        title: updates.title ?? slide.title,
-                        content: updates.content ?? slide.content,
-                        layout: updates.layout ?? slide.layout,
-                        notes: updates.notes ?? slide.notes,
-                        order: updates.order ?? slide.order,
-                    });
-                    setDirty(false);
-                    setPreviewVersion((version) => version + 1);
-                } catch (error) {
-                    console.error('Failed to save slide:', error);
-                }
+            if (!slide) return;
+            try {
+                // Only send allowed fields to the API
+                await slidesApi.update(presentationId, slideId, {
+                    type: updates.type ?? slide.type,
+                    title: updates.title ?? slide.title,
+                    content: updates.content ?? slide.content,
+                    layout: updates.layout ?? slide.layout,
+                    notes: updates.notes ?? slide.notes,
+                    order: updates.order ?? slide.order,
+                });
+                setDirty(false);
+                setPreviewVersion((version) => version + 1);
+            } catch (error) {
+                console.error('Failed to save slide:', error);
             }
         }, 500);
+    }
+    const handleSaveSlideDelayed = (slideId: string, updates: Partial<any>) => {
+        saveSchedulerRef.current!.schedule(slideId, updates);
     };
 
     const persistHistoryState = async () => {
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-            saveTimeoutRef.current = null;
-        }
+        saveSchedulerRef.current?.cancelAll();
         const restored = useEditorStore.getState().presentation;
         if (!restored) return;
         setSaving(true);
@@ -893,7 +889,11 @@ export default function EditorPage() {
             setPreviewVersion((version) => version + 1);
             setAiChatMessages((messages) => [...messages, { role: 'assistant', text: `${targets.length}개 슬라이드를 수정했습니다.` }]);
             toast({ title: 'AI 편집 완료', description: `${targets.length}개 슬라이드가 업데이트되었습니다.` });
-            void fetchPresentation();
+            // Persist any manual edits still pending on other slides before
+            // pulling server state back down, so this fetch can't clobber
+            // in-flight local changes with stale data.
+            await saveSchedulerRef.current?.flushAll();
+            await fetchPresentation();
         } catch {
             const cancelled = abortController.signal.aborted;
             setAiChatMessages((messages) => [...messages, { role: 'assistant', text: cancelled ? '수정 요청을 중지했습니다.' : '수정에 실패했습니다. 잠시 후 다시 요청해 주세요.' }]);
@@ -1253,20 +1253,7 @@ export default function EditorPage() {
                                     {nativeObjects.filter((item: any) => item.kind === 'text' || item.kind === 'table' || item.kind === 'shape' || item.kind === 'image').map((item: any, index: number) => <option key={item.id} value={item.id}>{item.kind === 'table' ? '표' : item.kind === 'shape' ? '도형' : item.kind === 'image' ? '이미지' : '텍스트'} {index + 1}</option>)}
                                 </select>
                                 {selectedNativeObject ? <div className="space-y-3">
-                                    {selectedNativeObject.kind !== 'shape' && selectedNativeObject.kind !== 'image' && <div className="space-y-2">
-                                    <label className="block text-xs font-medium text-gray-600">{selectedNativeObject.kind === 'table' ? '표 내용 (줄마다 첫 번째 열)' : '텍스트'}</label>
-                                    <textarea
-                                        value={selectedNativeObject.kind === 'table' ? ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.cells || selectedNativeObject.cells || []).map((row: string[]) => row.join(' | ')).join('\n') : ((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.text ?? selectedNativeObject.text ?? '')}
-                                        rows={selectedNativeObject.kind === 'table' ? 6 : 4}
-                                        onChange={(event) => updateNativeObject(selectedNativeObject.id, selectedNativeObject.kind === 'table' ? { cells: event.target.value.split('\n').map((row) => row.split('|').map((cell) => cell.trim())) } : { text: event.target.value })}
-                                        className={selectedNativeObject.kind === 'table' ? 'hidden' : 'w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500'}
-                                    />
-                                    </div>}
-                                    {selectedNativeObject.kind === 'table' && <div className="overflow-auto rounded border p-2">
-                                        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(...selectedNativeCells.map((row: string[]) => row.length), 1)}, minmax(96px, 1fr))` }}>
-                                            {selectedNativeCells.flatMap((row: string[], rowIndex: number) => row.map((cell: string, cellIndex: number) => <input key={`${rowIndex}-${cellIndex}`} value={cell} onChange={(event) => { const cells = selectedNativeCells.map((source: string[]) => [...source]); cells[rowIndex][cellIndex] = event.target.value; updateNativeObject(selectedNativeObject.id, { cells }); }} className="min-w-0 rounded border px-2 py-1 text-sm" />))}
-                                        </div>
-                                    </div>}
+                                    {(selectedNativeObject.kind === 'text' || selectedNativeObject.kind === 'table') && <p className="text-xs text-gray-500">슬라이드에서 더블클릭하면 직접 편집할 수 있습니다.</p>}
                                     {selectedNativeObject.kind === 'text' && <div className="grid grid-cols-2 gap-2">
                                         <label className="text-xs text-gray-600">글꼴<input value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontFamily ?? selectedNativeObject.fontFamily ?? ''} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontFamily: event.target.value })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
                                         <label className="text-xs text-gray-600">크기<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontSize ?? selectedNativeObject.fontSize ?? 18} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontSize: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
@@ -1553,6 +1540,8 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
     const htmlTextFields = typeof content.html === 'string' ? getHtmlTextFields(content.html) : [];
     const htmlSelectionAreas = typeof content.html === 'string' ? getHtmlSelectionAreas(content.html) : [];
     const [inlineTextIndex, setInlineTextIndex] = useState<number | null>(null);
+    const [editingNativeTextId, setEditingNativeTextId] = useState<string | null>(null);
+    const [editingNativeCell, setEditingNativeCell] = useState<{ objectId: string; row: number; col: number } | null>(null);
     const htmlFrameRef = useRef<HTMLIFrameElement>(null);
     const htmlCanvasRef = useRef<HTMLDivElement>(null);
     const latestContentRef = useRef(content);
@@ -1798,6 +1787,14 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
         window.addEventListener('pointerup', stop, { once: true });
     };
 
+    const updateNativeObjectContent = (objectId: string, updates: Record<string, any>) => {
+        const objectEdits = [...(content.objectEdits || [])];
+        const index = objectEdits.findIndex((item: any) => item.objectId === objectId);
+        if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...updates };
+        else objectEdits.push({ objectId, slide: content.templateIndex ?? slide.order ?? 0, ...updates });
+        onUpdate({ content: { ...content, objectEdits } });
+    };
+
     if (previewUrl && (!content.html || nativeObjects.length)) {
         return (
             <div className="relative h-full w-full touch-pan-y" data-html-canvas onPointerDown={startSlideSwipe}>
@@ -1810,7 +1807,55 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                     const width = edit.width ?? object.width ?? 0;
                     const height = edit.height ?? object.height ?? 0;
                     const selected = selectedNativeObjectId === object.id;
-                    return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}>
+                    return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }} onDoubleClick={(event) => {
+                        if (object.kind !== 'text') return;
+                        event.preventDefault(); event.stopPropagation();
+                        onSelectNativeObject(object.id);
+                        setEditingNativeTextId(object.id);
+                    }}>
+                        {object.kind === 'text' && (editingNativeTextId === object.id ? <textarea
+                            autoFocus
+                            aria-label="네이티브 텍스트 직접 편집"
+                            value={edit.text ?? object.text ?? ''}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onChange={(event) => updateNativeObjectContent(object.id, { text: event.target.value })}
+                            onBlur={() => setEditingNativeTextId(null)}
+                            onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeTextId(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
+                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white/95 p-1 text-sm leading-tight outline-none"
+                        /> : <div className="pointer-events-none h-full w-full overflow-hidden p-1 text-sm leading-tight" style={{ textAlign: (edit.align ?? object.align ?? 'left') as any }}>{edit.text ?? object.text ?? ''}</div>)}
+                        {object.kind === 'table' && (() => {
+                            const cells: string[][] = edit.cells || object.cells || [];
+                            const rowHeights: number[] = (object.rowHeights?.length === cells.length ? object.rowHeights : cells.map(() => 1));
+                            const columnWidths: number[] = (object.columnWidths?.length === (cells[0]?.length || 0) ? object.columnWidths : (cells[0] || []).map(() => 1));
+                            const rowTotal = rowHeights.reduce((sum: number, value: number) => sum + value, 0) || 1;
+                            const colTotal = columnWidths.reduce((sum: number, value: number) => sum + value, 0) || 1;
+                            return <div className="grid h-full w-full" style={{ gridTemplateRows: rowHeights.map((value) => `${(value / rowTotal) * 100}%`).join(' '), gridTemplateColumns: columnWidths.map((value) => `${(value / colTotal) * 100}%`).join(' ') }}>
+                                {cells.flatMap((row: string[], rowIndex: number) => row.map((cellText: string, colIndex: number) => {
+                                    const isEditing = !!editingNativeCell && editingNativeCell.objectId === object.id && editingNativeCell.row === rowIndex && editingNativeCell.col === colIndex;
+                                    return isEditing ? <textarea
+                                        key={`${rowIndex}-${colIndex}`}
+                                        autoFocus
+                                        aria-label="표 셀 직접 편집"
+                                        value={cellText}
+                                        onPointerDown={(event) => event.stopPropagation()}
+                                        onChange={(event) => {
+                                            const next = cells.map((source: string[]) => [...source]);
+                                            next[rowIndex][colIndex] = event.target.value;
+                                            updateNativeObjectContent(object.id, { cells: next });
+                                        }}
+                                        onBlur={() => setEditingNativeCell(null)}
+                                        onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeCell(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
+                                        className="resize-none border border-purple-600 bg-white/95 p-1 text-xs leading-tight outline-none"
+                                    /> : <div
+                                        key={`${rowIndex}-${colIndex}`}
+                                        data-native-table-cell
+                                        className="overflow-hidden border border-transparent p-1 text-xs leading-tight hover:border-purple-400/70"
+                                        onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}
+                                        onDoubleClick={(event) => { event.preventDefault(); event.stopPropagation(); onSelectNativeObject(object.id); setEditingNativeCell({ objectId: object.id, row: rowIndex, col: colIndex }); }}
+                                    >{cellText}</div>;
+                                }))}
+                            </div>;
+                        })()}
                         {selected && <button type="button" aria-label="native object resize" className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-sm border border-purple-700 bg-white" onPointerDown={(event) => startNativeTransform(event, object, true)} />}
                     </div>;
                 })}
