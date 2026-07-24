@@ -46,6 +46,8 @@ export default function AdminTemplatesPage() {
     const [layouts, setLayouts] = useState<LayoutRule[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [templateQuery, setTemplateQuery] = useState('');
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
 
     // Modal states
     const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -221,6 +223,18 @@ export default function AdminTemplatesPage() {
         } catch (err) {
             showToast('삭제에 실패했습니다. 사용 중인 템플릿은 삭제할 수 없습니다.', 'error');
         }
+    };
+    const handleDeleteSelectedTemplates = async () => {
+        if (!selectedTemplateIds.length || !confirm(`${selectedTemplateIds.length}개 템플릿을 삭제할까요?`)) return;
+        const results = await Promise.allSettled(selectedTemplateIds.map((id) => adminFetch(`${API_URL}/admin/templates/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((res) => { if (!res.ok) throw new Error(); })));
+        const deleted = results.filter((result) => result.status === 'fulfilled').length;
+        showToast(`${deleted}개 삭제${deleted === selectedTemplateIds.length ? '' : `, ${selectedTemplateIds.length - deleted}개는 사용 중 또는 실패`}`, deleted ? 'success' : 'error');
+        setSelectedTemplateIds([]); fetchData();
+    };
+    const handleReextractPptx = async (id: string) => {
+        const res = await adminFetch(`${API_URL}/admin/templates/${id}/reextract-pptx`, { method: 'POST', headers: getAuthHeaders() });
+        if (!res.ok) return showToast('PPTX 재추출에 실패했습니다.', 'error');
+        showToast('PPTX 객체 맵을 다시 추출했습니다.'); fetchData();
     };
 
     const handleImportPptx = async () => {
@@ -501,6 +515,8 @@ export default function AdminTemplatesPage() {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                 </div>
             ) : tab === 'templates' ? (
+                <>
+                <div className="mb-4 flex items-center gap-3"><input value={templateQuery} onChange={(event) => setTemplateQuery(event.target.value)} placeholder="템플릿 검색" className="rounded border px-3 py-2 text-sm" /><label className="text-sm"><input type="checkbox" checked={templates.length > 0 && selectedTemplateIds.length === templates.length} onChange={(event) => setSelectedTemplateIds(event.target.checked ? templates.map((item) => item.id) : [])} className="mr-2" />전체 선택</label><button type="button" disabled={!selectedTemplateIds.length} onClick={handleDeleteSelectedTemplates} className="rounded border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-40">선택 삭제 ({selectedTemplateIds.length})</button></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {templates.length === 0 ? (
                         <div className="col-span-full text-center py-12 text-gray-500">
@@ -510,7 +526,7 @@ export default function AdminTemplatesPage() {
                                 첫 템플릿 추가하기
                             </button>
                         </div>
-                    ) : templates.map((template) => (
+                    ) : templates.filter((template) => `${template.name} ${template.description || ''}`.toLowerCase().includes(templateQuery.toLowerCase())).map((template) => (
                         <div key={template.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <div
                                 className="h-32 flex items-center justify-center text-4xl"
@@ -520,6 +536,7 @@ export default function AdminTemplatesPage() {
                             </div>
                             <div className="p-4">
                                 <div className="flex justify-between items-start mb-2">
+                                    <input type="checkbox" aria-label={`${template.name} 선택`} checked={selectedTemplateIds.includes(template.id)} onChange={(event) => setSelectedTemplateIds((ids) => event.target.checked ? [...ids, template.id] : ids.filter((id) => id !== template.id))} />
                                     <h3 className="font-semibold text-gray-900">{template.name}</h3>
                                     <button
                                         onClick={() => handleToggleTemplatePublic(template)}
@@ -545,6 +562,7 @@ export default function AdminTemplatesPage() {
                                 >
                                     <Eye size={14} className="inline mr-1" />미리보기
                                 </button>
+                                {template.config?.source?.kind === 'pptx' && <button onClick={() => handleReextractPptx(template.id)} className="p-1.5 border rounded hover:bg-gray-100" title="PPTX 객체 맵 재추출"><Loader2 size={14} /></button>}
                                 <button
                                     onClick={() => handleEditTemplate(template)}
                                     className="p-1.5 border rounded hover:bg-gray-100"
@@ -561,6 +579,7 @@ export default function AdminTemplatesPage() {
                         </div>
                     ))}
                 </div>
+                </>
             ) : tab === 'palettes' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {palettes.length === 0 ? (
