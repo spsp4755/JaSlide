@@ -292,9 +292,10 @@ interface DraggableSlideProps {
     onSelect: () => void;
     onToggleCheck: () => void;
     onMove: (from: number, to: number) => void;
+    previewUrl?: string;
 }
 
-function DraggableSlide({ slide, index, isSelected, isChecked, onSelect, onToggleCheck, onMove }: DraggableSlideProps) {
+function DraggableSlide({ slide, index, isSelected, isChecked, onSelect, onToggleCheck, onMove, previewUrl }: DraggableSlideProps) {
     const [{ isDragging }, drag] = useDrag({
         type: 'SLIDE',
         item: { index },
@@ -335,8 +336,12 @@ function DraggableSlide({ slide, index, isSelected, isChecked, onSelect, onToggl
                 title="AI 편집 대상으로 선택"
                 className="absolute top-1 left-1 z-10 h-4 w-4 cursor-pointer accent-purple-600"
             />
-            <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-50 rounded flex items-center justify-center mb-2">
-                <Icon className="h-6 w-6 text-gray-400" />
+            {/* Every slide used to show the same grey type icon, so a ten-slide deck
+                was ten identical boxes. Show the rendered slide once we have it. */}
+            <div className="aspect-video overflow-hidden rounded bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center mb-2">
+                {previewUrl
+                    ? <img src={previewUrl} alt="" className="h-full w-full object-contain" />
+                    : <Icon className="h-6 w-6 text-gray-400" />}
             </div>
             <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-gray-600 truncate">
@@ -402,6 +407,7 @@ export default function EditorPage() {
     // current revision the canvas shows the edited text itself, so a change appears
     // immediately instead of after the ~1s LibreOffice round trip.
     const [previewKey, setPreviewKey] = useState<string | null>(null);
+    const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
     const previewCacheRef = useRef(new Map<string, string>());
     const previewPendingRef = useRef(new Map<string, Promise<string | null>>());
     const previewSlideIdRef = useRef<string | null>(null);
@@ -510,13 +516,17 @@ export default function EditorPage() {
     const loadPreview = useCallback((slideIndex: number, slideId: string) => {
         const key = `${slideId}:${previewRevisions[slideId] || 0}`;
         const cached = previewCacheRef.current.get(key);
-        if (cached) return Promise.resolve(cached);
+        if (cached) {
+            setThumbnails((current) => (current[slideId] === cached ? current : { ...current, [slideId]: cached }));
+            return Promise.resolve(cached);
+        }
         const pending = previewPendingRef.current.get(key);
         if (pending) return pending;
         const request = exportApi.preview(presentationId, slideIndex)
             .then((response) => {
                 const url = URL.createObjectURL(response.data);
                 previewCacheRef.current.set(key, url);
+                setThumbnails((current) => ({ ...current, [slideId]: url }));
                 return url;
             })
             .catch(() => null)
@@ -602,12 +612,18 @@ export default function EditorPage() {
                 setPreviewKey(key);
             }
         });
-        // Warm the neighbours only; the renderer handles one request at a time, so
-        // prefetching a long deck would queue ahead of the slide being edited.
-        for (const offset of [1, -1]) {
-            const neighbour = presentation.slides[slideIndex + offset];
-            if (neighbour) void loadPreview(slideIndex + offset, neighbour.id);
-        }
+        // Warm the neighbours first, then fill the rest of the panel's thumbnails one
+        // at a time. The renderer serves a single request at a time, so firing the whole
+        // deck at once (what this used to do) queued ahead of the slide being edited.
+        void (async () => {
+            for (const offset of [1, -1]) {
+                const neighbour = presentation.slides[slideIndex + offset];
+                if (active && neighbour) await loadPreview(slideIndex + offset, neighbour.id);
+            }
+            for (let index = 0; index < presentation.slides.length && active; index += 1) {
+                await loadPreview(index, presentation.slides[index].id);
+            }
+        })();
         return () => { active = false; };
     }, [presentation, selectedSlideId, previewRevisions, loadPreview]);
 
@@ -1135,6 +1151,7 @@ export default function EditorPage() {
                                     index={index}
                                     isSelected={slide.id === selectedSlideId}
                                     isChecked={multiSelectedSlides.includes(slide.id)}
+                                    previewUrl={thumbnails[slide.id]}
                                     onSelect={() => {
                                         setSelectedSlide(slide.id);
                                         setSelectedHtmlTextIndex(null);

@@ -307,7 +307,7 @@ function DashboardContent() {
         const poll = async () => {
             try {
                 const response = await generationApi.status(jobId);
-                const { status: jobStatus, progress: jobProgress } = response.data;
+                const { status: jobStatus, progress: jobProgress, error: jobError } = response.data;
                 setProgress(jobProgress);
                 if (jobStatus === 'COMPLETED') {
                     setGenerationStatus('completed');
@@ -315,7 +315,14 @@ function DashboardContent() {
                     setTimeout(() => router.push(`/editor/${presentationId}`), 1000);
                 } else if (jobStatus === 'FAILED') {
                     setGenerationStatus('failed');
-                    toast({ title: '생성 실패', description: '프레젠테이션 생성에 실패했습니다.', variant: 'destructive' });
+                    // The job records why it failed and the API already returns it. Showing
+                    // only "실패했습니다" left users with no way to tell a missing LLM model
+                    // from an unreachable endpoint — the usual causes on a closed network.
+                    toast({
+                        title: '생성 실패',
+                        description: jobError?.message || '프레젠테이션 생성에 실패했습니다.',
+                        variant: 'destructive',
+                    });
                 } else if (jobStatus === 'CANCELLED') {
                     setGenerationStatus('idle');
                 } else {

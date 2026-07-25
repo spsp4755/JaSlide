@@ -86,6 +86,16 @@ test('an edit shows on the canvas before the new preview image arrives', () => {
     assert.match(overlay, /previewStale && edit\.cells \? cellText : ''/);
 });
 
+test('the slide panel shows each slide, not the same grey icon', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const panel = editor.slice(editor.indexOf('function DraggableSlide'), editor.indexOf('interface EditableSlidePreviewProps'));
+
+    assert.match(panel, /previewUrl\n?\s*\? <img src=\{previewUrl\}/);
+    assert.match(editor, /previewUrl=\{thumbnails\[slide\.id\]\}/);
+    // Filled one at a time so a thumbnail sweep never queues ahead of an edit.
+    assert.match(editor, /await loadPreview\(index, presentation\.slides\[index\]\.id\)/);
+});
+
 test('the insert dropdowns dismiss and switch groups without a mouse', () => {
     const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
 
