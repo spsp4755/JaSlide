@@ -600,6 +600,71 @@ def test_sourcepptx_keeps_only_the_generated_slides_in_their_generated_order():
     assert [_slide_texts(slide) for slide in generated.slides] == [["Second template"], ["First template"]]
 
 
+def test_every_preset_shape_name_exports_as_that_shape_not_a_rectangle():
+    # The picker sends OOXML preset names. A hand-written lookup covered 20 of
+    # them and quietly turned the other 160 into rectangles on export.
+    from pptx.enum.shapes import MSO_SHAPE as PRESETS
+
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+    kinds = ["roundRect", "snip2DiagRect", "octagon", "star24", "wedgeEllipseCallout",
+             "flowChartMagneticDrum", "curvedUpArrow", "mathNotEqual", "irregularSeal2", "cloudCallout"]
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": f"new-{kind}", "addShape": kind} for kind in kinds],
+    })))
+
+    generated = Presentation(BytesIO(output)).slides[0].shapes
+    assert [shape.auto_shape_type for shape in generated] == [PRESETS.from_xml(kind) for kind in kinds]
+
+
+def test_an_inserted_shape_keeps_the_text_typed_into_it_on_the_canvas():
+    # Double-clicking a shape in the editor opens the same inline text editor a
+    # text box gets, so the shape's edit arrives carrying both addShape and text.
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": "new-shape", "addShape": "roundRect", "text": "핵심 지표"}],
+    })))
+
+    shape = Presentation(BytesIO(output)).slides[0].shapes[0]
+    assert shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE and shape.text_frame.text == "핵심 지표"
+
+
+def test_unknown_shape_names_fall_back_to_a_rectangle_instead_of_failing():
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": "new-shape", "addShape": "notAPreset"}],
+    })))
+
+    assert Presentation(BytesIO(output)).slides[0].shapes[0].auto_shape_type == MSO_SHAPE.RECTANGLE
+
+
+def test_line_kinds_carry_their_arrowheads_and_dash_pattern():
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": f"new-{kind}", "addLine": kind}
+                        for kind in ("straightLine", "arrowLine", "doubleArrowLine", "dashedLine", "dottedLine")],
+    })))
+
+    lines = [shape.line._get_or_add_ln() for shape in Presentation(BytesIO(output)).slides[0].shapes]
+    plain, single, double, dashed, dotted = lines
+    assert plain.find(qn("a:tailEnd")) is None and plain.find(qn("a:prstDash")) is None
+    assert single.find(qn("a:tailEnd")) is not None and single.find(qn("a:headEnd")) is None
+    assert double.find(qn("a:tailEnd")) is not None and double.find(qn("a:headEnd")) is not None
+    assert dashed.find(qn("a:prstDash")).get("val") == "dash"
+    assert dotted.find(qn("a:prstDash")).get("val") == "sysDot"
+
+
 def test_pptx_table_edits_survive_a_theme_colored_source_cell():
     # Many real-world decks color table text via a theme/scheme reference
     # (design-system driven) instead of an explicit RGB value. Reading

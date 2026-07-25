@@ -17,6 +17,7 @@ import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
+import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
 import {
     ArrowLeft,
     Save,
@@ -191,73 +192,19 @@ function addHtmlText(html: string): string {
 }
 
 const EDITOR_COLORS = ['#111827', '#374151', '#6B7280', '#FFFFFF', '#DC2626', '#EA580C', '#D97706', '#16A34A', '#2563EB', '#4F46E5', '#9333EA', '#DB2777'];
-const ALL_SHAPE_GROUPS = [
-    ['기본 도형', [['rectangle', '사각형'], ['rounded', '둥근 사각형'], ['round1Rectangle', '한쪽 둥근 사각형'], ['round2DiagonalRectangle', '대각 둥근 사각형'], ['round2SameRectangle', '양쪽 둥근 사각형'], ['snip1Rectangle', '한쪽 잘린 사각형'], ['snip2DiagonalRectangle', '대각 잘린 사각형'], ['snip2SameRectangle', '양쪽 잘린 사각형'], ['snipRoundRectangle', '잘린 둥근 사각형'], ['ellipse', '타원'], ['arc', '호'], ['blockArc', '블록 호'], ['triangle', '삼각형'], ['rightTriangle', '직각 삼각형'], ['diamond', '마름모'], ['trapezoid', '사다리꼴'], ['parallelogram', '평행사변형'], ['pentagon', '오각형'], ['hexagon', '육각형'], ['heptagon', '칠각형'], ['octagon', '팔각형'], ['decagon', '십각형'], ['dodecagon', '십이각형'], ['donut', '도넛'], ['pie', '파이'], ['chord', '현'], ['plaque', '명판'], ['bevel', '베벨'], ['can', '원통'], ['cube', '큐브'], ['frame', '프레임'], ['halfFrame', '반 프레임'], ['foldedCorner', '접힌 모서리'], ['corner', '모서리']]],
-    ['화살표', [['arrow', '오른쪽 화살표'], ['leftArrow', '왼쪽 화살표'], ['upArrow', '위 화살표'], ['downArrow', '아래 화살표'], ['leftRightArrow', '양방향 화살표'], ['leftRightUpArrow', '좌우 위 화살표'], ['leftUpArrow', '왼쪽 위 화살표'], ['upDownArrow', '상하 화살표'], ['quadArrow', '사방 화살표'], ['bentArrow', '꺾인 화살표'], ['bentUpArrow', '위로 꺾인 화살표'], ['uturnArrow', 'U턴 화살표'], ['curvedLeftArrow', '곡선 왼쪽 화살표'], ['curvedRightArrow', '곡선 오른쪽 화살표'], ['curvedUpArrow', '곡선 위 화살표'], ['curvedDownArrow', '곡선 아래 화살표'], ['notchedRightArrow', '홈 화살표'], ['stripedRightArrow', '줄무늬 화살표'], ['arrowEast', '동쪽 화살표'], ['arrowNorthEast', '북동 화살표'], ['arrowNorth', '북쪽 화살표'], ['downArrowCallout', '아래 화살표 설명선'], ['leftArrowCallout', '왼쪽 화살표 설명선'], ['leftRightArrowCallout', '양방향 화살표 설명선'], ['quadArrowCallout', '사방 화살표 설명선'], ['rightArrowCallout', '오른쪽 화살표 설명선'], ['upArrowCallout', '위 화살표 설명선']]],
-    ['설명·기호', [['cloud', '구름'], ['cloudCallout', '구름 설명선'], ['heart', '하트'], ['smileyFace', '스마일'], ['sun', '태양'], ['moon', '달'], ['lightningBolt', '번개'], ['star4', '4각 별'], ['star5', '5각 별'], ['star6', '6각 별'], ['star7', '7각 별'], ['star8', '8각 별'], ['star10', '10각 별'], ['star12', '12각 별'], ['star16', '16각 별'], ['star24', '24각 별'], ['star32', '32각 별'], ['irregularSeal1', '불규칙 인장 1'], ['irregularSeal2', '불규칙 인장 2'], ['starburst', '별 폭발'], ['speech', '말풍선'], ['wedgeRectangleCallout', '사각 말풍선'], ['wedgeRoundRectangleCallout', '둥근 말풍선'], ['wedgeEllipseCallout', '타원 말풍선'], ['bracePair', '중괄호 쌍'], ['bracketPair', '대괄호 쌍'], ['leftBrace', '왼쪽 중괄호'], ['rightBrace', '오른쪽 중괄호'], ['leftBracket', '왼쪽 대괄호'], ['rightBracket', '오른쪽 대괄호'], ['horizontalScroll', '가로 스크롤'], ['verticalScroll', '세로 스크롤'], ['ellipseRibbon', '타원 리본'], ['ellipseRibbon2', '타원 리본 2']]],
-    ['순서도', [['flowChartProcess', '프로세스'], ['flowChartAlternateProcess', '대체 프로세스'], ['flowChartCollate', '수합'], ['flowChartDecision', '결정'], ['flowChartData', '데이터'], ['flowChartDocument', '문서'], ['flowChartMultidocument', '다중 문서'], ['flowChartExtract', '추출'], ['flowChartTerminator', '시작/끝'], ['flowChartPreparation', '준비'], ['flowChartManualInput', '수동 입력'], ['flowChartManualOperation', '수동 작업'], ['flowChartPredefinedProcess', '서브프로세스'], ['flowChartConnector', '커넥터'], ['flowChartOffpageConnector', '오프페이지 커넥터'], ['flowChartDelay', '지연'], ['flowChartDisplay', '표시'], ['flowChartMerge', '병합'], ['flowChartOr', 'OR'], ['flowChartSort', '정렬'], ['flowChartSummingJunction', '합류'], ['flowChartInternalStorage', '내부 저장소'], ['flowChartOnlineStorage', '온라인 저장소'], ['flowChartOfflineStorage', '오프라인 저장소'], ['flowChartMagneticDisk', '자기 디스크'], ['flowChartMagneticDrum', '자기 드럼'], ['flowChartMagneticTape', '자기 테이프'], ['flowChartPunchedCard', '천공 카드'], ['flowChartPunchedTape', '천공 테이프']]],
-    ['수식·기타', [['mathPlus', '더하기'], ['plus', '플러스'], ['mathMinus', '빼기'], ['mathMultiply', '곱하기'], ['mathDivide', '나누기'], ['mathEqual', '같음'], ['mathNotEqual', '같지 않음'], ['diagonalStripe', '대각선 띠'], ['homePlate', '홈 플레이트'], ['ribbon', '리본'], ['ribbon2', '리본 2'], ['wave', '물결'], ['doubleWave', '이중 물결'], ['teardrop', '물방울'], ['noSmoking', '금지'], ['custom', '사용자 정의']]],
-] as const;
-const SHAPE_GROUPS = ALL_SHAPE_GROUPS;
-const LINE_OPTIONS = [
-    ['straightLine', '직선'], ['arrowLine', '화살표 선'], ['doubleArrowLine', '양방향 화살표 선'],
-    ['elbowConnector', '꺾은 연결선'], ['bentConnector2', '꺾은 연결선 2'], ['bentConnector3', '꺾은 연결선 3'], ['bentConnector4', '꺾은 연결선 4'], ['bentConnector5', '꺾은 연결선 5'], ['elbowArrowConnector', '꺾은 화살표 연결선'],
-    ['curvedConnector2', '곡선 연결선 2'], ['curvedConnector3', '곡선 연결선 3'], ['curvedConnector4', '곡선 연결선 4'], ['curvedConnector5', '곡선 연결선 5'], ['curvedArrowConnector', '곡선 화살표 연결선'],
-    ['dashedLine', '점선'], ['dottedLine', '점선(원형)'],
-] as const;
-
-function shapeStyle(kind: string) {
-    const ink = '#202124';
-    if (kind.includes('Connector')) return kind.startsWith('curved') ? `width:420px;height:180px;border:8px solid ${ink};border-left:0;border-bottom:0;border-radius:0 180px 0 0;background:transparent;` : `width:420px;height:160px;border:8px solid ${ink};border-left:0;border-bottom:0;background:transparent;`;
-    if (/dashedLine|dottedLine/.test(kind)) return `width:420px;height:0;border-top:8px ${kind === 'dottedLine' ? 'dotted' : 'dashed'} ${ink};background:transparent;`;
-    if (kind === 'straightLine' || kind === 'straightConnector') return `width:420px;height:0;border-top:8px solid ${ink};background:transparent;`;
-    if (/arrowLine|ArrowConnector|doubleArrowLine/.test(kind)) return `width:420px;height:0;border-top:8px solid ${ink};background:transparent;`;
-    if (kind === 'leftRightArrow') return `width:360px;height:180px;background:${ink};clip-path:polygon(0 50%,24% 0,24% 30%,76% 30%,76% 0,100% 50%,76% 100%,76% 70%,24% 70%,24% 100%);`;
-    if (kind === 'arrow' || /Arrow$/.test(kind)) return `width:360px;height:180px;background:${ink};clip-path:polygon(0 32%,62% 32%,62% 0,100% 50%,62% 100%,62% 68%,0 68%);${kind.includes('left') || kind.includes('Left') ? 'transform:scaleX(-1);' : kind.includes('up') || kind.includes('Up') ? 'transform:rotate(-90deg);' : kind.includes('down') || kind.includes('Down') ? 'transform:rotate(90deg);' : ''}`;
-    if (/ellipse|donut|pie|chord|moon|sun|smiley|connector|or$|disk|drum/i.test(kind)) return `width:220px;height:220px;background:#fff;border:3px solid ${ink};border-radius:50%;`;
-    if (/diamond|decision|merge|sort|homePlate/i.test(kind)) return `width:220px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);`;
-    if (/triangle|offpage|preparation/i.test(kind)) return `width:260px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,100% 100%,0 100%);`;
-    if (/trapezoid|parallelogram|inputOutput|manualInput/i.test(kind)) return `width:320px;height:180px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(14% 0,100% 0,86% 100%,0 100%);`;
-    if (/pentagon/i.test(kind)) return `width:240px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%);`;
-    if (/hexagon/i.test(kind)) return `width:280px;height:200px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);`;
-    if (/heptagon|octagon|decagon|dodecagon/i.test(kind)) return `width:240px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,82% 10%,100% 38%,94% 72%,68% 100%,32% 100%,6% 72%,0 38%,18% 10%);`;
-    if (/star|seal|lightning/i.test(kind)) return `width:220px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 0,61% 34%,98% 35%,68% 57%,79% 92%,50% 70%,21% 92%,32% 57%,2% 35%,39% 34%);`;
-    if (/heart/i.test(kind)) return `width:230px;height:200px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(50% 88%,8% 49%,0 25%,10% 4%,30% 0,50% 18%,70% 0,90% 4%,100% 25%,92% 49%);`;
-    if (/cloud/i.test(kind)) return `width:320px;height:170px;background:#fff;border:3px solid ${ink};border-radius:90px;`;
-    if (/speech/i.test(kind)) return `width:320px;height:180px;background:#fff;border:3px solid ${ink};border-radius:16px;`;
-    if (/round|terminator|scroll|can|bevel|plaque/i.test(kind)) return `width:320px;height:180px;background:#fff;border:3px solid ${ink};border-radius:32px;`;
-    if (/brace|bracket/i.test(kind)) return `width:180px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(45% 0,100% 0,70% 25%,70% 42%,45% 50%,70% 58%,70% 75%,100% 100%,45% 100%,0 75%,20% 50%,0 25%);`;
-    if (/mathPlus/i.test(kind)) return `width:220px;height:220px;background:#fff;box-shadow:inset 0 0 0 3px ${ink};clip-path:polygon(38% 0,62% 0,62% 38%,100% 38%,100% 62%,62% 62%,62% 100%,38% 100%,38% 62%,0 62%,0 38%,38% 38%);`;
-    return `width:320px;height:180px;background:#fff;border:3px solid ${ink};`;
-}
-
-function shapePickerStyle(kind: string): CSSProperties {
-    const stroke = '1.5px solid #202124';
-    if (kind === 'straightLine' || kind === 'straightConnector') return { width: 24, borderTop: stroke };
-    if (kind.includes('Connector')) return { width: 22, height: 16, borderTop: stroke, borderRight: stroke, borderRadius: kind.startsWith('curved') ? '0 12px 0 0' : 0 };
-    if (/ellipse|donut|pie|chord|moon|sun|smiley|disk|drum/i.test(kind)) return { width: 20, height: 20, border: stroke, borderRadius: '999px' };
-    if (/diamond|decision|merge|sort|homePlate/i.test(kind)) return { width: 17, height: 17, border: stroke, transform: 'rotate(45deg)' };
-    if (/triangle|offpage|preparation/i.test(kind)) return { width: 22, height: 19, border: stroke, clipPath: 'polygon(50% 0,100% 100%,0 100%)' };
-    if (/trapezoid|parallelogram|inputOutput|manualInput/i.test(kind)) return { width: 24, height: 16, border: stroke, clipPath: 'polygon(14% 0,100% 0,86% 100%,0 100%)' };
-    if (/pentagon/i.test(kind)) return { width: 21, height: 20, border: stroke, clipPath: 'polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)' };
-    if (/hexagon/i.test(kind)) return { width: 23, height: 18, border: stroke, clipPath: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)' };
-    if (/heart/i.test(kind)) return { width: 22, height: 19, border: stroke, clipPath: 'polygon(50% 100%,0 45%,0 15%,25% 0,50% 20%,75% 0,100% 15%,100% 45%)' };
-    if (/star|seal|lightning/i.test(kind)) return { width: 21, height: 21, border: stroke, clipPath: 'polygon(50% 0,61% 34%,98% 35%,68% 57%,79% 92%,50% 70%,21% 92%,32% 57%,2% 35%,39% 34%)' };
-    if (/cloud/i.test(kind)) return { width: 25, height: 15, border: stroke, borderRadius: 9 };
-    if (/mathPlus|plus/i.test(kind)) return { width: 19, height: 19, border: stroke, clipPath: 'polygon(36% 0,64% 0,64% 36%,100% 36%,100% 64%,64% 64%,64% 100%,36% 100%,36% 64%,0 64%,0 36%,36% 36%)' };
-    return { width: 25, height: 16, border: stroke, borderRadius: /round|terminator|scroll|can|bevel|plaque/i.test(kind) ? 5 : 0 };
-}
-
 function ShapePickerGlyph({ kind }: { kind: string }) {
-    return <span aria-hidden="true" className="relative block h-6 w-7 overflow-hidden"><span ref={(node) => { if (node) node.style.cssText = `position:absolute;left:0;top:0;zoom:0.065;${shapeStyle(kind)}`; }} /></span>;
+    return <svg aria-hidden="true" viewBox="0 0 100 100" className="h-5 w-5 overflow-visible"><path d={glyphPath(kind)} fill={isStrokeOnly(kind) ? 'none' : '#FFFFFF'} stroke="#202124" strokeWidth={6} vectorEffect="non-scaling-stroke" /></svg>;
 }
 
-function addHtmlShape(html: string, kind = 'rectangle'): string {
+function addHtmlShape(html: string, kind = 'rect'): string {
     const document = new DOMParser().parseFromString(html, 'text/html');
     const container = document.querySelector('.slide-container') || document.body;
     const element = document.createElement('div');
     element.dataset.object = 'true'; element.dataset.objectType = 'shape'; element.dataset.shapeType = kind;
-    element.style.cssText = `position:absolute;left:180px;top:180px;border:0 solid #312E81;z-index:100;${shapeStyle(kind)}`;
+    const [width, height] = isStrokeOnly(kind) ? [420, 160] : [320, 180];
+    element.style.cssText = `position:absolute;left:180px;top:180px;width:${width}px;height:${height}px;z-index:100;`;
+    // The same outline the picker icon draws, so what you clicked is what you get.
+    element.innerHTML = shapeSvgMarkup(kind, width, height);
     container.append(element);
     return document.documentElement.outerHTML;
 }
@@ -1115,7 +1062,7 @@ export default function EditorPage() {
                     </> : <span className="text-xs text-gray-400">객체를 선택하면 글꼴, 목록, 정렬, 색상 서식을 적용할 수 있습니다.</span>) : <>
                         <Button type="button" size="sm" variant="outline" onClick={() => presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeText() : insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
                         <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-white shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
-                        <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind, true) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
+                        <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(({ kind, label }) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind, true) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, false))}><List className="mr-1 h-4 w-4" />글머리</Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, true))}><ListOrdered className="mr-1 h-4 w-4" />번호 목록</Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject(addHtmlTable)}><Table2 className="mr-1 h-4 w-4" />표</Button>
@@ -1812,7 +1759,10 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                     const height = edit.height ?? object.height ?? 0;
                     const selected = selectedNativeObjectId === object.id;
                     return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }} onDoubleClick={(event) => {
-                        if (object.kind !== 'text') return;
+                        // Shapes carry text too, the way they do in Google Slides: an
+                        // autoshape has a text frame and the renderer already writes
+                        // `text` into whichever object the edit targets.
+                        if (object.kind !== 'text' && object.kind !== 'shape') return;
                         event.preventDefault(); event.stopPropagation();
                         onSelectNativeObject(object.id);
                         setEditingNativeTextId(object.id);
@@ -1820,7 +1770,7 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                         {/* The preview image underneath already shows this text, rendered by
                             LibreOffice with the deck's real fonts. Painting it again here made
                             every string appear twice, offset. Only the edit surface draws text. */}
-                        {object.kind === 'text' && editingNativeTextId === object.id && <textarea
+                        {editingNativeTextId === object.id && <textarea
                             autoFocus
                             aria-label="네이티브 텍스트 직접 편집"
                             value={edit.text ?? object.text ?? ''}

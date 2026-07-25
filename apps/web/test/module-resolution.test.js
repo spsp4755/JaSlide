@@ -64,3 +64,13 @@ test('the native object overlay does not repaint text over the preview image', (
     assert.match(overlay, /value=\{edit\.text \?\? object\.text \?\? ''\}/);
     assert.match(overlay, /value=\{cellText\}/);
 });
+
+test('shapes accept in-slide text editing, like Google Slides', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
+
+    // An autoshape has a text frame, so double-click must open the editor on it too,
+    // not only on text boxes.
+    assert.match(overlay, /object\.kind !== 'text' && object\.kind !== 'shape'/);
+    assert.doesNotMatch(overlay, /object\.kind === 'text' && editingNativeTextId/);
+});

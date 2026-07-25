@@ -51,18 +51,14 @@ test('TaeSlide editor persists generic HTML object styles', () => {
     assert.ok(editor.indexOf('if (content.html)') < editor.indexOf('const startHtmlTransform'));
     assert.match(editor, /startSlideSwipe/);
     assert.match(editor, /onNavigate/);
-    assert.match(editor, /kind = 'rectangle'/);
-    assert.match(editor, /화살표/);
-    assert.match(editor, /const SHAPE_GROUPS/);
-    assert.match(editor, /const SHAPE_GROUPS = ALL_SHAPE_GROUPS/);
-    assert.match(editor, /const LINE_OPTIONS/);
-    assert.match(editor, /arrowLine/);
-    assert.match(editor, /doubleArrowLine/);
+    assert.match(editor, /kind = 'rect'/);
+    // The shape catalogue and its glyphs live in @/lib/shape-glyphs now, so the
+    // picker, the HTML insert path and the exported PPTX cannot disagree.
+    // shape-glyphs.test.js owns the assertions about the catalogue itself.
+    assert.match(editor, /SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup/);
     assert.match(editor, /function ShapePickerGlyph/);
-    assert.match(editor, /shapeStyle\(kind\)/);
+    assert.match(editor, /shapeSvgMarkup\(kind, width, height\)/);
     assert.match(editor, /box-shadow:0 0 0 2px/);
-    assert.match(editor, /flowChartProcess/);
-    assert.match(editor, /curvedConnector5/);
     assert.match(editor, /overflow-visible border-b bg-white/);
     assert.match(editor, /w-\[1100px\] min-w-\[960px\]/);
 assert.match(editor, /isFocusMode/);

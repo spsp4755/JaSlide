@@ -213,6 +213,35 @@ class PPTXGenerator:
                 sld_id_lst.append(remaining[slide_id])
 
     @staticmethod
+    def _preset_shape(kind: str) -> Any:
+        """Resolve an OOXML preset geometry name to its MSO_SHAPE member.
+
+        The editor sends preset names straight from the shape picker, so all 180-odd
+        presets work. The old hand-written lookup covered 20 of them and silently
+        exported everything else as a rectangle."""
+        try:
+            return MSO_SHAPE.from_xml(kind)
+        except (KeyError, ValueError):
+            return MSO_SHAPE.RECTANGLE
+
+    @staticmethod
+    def _style_connector(shape: Any, kind: str) -> None:
+        """Add the arrowheads and dash pattern the picker's icon promised.
+
+        python-pptx has no API for either, so write the <a:ln> children directly."""
+        line = shape.line._get_or_add_ln()
+        for name, present in (("a:headEnd", kind.startswith("double")), ("a:tailEnd", "rrow" in kind)):
+            if present:
+                end = OxmlElement(name)
+                end.set("type", "triangle")
+                line.append(end)
+        dash = {"dashedLine": "dash", "dottedLine": "sysDot"}.get(kind)
+        if dash:
+            element = OxmlElement("a:prstDash")
+            element.set("val", dash)
+            line.append(element)
+
+    @staticmethod
     def _safe_rgb(color: Any):
         """python-pptx raises AttributeError reading .rgb off a theme/scheme
         color (common in real-world decks); treat that as "no explicit color"
@@ -235,22 +264,12 @@ class PPTXGenerator:
         width = int((edit.get("width", 640)) * self.prs.slide_width / 1920)
         height = int((edit.get("height", 100)) * self.prs.slide_height / 1080)
         if isinstance(edit.get("addShape"), str):
-            shapes = {
-                "rectangle": MSO_SHAPE.RECTANGLE, "rounded": MSO_SHAPE.ROUNDED_RECTANGLE,
-                "ellipse": MSO_SHAPE.OVAL, "triangle": MSO_SHAPE.ISOSCELES_TRIANGLE,
-                "rightTriangle": MSO_SHAPE.RIGHT_TRIANGLE, "diamond": MSO_SHAPE.DIAMOND,
-                "trapezoid": MSO_SHAPE.TRAPEZOID, "parallelogram": MSO_SHAPE.PARALLELOGRAM,
-                "pentagon": MSO_SHAPE.PENTAGON, "hexagon": MSO_SHAPE.HEXAGON,
-                "arrow": MSO_SHAPE.RIGHT_ARROW, "leftArrow": MSO_SHAPE.LEFT_ARROW,
-                "upArrow": MSO_SHAPE.UP_ARROW, "downArrow": MSO_SHAPE.DOWN_ARROW,
-                "cloud": MSO_SHAPE.CLOUD, "heart": MSO_SHAPE.HEART,
-                "star5": MSO_SHAPE.STAR_5_POINT, "flowChartProcess": MSO_SHAPE.FLOWCHART_PROCESS,
-                "flowChartDecision": MSO_SHAPE.FLOWCHART_DECISION, "flowChartDocument": MSO_SHAPE.FLOWCHART_DOCUMENT,
-            }
-            shape = slide.shapes.add_shape(shapes.get(edit["addShape"], MSO_SHAPE.RECTANGLE), left, top, width, height)
+            shape = slide.shapes.add_shape(self._preset_shape(edit["addShape"]), left, top, width, height)
         elif isinstance(edit.get("addLine"), str):
-            connector = MSO_CONNECTOR.CURVE if edit["addLine"].startswith("curved") else MSO_CONNECTOR.ELBOW if "Connector" in edit["addLine"] else MSO_CONNECTOR.STRAIGHT
+            kind = edit["addLine"]
+            connector = MSO_CONNECTOR.CURVE if kind.startswith("curved") else MSO_CONNECTOR.ELBOW if "elbow" in kind else MSO_CONNECTOR.STRAIGHT
             shape = slide.shapes.add_connector(connector, left, top + height // 2, left + width, top + height // 2)
+            self._style_connector(shape, kind)
         elif isinstance(edit.get("addText"), str):
             shape = slide.shapes.add_textbox(left, top, width, height)
             shape.text = edit.get("text", edit["addText"])
