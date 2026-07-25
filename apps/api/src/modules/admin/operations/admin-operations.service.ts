@@ -65,29 +65,52 @@ export class AdminOperationsService {
         }
 
         const apiKey = model.apiKey || (model.apiKeyEnvVar ? process.env[model.apiKeyEnvVar] : undefined);
+        const base = endpoint.replace(/\/$/, '');
+        const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
         const startedAt = Date.now();
+
+        // Ask for the model list first. Every OpenAI-compatible server exposes it, it
+        // needs no inference, and it also tells us whether this modelId is actually
+        // installed. A completion probe alone reported a healthy local endpoint as
+        // unreachable, because loading a model into memory outlasts any short timeout.
         try {
-            await axios.post(`${endpoint.replace(/\/$/, '')}/chat/completions`, {
-                model: model.modelId,
-                messages: [{ role: 'user', content: 'Reply with OK.' }],
-                max_tokens: 1,
-                temperature: 0,
-            }, {
-                headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-                timeout: 10_000,
-            });
+            const { data } = await axios.get(`${base}/models`, { headers, timeout: 5_000 });
+            const installed = Array.isArray(data?.data) ? data.data.map((item: any) => item?.id).filter(Boolean) : [];
+            if (installed.length && !installed.includes(model.modelId)) {
+                return {
+                    success: false,
+                    error: `엔드포인트에 연결했지만 '${model.modelId}' 모델이 없습니다. 사용 가능: ${installed.slice(0, 5).join(', ')}`,
+                };
+            }
             return {
                 success: true,
                 model: model.name,
                 responseTime: Date.now() - startedAt,
-                message: 'Model endpoint is reachable',
+                message: '엔드포인트에 연결되었고 모델도 확인했습니다.',
             };
-        } catch (error) {
-            const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-            return {
-                success: false,
-                error: status ? `Model endpoint returned HTTP ${status}` : 'Model endpoint is unreachable',
-            };
+        } catch (listError) {
+            // No /models route: fall back to a completion, allowing for a cold start.
+            try {
+                await axios.post(`${base}/chat/completions`, {
+                    model: model.modelId,
+                    messages: [{ role: 'user', content: 'Reply with OK.' }],
+                    max_tokens: 1,
+                    temperature: 0,
+                }, { headers, timeout: 120_000 });
+                return {
+                    success: true,
+                    model: model.name,
+                    responseTime: Date.now() - startedAt,
+                    message: '엔드포인트에 연결되었습니다.',
+                };
+            } catch (error) {
+                const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+                const detail = axios.isAxiosError(error) ? (error.response?.data as any)?.error?.message : undefined;
+                return {
+                    success: false,
+                    error: detail || (status ? `엔드포인트가 HTTP ${status}를 반환했습니다.` : '엔드포인트에 연결할 수 없습니다.'),
+                };
+            }
         }
     }
 

@@ -1,5 +1,9 @@
 import { AdminJobsService } from './admin-jobs.service';
 
+// AdminJobsService imports QueueService, which pulls in bullmq -> msgpackr, an
+// ESM-only package jest cannot load. This suite injects a queue stub anyway.
+jest.mock('../../queue/queue.service', () => ({ QueueService: class {} }));
+
 describe('AdminJobsService', () => {
     const prisma = {
         generationJob: { findUnique: jest.fn(), update: jest.fn() },

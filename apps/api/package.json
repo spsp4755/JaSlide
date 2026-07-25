@@ -94,8 +94,12 @@
             "<rootDir>/../node_modules"
         ],
         "moduleNameMapper": {
-            "^@prisma/client$": "<rootDir>/../node_modules/@prisma/client/default.js"
+            "^@prisma/client$": "<rootDir>/../node_modules/@prisma/client/default.js",
+            "^uuid$": "<rootDir>/../node_modules/uuid/dist/index.js"
         },
+        "setupFiles": [
+            "<rootDir>/../jest.setup.js"
+        ],
         "testRegex": ".*\\.spec\\.ts$",
         "transform": {
             "^.+\\.(t|j)s$": "ts-jest"

@@ -1,3 +1,8 @@
+// ponytail: this suite still fails to load — the service reaches the OpenAI SDK,
+// which needs a Web Fetch runtime jest's node environment withholds, and its
+// `openai/shims/node` fix is itself a file jest cannot parse. Needs a
+// transformIgnorePatterns entry for openai; left alone because changing the global
+// transform broke all fifteen suites when tried.
 import { AdminModelsService } from './admin-models.service';
 
 describe('AdminModelsService cache invalidation', () => {

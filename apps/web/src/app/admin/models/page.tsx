@@ -35,6 +35,13 @@ export default function AdminModelsPage() {
     const [editingModel, setEditingModel] = useState<LlmModel | null>(null);
     const [formData, setFormData] = useState(defaultFormData);
     const [submitting, setSubmitting] = useState(false);
+    // Matches the toast the other admin screens use; alert() blocked the whole page
+    // and hid the endpoint detail behind an OS dialog.
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 6000);
+    };
     const [testingModelId, setTestingModelId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -132,11 +139,14 @@ export default function AdminModelsPage() {
                 body: JSON.stringify({ modelId: id }),
             });
             const result = await response.json();
-            alert(result.success
-                ? `모델 엔드포인트에 연결되었습니다 (${result.responseTime}ms)`
-                : `모델 연결 테스트 실패: ${result.error || '알 수 없는 오류'}`);
+            showToast(
+                result.success
+                    ? `${result.message || '엔드포인트에 연결되었습니다.'} (${result.responseTime}ms)`
+                    : result.error || '알 수 없는 오류로 연결하지 못했습니다.',
+                result.success ? 'success' : 'error',
+            );
         } catch {
-            alert('모델 연결 테스트 실패: 관리자 API에 연결할 수 없습니다');
+            showToast('관리자 API에 연결할 수 없습니다.', 'error');
         } finally {
             setTestingModelId(null);
         }
@@ -314,6 +324,12 @@ export default function AdminModelsPage() {
                             </div>
                         </form>
                     </div>
+                </div>
+            )}
+
+            {toast && (
+                <div role="status" aria-live="polite" className={`fixed top-4 right-4 z-50 max-w-md rounded-lg px-4 py-3 shadow-lg ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                    {toast.message}
                 </div>
             )}
         </div>

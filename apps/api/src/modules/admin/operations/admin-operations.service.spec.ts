@@ -2,6 +2,10 @@ import axios from 'axios';
 import { AdminOperationsService } from './admin-operations.service';
 
 jest.mock('axios');
+// The service imports QueueService, which pulls in bullmq -> msgpackr, an ESM-only
+// package jest cannot load. This suite injects a queue stub anyway, so mock the
+// module out and the whole file becomes testable.
+jest.mock('../../queue/queue.service', () => ({ QueueService: class {} }));
 
 describe('AdminOperationsService', () => {
     const prisma = {
@@ -24,16 +28,48 @@ describe('AdminOperationsService', () => {
         delete process.env.INTERNAL_LLM_API_KEY;
     });
 
-    it('checks an OpenAI-compatible chat model without returning its API key', async () => {
-        prisma.llmModel.findUnique.mockResolvedValue({
-            id: 'model-1',
-            name: 'Internal Ollama',
-            provider: 'ollama',
-            modelId: 'llama3.2',
-            endpoint: 'http://ollama:11434/v1/',
-            apiKey: null,
-            apiKeyEnvVar: 'INTERNAL_LLM_API_KEY',
+    const ollamaModel = {
+        id: 'model-1',
+        name: 'Internal Ollama',
+        provider: 'ollama',
+        modelId: 'llama3.2',
+        endpoint: 'http://ollama:11434/v1/',
+        apiKey: null,
+        apiKeyEnvVar: 'INTERNAL_LLM_API_KEY',
+    };
+
+    // Listing models needs no inference. Probing with a completion alone reported a
+    // healthy local endpoint as unreachable, because loading a model into memory
+    // takes longer than any timeout short enough to be a useful check.
+    it('confirms a model by listing the endpoint, without waiting on inference', async () => {
+        prisma.llmModel.findUnique.mockResolvedValue(ollamaModel);
+        axiosGet.mockResolvedValue({ data: { data: [{ id: 'llama3.2' }, { id: 'qwen2.5' }] } });
+
+        const result = await service.testModel('model-1');
+
+        expect(axiosGet).toHaveBeenCalledWith('http://ollama:11434/v1/models', {
+            headers: { Authorization: 'Bearer test-key' },
+            timeout: 5_000,
         });
+        expect(axiosPost).not.toHaveBeenCalled();
+        expect(result).toEqual(expect.objectContaining({ success: true, model: 'Internal Ollama' }));
+        expect(JSON.stringify(result)).not.toContain('test-key');
+    });
+
+    it('names the installed models when the configured one is missing', async () => {
+        prisma.llmModel.findUnique.mockResolvedValue(ollamaModel);
+        axiosGet.mockResolvedValue({ data: { data: [{ id: 'qwen2.5' }] } });
+
+        const result = await service.testModel('model-1');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('llama3.2');
+        expect(result.error).toContain('qwen2.5');
+    });
+
+    it('falls back to a completion, allowing for a cold start, when the endpoint has no model list', async () => {
+        prisma.llmModel.findUnique.mockResolvedValue(ollamaModel);
+        axiosGet.mockRejectedValue(Object.assign(new Error('not found'), { response: { status: 404 } }));
         axiosPost.mockResolvedValue({ status: 200 });
 
         const result = await service.testModel('model-1');
@@ -45,9 +81,9 @@ describe('AdminOperationsService', () => {
             temperature: 0,
         }, {
             headers: { Authorization: 'Bearer test-key' },
-            timeout: 10_000,
+            timeout: 120_000,
         });
-        expect(result).toEqual(expect.objectContaining({ success: true, model: 'Internal Ollama' }));
+        expect(result).toEqual(expect.objectContaining({ success: true }));
         expect(JSON.stringify(result)).not.toContain('test-key');
     });
 
