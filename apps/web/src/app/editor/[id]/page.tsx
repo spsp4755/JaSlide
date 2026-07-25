@@ -840,6 +840,10 @@ export default function EditorPage() {
             setIsExporting(true);
             setShowExportMenu(false);
 
+            // The renderer builds the file from what is stored, so a debounced edit
+            // still waiting its 500ms was silently missing from the download.
+            await saveSchedulerRef.current?.flushAll();
+
             const response = format === 'pptx'
                 ? await exportApi.pptx(presentationId)
                 : await exportApi.pdf(presentationId);
@@ -860,8 +864,19 @@ export default function EditorPage() {
             document.body.removeChild(a);
 
             toast({ title: '내보내기 완료', description: `${format.toUpperCase()} 파일이 다운로드되었습니다.` });
-        } catch (error) {
-            toast({ title: '내보내기 실패', variant: 'destructive' });
+        } catch (error: any) {
+            // Export responses are arraybuffers, so an error body arrives as bytes and
+            // the reason was thrown away — "내보내기 실패" alone is not actionable when
+            // the cause is a renderer that is down.
+            let reason = error?.message;
+            const data = error?.response?.data;
+            if (data instanceof ArrayBuffer || data instanceof Blob) {
+                const text = data instanceof Blob ? await data.text() : new TextDecoder().decode(data);
+                reason = (() => { try { return JSON.parse(text)?.message ?? text; } catch { return text; } })() || reason;
+            } else if (typeof data?.message === 'string') {
+                reason = data.message;
+            }
+            toast({ title: '내보내기 실패', description: reason || '알 수 없는 오류입니다.', variant: 'destructive' });
         } finally {
             setIsExporting(false);
         }

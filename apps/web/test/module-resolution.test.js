@@ -119,6 +119,17 @@ test('a PPTX slide shows a rendering state instead of a fake slide', () => {
     );
 });
 
+test('exporting flushes pending edits and reports why it failed', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const handler = editor.slice(editor.indexOf("const handleExport = async"), editor.indexOf('// AI Edit handler'));
+
+    // The renderer builds from stored state, so a debounced edit had to land first.
+    assert.match(handler, /await saveSchedulerRef\.current\?\.flushAll\(\)/);
+    // Error bodies arrive as bytes on an arraybuffer response; decode them.
+    assert.match(handler, /data instanceof ArrayBuffer \|\| data instanceof Blob/);
+    assert.doesNotMatch(handler, /toast\(\{ title: '내보내기 실패', variant: 'destructive' \}\)/);
+});
+
 test('an empty template list tells the user what to do next', () => {
     const dashboard = fs.readFileSync(path.join(SRC, 'app', 'dashboard', 'page.tsx'), 'utf8');
 
