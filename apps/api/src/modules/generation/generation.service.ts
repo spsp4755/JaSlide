@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ServiceUnavailableException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { StartGenerationDto, AIEditDto, GenerateOutlineDto } from './dto/generation.dto';
@@ -144,13 +144,20 @@ export class GenerationService implements OnModuleInit {
             ? `${dto.content}\n\n[작성 Skill 가이드]\n${skill.outlineGuidance}`
             : dto.content;
         const language = dto.language || (await this.llmService.detectLanguage(guidedContent));
-        return this.llmService.generateOutline({
-            content: guidedContent,
-            slideCount: dto.slideCount ?? this.automaticSlideCount(guidedContent),
-            language,
-            style: dto.options?.style,
-            templateSlides,
-        });
+        try {
+            return await this.llmService.generateOutline({
+                content: guidedContent,
+                slideCount: dto.slideCount ?? this.automaticSlideCount(guidedContent),
+                language,
+                style: dto.options?.style,
+                templateSlides,
+            });
+        } catch (error) {
+            // An LLM that is unreachable or misconfigured surfaced as a bare 500
+            // "Internal server error", which tells the user nothing they can act on.
+            this.logger.error(`Outline generation failed: ${(error as Error).message}`);
+            throw new ServiceUnavailableException(`아웃라인을 생성하지 못했습니다: ${(error as Error).message}`);
+        }
     }
 
     async startGeneration(user: { id: string; organizationId?: string | null }, dto: StartGenerationDto) {

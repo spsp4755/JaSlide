@@ -222,7 +222,10 @@ export class LlmService {
                 slides.push({ ...slide, order: slides.length + 1 });
                 if (Number.isInteger(slide.templateIndex)) usedTemplateIndexes.push(slide.templateIndex as number);
             }
-            remaining -= batchSize;
+            // Count what actually came back: a batch may return fewer slides than asked,
+            // and assuming batchSize left the deck short. A batch can't return zero
+            // (validateOutline rejects that), so this always terminates.
+            remaining -= batch.slides.length;
         }
 
         return { title, slides };
@@ -453,26 +456,30 @@ Return JSON with "layout" field only.`;
         throw error instanceof Error ? error : new Error('Invalid LLM JSON response');
     }
 
+    // ponytail: tolerant of varied local-model output, like validateSlideContent.
+    // A slide count is a request, not a contract: a local model that returned 2
+    // slides for a 1-slide ask used to fail the whole generation with a 500.
     private validateOutline(value: unknown, slideCount: number, templateCount: number): SlideOutline {
         if (!this.isRecord(value) || !this.isText(value.title) || !Array.isArray(value.slides)) {
             throw new Error('Outline must include a non-empty title and slides');
         }
-        if (value.slides.length !== slideCount) {
-            throw new Error(`Outline expected ${slideCount} slides, received ${value.slides.length}`);
-        }
 
-        const slides = value.slides.map((slide, index) => {
-            if (!this.isRecord(slide) || slide.order !== index + 1 || !this.isText(slide.title)
+        const slides = value.slides.slice(0, slideCount).map((slide, index) => {
+            // `order` is renumbered rather than required, and one key point is enough.
+            if (!this.isRecord(slide) || !this.isText(slide.title)
                 || !this.isText(slide.type) || !this.SLIDE_TYPES.has(slide.type)
-                || !Array.isArray(slide.keyPoints) || slide.keyPoints.length < 2 || slide.keyPoints.length > 5
+                || !Array.isArray(slide.keyPoints) || slide.keyPoints.length < 1
                 || !slide.keyPoints.every((point) => this.isText(point))) {
                 throw new Error(`Invalid outline slide at position ${index + 1}`);
             }
             return {
-                order: slide.order, title: slide.title, type: slide.type, keyPoints: slide.keyPoints,
+                order: index + 1, title: slide.title, type: slide.type, keyPoints: slide.keyPoints.slice(0, 8),
                 ...(Number.isInteger(slide.templateIndex) && (slide.templateIndex as number) >= 0 && (templateCount === 0 || (slide.templateIndex as number) < templateCount) ? { templateIndex: slide.templateIndex as number } : {}),
             };
         });
+        if (!slides.length) {
+            throw new Error('Outline must include at least one slide');
+        }
         return { title: value.title, slides };
     }
 

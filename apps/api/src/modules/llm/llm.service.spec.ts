@@ -112,13 +112,38 @@ describe('LlmService contracts', () => {
         expect(create).toHaveBeenCalledTimes(2);
     });
 
-    it('rejects an outline with a different slide count after retries', async () => {
-        const invalid = { ...outline, slides: [outline.slides[0]] };
-        const create = await createService([JSON.stringify(invalid), JSON.stringify(invalid), JSON.stringify(invalid), JSON.stringify(invalid)]);
+    // A slide count is a request, not a contract. Rejecting a mismatch failed the whole
+    // generation with a 500 whenever a local model returned one slide too many.
+    it('trims an outline that came back with more slides than requested', async () => {
+        const create = await createService([JSON.stringify(outline)]);
 
-        await expect(service.generateOutline({ content: '신규 서비스 제안서', slideCount: 2, language: 'ko' }))
-            .rejects.toThrow('expected 2 slides');
-        expect(create).toHaveBeenCalledTimes(4);
+        await expect(service.generateOutline({ content: '주간 업무 보고', slideCount: 1, language: 'ko' }))
+            .resolves.toEqual({ title: outline.title, slides: [outline.slides[0]] });
+        expect(create).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts an outline that came back with fewer slides than requested', async () => {
+        await createService([JSON.stringify({ ...outline, slides: [outline.slides[0]] })]);
+
+        await expect(service.generateOutline({ content: '주간 업무 보고', slideCount: 2, language: 'ko' }))
+            .resolves.toEqual({ title: outline.title, slides: [outline.slides[0]] });
+    });
+
+    it('renumbers slides and keeps a single key point instead of rejecting the outline', async () => {
+        await createService([JSON.stringify({
+            title: '주간 보고',
+            slides: [{ title: '실적', type: 'CONTENT', keyPoints: ['examweb 고도화'] }],
+        })]);
+
+        await expect(service.generateOutline({ content: '주간 업무 보고', slideCount: 1, language: 'ko' }))
+            .resolves.toEqual({ title: '주간 보고', slides: [{ order: 1, title: '실적', type: 'CONTENT', keyPoints: ['examweb 고도화'] }] });
+    });
+
+    it('still rejects an outline with no usable slide', async () => {
+        await createService(Array(4).fill(JSON.stringify({ title: '주간 보고', slides: [] })));
+
+        await expect(service.generateOutline({ content: '주간 업무 보고', slideCount: 1, language: 'ko' }))
+            .rejects.toThrow('at least one slide');
     });
 
     it('batches large outline requests instead of asking for every slide in one completion', async () => {
