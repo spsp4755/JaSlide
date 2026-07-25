@@ -92,7 +92,6 @@ export const generationApi = {
 export const templatesApi = {
     list: (category?: string) =>
         api.get('/templates', { params: { category } }),
-    defaults: () => api.get('/templates/defaults'),
     get: (id: string) => api.get(`/templates/${id}`),
 };
 

@@ -13,12 +13,6 @@ export class TemplatesController {
         return this.templatesService.findAll(category);
     }
 
-    @Get('defaults')
-    @ApiOperation({ summary: 'Get default built-in templates' })
-    async getDefaults() {
-        return this.templatesService.getDefaultTemplates();
-    }
-
     @Get(':id')
     @ApiOperation({ summary: 'Get template by ID' })
     async findById(@Param('id') id: string) {

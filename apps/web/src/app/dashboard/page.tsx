@@ -67,7 +67,6 @@ function DashboardContent() {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-    const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
     const [skills, setSkills] = useState<Skill[]>([]);
     const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
 
@@ -99,14 +98,11 @@ function DashboardContent() {
         (async () => {
             setLoadingTemplates(true);
             try {
-                const [apiRes, defaultsRes, skillsRes] = await Promise.all([
+                const [apiRes, skillsRes] = await Promise.all([
                     templatesApi.list().catch(() => ({ data: [] })),
-                    templatesApi.defaults().catch(() => ({ data: [] })),
                     skillsApi.list().catch(() => ({ data: [] })),
                 ]);
-                const apiTemplates = Array.isArray(apiRes.data) ? apiRes.data : [];
-                const defaultTemplates = Array.isArray(defaultsRes.data) ? defaultsRes.data : [];
-                setTemplates([...defaultTemplates, ...apiTemplates]);
+                setTemplates(Array.isArray(apiRes.data) ? apiRes.data : []);
                 setSkills(Array.isArray(skillsRes.data) ? skillsRes.data : []);
             } catch (err) {
                 console.error('Failed to fetch templates:', err);
@@ -600,23 +596,6 @@ function DashboardContent() {
                 {/* Template gallery */}
                 <section>
                     <h2 className="text-xl font-bold text-gray-900 mb-4">템플릿</h2>
-                    {templates.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {[null, ...Array.from(new Set(templates.map((t) => t.category)))].map((cat) => (
-                                <button
-                                    key={cat ?? 'all'}
-                                    onClick={() => setCategoryFilter(cat)}
-                                    className={`px-3 py-1 rounded-full text-sm border ${
-                                        categoryFilter === cat
-                                            ? 'bg-foreground text-background border-foreground'
-                                            : 'bg-card text-muted-foreground border-border hover:border-foreground/40'
-                                    }`}
-                                >
-                                    {cat ?? '전체'}
-                                </button>
-                            ))}
-                        </div>
-                    )}
                     {loadingTemplates ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -625,9 +604,7 @@ function DashboardContent() {
                         <p className="text-sm text-gray-500 text-center py-8">사용 가능한 템플릿이 없습니다.</p>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {templates
-                                .filter((t) => !categoryFilter || t.category === categoryFilter)
-                                .map((template) => (
+                            {templates.map((template) => (
                                 <button
                                     key={template.id}
                                     type="button"
@@ -653,7 +630,6 @@ function DashboardContent() {
                                     </div>
                                     <div className="p-3 bg-white">
                                         <p className="text-sm font-medium text-gray-900 truncate">{template.name}</p>
-                                        <p className="text-xs text-gray-500 truncate">{template.category}</p>
                                     </div>
                                     {selectedTemplateId === template.id && (
                                         <div className="absolute top-2 right-2 w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
