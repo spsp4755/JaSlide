@@ -65,6 +65,60 @@ test('the native object overlay does not repaint text over the preview image', (
     assert.match(overlay, /value=\{cellText\}/);
 });
 
+test('a preview refresh invalidates only the slides that changed', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // A single global counter dropped every slide's cached preview, and the effect
+    // then re-rendered the whole deck through LibreOffice on every keystroke's save.
+    assert.doesNotMatch(editor, /setPreviewVersion/);
+    assert.match(editor, /invalidatePreviews\(\[slideId\]\)/);
+    assert.match(editor, /const key = `\$\{slideId\}:\$\{previewRevisions\[slideId\] \|\| 0\}`/);
+    // Prefetch neighbours, not the entire deck: the renderer serves one at a time.
+    assert.match(editor, /for \(const offset of \[1, -1\]\)/);
+});
+
+test('an edit shows on the canvas before the new preview image arrives', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
+
+    // Only while the image lags — painting over a current preview is the double-text bug.
+    assert.match(overlay, /previewStale && editingNativeTextId !== object\.id && typeof edit\.text === 'string'/);
+    assert.match(overlay, /previewStale && edit\.cells \? cellText : ''/);
+});
+
+test('the insert dropdowns dismiss and switch groups without a mouse', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // They used to close only by clicking their own button again, leaving the shape
+    // sheet over the canvas, and groups switched on hover alone — unusable on touch.
+    assert.match(editor, /closest\?\.\('\[data-insert-picker\]'\)/);
+    assert.match(editor, /event\.key === 'Escape'\) close\(\)/);
+    assert.match(editor, /onClick=\{\(\) => setShapePickerGroup\(index\)\}/);
+    assert.match(editor, /aria-expanded=\{showShapePicker\}/);
+});
+
+test('a PPTX slide shows a rendering state instead of a fake slide', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // Without this the generic type-based editor flashed a different slide for the
+    // second the renderer needs.
+    assert.match(editor, /슬라이드를 그리고 있습니다/);
+    assert.ok(
+        editor.indexOf('슬라이드를 그리고 있습니다') < editor.lastIndexOf('switch (slide.type)'),
+        'the rendering state must come before the generic fallback',
+    );
+});
+
+test('the admin template screen speaks Korean throughout', () => {
+    const admin = fs.readFileSync(path.join(SRC, 'app', 'admin', 'templates', 'page.tsx'), 'utf8');
+
+    // "PPTX 템플릿을…" is fine; a message with no Hangul at all is not.
+    const english = [...admin.matchAll(/showToast\('([^']+)'/g)]
+        .map((match) => match[1])
+        .filter((message) => !/[가-힣]/.test(message));
+    assert.deepEqual(english, []);
+});
+
 test('shapes accept in-slide text editing, like Google Slides', () => {
     const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
     const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));

@@ -12,14 +12,16 @@ test('editor provides whole-deck AI chat with numbered slide targeting', () => {
     assert.doesNotMatch(source, /showAiEditDialog/);
     assert.match(source, /const editedSlides = response\.data\.slides/);
     assert.match(source, /setPresentation\(\{[\s\S]*editedSlides/);
-    assert.match(source, /setPreviewVersion/);
+    // Refresh only the slides the AI actually edited, not the whole deck.
+    assert.match(source, /invalidatePreviews\(targets\)/);
     assert.match(source, /role="separator"/);
     assert.match(source, /event\.key === 'Enter' && !event\.shiftKey/);
     assert.match(source, /new AbortController\(\)/);
     assert.match(source, /handleCancelAiChat/);
     assert.match(source, /previewCacheRef/);
     assert.match(source, /previewSlideIdRef\.current !== selectedSlideId/);
-    assert.match(source, /for \(let index = 0; index < presentation\.slides\.length; index \+= 1\)/);
+    // Neighbours only — module-resolution.test.js covers why the whole-deck loop went away.
+    assert.match(source, /for \(const offset of \[1, -1\]\)/);
     assert.doesNotMatch(source, /<AiHintBar/);
 });
 

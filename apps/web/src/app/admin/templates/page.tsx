@@ -239,7 +239,7 @@ export default function AdminTemplatesPage() {
 
     const handleImportPptx = async () => {
         if (!pptxImportForm.name.trim() || !pptxImportForm.file) {
-            showToast('Enter a template name and choose a PPTX file.', 'error');
+            showToast('템플릿 이름을 입력하고 PPTX 파일을 선택하세요.', 'error');
             return;
         }
 
@@ -272,7 +272,7 @@ export default function AdminTemplatesPage() {
 
     const handleImportHtmlZip = async () => {
         if (!htmlZipImportForm.name.trim() || !htmlZipImportForm.file) {
-            showToast('Enter a template name and choose a ZIP file.', 'error');
+            showToast('템플릿 이름을 입력하고 ZIP 파일을 선택하세요.', 'error');
             return;
         }
 
@@ -290,11 +290,11 @@ export default function AdminTemplatesPage() {
             });
             if (!res.ok) throw new Error('Import failed');
 
-            showToast('Template created from HTML ZIP.');
+            showToast('HTML ZIP으로 템플릿을 만들었습니다.');
             setShowHtmlZipImportModal(false);
             fetchData();
         } catch {
-            showToast('Unable to import the HTML ZIP template.', 'error');
+            showToast('HTML ZIP 템플릿을 가져오지 못했습니다.', 'error');
         } finally {
             setImportingHtmlZip(false);
         }

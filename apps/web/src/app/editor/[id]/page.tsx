@@ -394,7 +394,14 @@ export default function EditorPage() {
     const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
     const [multiSelectedSlides, setMultiSelectedSlides] = useState<string[]>([]);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [previewVersion, setPreviewVersion] = useState(0);
+    // Per-slide preview revisions. A single global counter meant one keystroke's
+    // debounced save invalidated every slide's cached preview, and the prefetch
+    // loop below then re-rendered the whole deck through LibreOffice (~0.9s each).
+    const [previewRevisions, setPreviewRevisions] = useState<Record<string, number>>({});
+    // Which slide+revision the displayed image actually is. While it lags behind the
+    // current revision the canvas shows the edited text itself, so a change appears
+    // immediately instead of after the ~1s LibreOffice round trip.
+    const [previewKey, setPreviewKey] = useState<string | null>(null);
     const previewCacheRef = useRef(new Map<string, string>());
     const previewPendingRef = useRef(new Map<string, Promise<string | null>>());
     const previewSlideIdRef = useRef<string | null>(null);
@@ -474,8 +481,34 @@ export default function EditorPage() {
         setSelectedNativeObjectId(objectId);
     };
 
-    const loadPreview = useCallback((slideIndex: number) => {
-        const key = `${previewVersion}:${slideIndex}`;
+    // Dropdowns only closed by clicking their own button again, which left the shape
+    // sheet covering the canvas. Close on an outside click or Escape, as menus do.
+    useEffect(() => {
+        if (!showShapePicker && !showLinePicker) return;
+        const close = () => { setShowShapePicker(false); setShowLinePicker(false); };
+        const onPointerDown = (event: PointerEvent) => {
+            if (!(event.target as HTMLElement)?.closest?.('[data-insert-picker]')) close();
+        };
+        const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('pointerdown', onPointerDown);
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [showShapePicker, showLinePicker]);
+
+    // Bump only the slides that actually changed, so untouched previews stay cached.
+    const invalidatePreviews = useCallback((slideIds: string[]) => {
+        setPreviewRevisions((revisions) => {
+            const next = { ...revisions };
+            for (const id of slideIds) next[id] = (next[id] || 0) + 1;
+            return next;
+        });
+    }, []);
+
+    const loadPreview = useCallback((slideIndex: number, slideId: string) => {
+        const key = `${slideId}:${previewRevisions[slideId] || 0}`;
         const cached = previewCacheRef.current.get(key);
         if (cached) return Promise.resolve(cached);
         const pending = previewPendingRef.current.get(key);
@@ -490,7 +523,7 @@ export default function EditorPage() {
             .finally(() => previewPendingRef.current.delete(key));
         previewPendingRef.current.set(key, request);
         return request;
-    }, [presentationId, previewVersion]);
+    }, [presentationId, previewRevisions]);
 
     const startPanelResize = (side: 'left' | 'right') => (event: any) => {
         event.preventDefault();
@@ -551,26 +584,32 @@ export default function EditorPage() {
         if (!presentation || !selectedSlideId) return;
         const slideIndex = presentation.slides.findIndex((slide) => slide.id === selectedSlideId);
         let active = true;
-        const key = `${previewVersion}:${slideIndex}`;
+        const key = `${selectedSlideId}:${previewRevisions[selectedSlideId] || 0}`;
         const cached = previewCacheRef.current.get(key);
         if (cached) {
             previewSlideIdRef.current = selectedSlideId;
             setPreviewUrl(cached);
+            setPreviewKey(key);
         } else if (previewSlideIdRef.current !== selectedSlideId) {
             previewSlideIdRef.current = null;
             setPreviewUrl(null);
+            setPreviewKey(null);
         }
-        void loadPreview(slideIndex).then((url) => {
+        void loadPreview(slideIndex, selectedSlideId).then((url) => {
             if (active && url) {
                 previewSlideIdRef.current = selectedSlideId;
                 setPreviewUrl(url);
+                setPreviewKey(key);
             }
         });
-        for (let index = 0; index < presentation.slides.length; index += 1) {
-            if (index !== slideIndex) void loadPreview(index);
+        // Warm the neighbours only; the renderer handles one request at a time, so
+        // prefetching a long deck would queue ahead of the slide being edited.
+        for (const offset of [1, -1]) {
+            const neighbour = presentation.slides[slideIndex + offset];
+            if (neighbour) void loadPreview(slideIndex + offset, neighbour.id);
         }
         return () => { active = false; };
-    }, [presentation, selectedSlideId, previewVersion, loadPreview]);
+    }, [presentation, selectedSlideId, previewRevisions, loadPreview]);
 
     useEffect(() => () => {
         for (const url of previewCacheRef.current.values()) URL.revokeObjectURL(url);
@@ -639,7 +678,7 @@ export default function EditorPage() {
                 order: slide.order,
             });
             setDirty(false);
-            setPreviewVersion((version) => version + 1);
+            invalidatePreviews([slide.id]);
         } catch (error) {
             console.error('Failed to save slide:', error);
         }
@@ -668,7 +707,7 @@ export default function EditorPage() {
                     order: updates.order ?? slide.order,
                 });
                 setDirty(false);
-                setPreviewVersion((version) => version + 1);
+                invalidatePreviews([slideId]);
             } catch (error) {
                 console.error('Failed to save slide:', error);
             }
@@ -715,7 +754,7 @@ export default function EditorPage() {
                 layout: slide.layout, notes: slide.notes, order: slide.order,
             })));
             setDirty(false);
-            setPreviewVersion((version) => version + 1);
+            invalidatePreviews(synchronized.slides.map((slide) => slide.id));
         } catch (error) {
             toast({ title: '저장 실패', description: '실행 취소 내용을 저장하지 못했습니다.', variant: 'destructive' });
         } finally {
@@ -837,7 +876,7 @@ export default function EditorPage() {
                 ...presentation,
                 slides: presentation.slides.map((slide) => editedSlides.find((edited: any) => edited.id === slide.id) ?? slide),
             });
-            setPreviewVersion((version) => version + 1);
+            invalidatePreviews(targets);
             setAiChatMessages((messages) => [...messages, { role: 'assistant', text: `${targets.length}개 슬라이드를 수정했습니다.` }]);
             toast({ title: 'AI 편집 완료', description: `${targets.length}개 슬라이드가 업데이트되었습니다.` });
             // Persist any manual edits still pending on other slides before
@@ -1061,8 +1100,8 @@ export default function EditorPage() {
                         <Button aria-label="선택한 객체 삭제" type="button" size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={deleteSelectedHtmlObject}><Trash2 className="mr-1 h-4 w-4" />삭제</Button>
                     </> : <span className="text-xs text-gray-400">객체를 선택하면 글꼴, 목록, 정렬, 색상 서식을 적용할 수 있습니다.</span>) : <>
                         <Button type="button" size="sm" variant="outline" onClick={() => presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeText() : insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
-                        <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-white shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
-                        <div className="relative"><Button type="button" size="sm" variant="outline" onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(({ kind, label }) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind, true) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
+                        <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showShapePicker} onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-white shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} onClick={() => setShapePickerGroup(index)} aria-current={shapePickerGroup === index} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
+                        <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showLinePicker} onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(({ kind, label }) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind, true) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, false))}><List className="mr-1 h-4 w-4" />글머리</Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, true))}><ListOrdered className="mr-1 h-4 w-4" />번호 목록</Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject(addHtmlTable)}><Table2 className="mr-1 h-4 w-4" />표</Button>
@@ -1123,6 +1162,7 @@ export default function EditorPage() {
                                         slide={selectedSlide}
                                         template={presentation.template}
                                         previewUrl={previewUrl}
+                                        previewStale={!!selectedSlide && previewKey !== `${selectedSlide.id}:${previewRevisions[selectedSlide.id] || 0}`}
                                         selectedHtmlTextIndex={selectedHtmlTextIndex}
                                         onSelectHtmlText={setSelectedHtmlTextIndex}
                                         nativeObjects={nativeObjects}
@@ -1470,6 +1510,7 @@ interface EditableSlidePreviewProps {
     slide: any;
     template?: any;
     previewUrl?: string | null;
+    previewStale?: boolean;
     selectedHtmlTextIndex: number | null;
     onSelectHtmlText: (index: number | null) => void;
     nativeObjects: any[];
@@ -1481,7 +1522,7 @@ interface EditableSlidePreviewProps {
     htmlTextFormatCommand: { id: number; updates: Record<string, string> } | null;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, previewStale, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1767,9 +1808,14 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                         onSelectNativeObject(object.id);
                         setEditingNativeTextId(object.id);
                     }}>
-                        {/* The preview image underneath already shows this text, rendered by
-                            LibreOffice with the deck's real fonts. Painting it again here made
-                            every string appear twice, offset. Only the edit surface draws text. */}
+                        {/* Never paint text over an up-to-date preview: the image already shows
+                            it in the deck's real fonts, and drawing it twice was the double-text
+                            bug. While the image lags an edit, cover that region opaquely with the
+                            new text so the change shows up now instead of a round trip later. */}
+                        {previewStale && editingNativeTextId !== object.id && typeof edit.text === 'string' && <div
+                            className="pointer-events-none absolute inset-0 overflow-hidden bg-white p-1 text-sm leading-tight"
+                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any }}
+                        >{edit.text}</div>}
                         {editingNativeTextId === object.id && <textarea
                             autoFocus
                             aria-label="네이티브 텍스트 직접 편집"
@@ -1807,11 +1853,11 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                                     /> : <div
                                         key={`${rowIndex}-${colIndex}`}
                                         data-native-table-cell
-                                        // Hit target only — the preview image already shows the cell text.
-                                        className="overflow-hidden border border-transparent hover:border-purple-400/70"
+                                        // Hit target only, unless the preview still lags this edit.
+                                        className={`overflow-hidden border border-transparent p-1 text-xs leading-tight hover:border-purple-400/70 ${previewStale && edit.cells ? 'bg-white' : ''}`}
                                         onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}
                                         onDoubleClick={(event) => { event.preventDefault(); event.stopPropagation(); onSelectNativeObject(object.id); setEditingNativeCell({ objectId: object.id, row: rowIndex, col: colIndex }); }}
-                                    />;
+                                    >{previewStale && edit.cells ? cellText : ''}</div>;
                                 }))}
                             </div>;
                         })()}
@@ -1923,6 +1969,18 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
 
     // Common editable input styles
     const editableStyle = "bg-transparent border-none outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 rounded px-2 py-1 w-full";
+
+    // A PPTX slide is drawn by the renderer, which takes about a second. Falling through
+    // to the generic type-based editor below flashed a completely different fake slide in
+    // the meantime, so say what is happening instead.
+    if (nativeObjects.length || template?.config?.source?.kind === 'pptx') {
+        return (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gray-50" role="status" aria-live="polite">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <p className="text-sm text-gray-500">슬라이드를 그리고 있습니다…</p>
+            </div>
+        );
+    }
 
     // Render based on slide type
     switch (slide.type) {
