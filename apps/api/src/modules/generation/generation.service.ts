@@ -18,16 +18,35 @@ export function preservesTemplateStructure(template: string, candidate: string):
         && count(candidate, /data-object\s*=\s*["']true["']/gi) >= count(template, /data-object\s*=\s*["']true["']/gi);
 }
 
+// Keep compact labels, but replace the long content regions that make a
+// report/table template useful. Existing blank placeholders still work.
+const isTableLabel = (text: string) => Boolean(text) && !text.includes('\n') && text.length <= 60;
+
 export function populatePptxTableCells(cells: unknown, values: string[]): string[][] {
     if (!Array.isArray(cells)) return [];
-    const replacements = values.filter(Boolean);
-    return cells.map((row) => Array.isArray(row) ? row.map((cell) => {
-        const text = typeof cell === 'string' ? cell.trim() : '';
-        // Keep compact labels, but replace the long content regions that make a
-        // report/table template useful. Existing blank placeholders still work.
-        if (text && !text.includes('\n') && text.length <= 60) return text;
-        return replacements.shift() || text;
-    }) : []);
+    const rows = cells.map((row) => Array.isArray(row) ? row.map((cell) => typeof cell === 'string' ? cell.trim() : '') : []);
+    // Spread the lines across every content cell. Handing each cell the whole
+    // body plus a repeat of the same key points filled a 실적/계획 table with
+    // duplicate text in both columns.
+    const lines = values.filter(Boolean);
+    const slots = rows.flat().filter((text) => !isTableLabel(text)).length;
+    const size = Math.ceil(lines.length / Math.max(slots, 1)) || 1;
+    const chunks = Array.from({ length: slots }, (_, index) => lines.slice(index * size, index * size + size).join('\n'));
+    return rows.map((row) => row.map((text) => isTableLabel(text) ? text : (chunks.shift() ?? text)));
+}
+
+/** Map a PPTX template slide's native objects onto the generated content. */
+export function pptxObjectEdits(objects: any[], slide: number, title: string, lines: string[]) {
+    // Biggest type is the slide's real heading; source order puts small corner
+    // labels (a team name, a page marker) first.
+    const texts = objects.filter((item) => item?.kind === 'text').sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0));
+    const tables = objects.filter((item) => item?.kind === 'table');
+    // A table owns its cell text; writing the body into a text box too would
+    // duplicate the content on top of the table.
+    return [
+        ...texts.slice(0, tables.length ? 1 : 2).map((item, index) => ({ objectId: item.id, slide, text: index === 0 ? title : lines.join('\n') })),
+        ...tables.map((item) => ({ objectId: item.id, slide, cells: populatePptxTableCells(item.cells, lines) })),
+    ];
 }
 
 function presentationText(content: { body?: string; bullets?: { text: string; level?: number }[] }, keyPoints: string[]) {
@@ -288,14 +307,9 @@ export class GenerationService implements OnModuleInit {
                 let html = !pptxSource && templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;
                 const objects = pptxSource?.slides?.[templateIndex]?.objects || [];
                 const richText = presentationText(content, slideOutline.keyPoints);
-                const textObjects = objects.filter((item: any) => item.kind === 'text');
-                const hasTable = objects.some((item: any) => item.kind === 'table');
-                // A PPTX table owns its cell text. Writing the generated body into
-                // every text box duplicates content on top of the table.
                 const objectEdits = pptxSource
-                    ? textObjects.slice(0, hasTable ? 1 : 2).map((item: any, index: number) => ({ objectId: item.id, slide: templateIndex, text: index === 0 ? slideOutline.title : richText }))
+                    ? pptxObjectEdits(objects, templateIndex, slideOutline.title, richText.split('\n'))
                     : [];
-                if (pptxSource) objectEdits.push(...objects.filter((item: any) => item.kind === 'table').map((item: any) => ({ objectId: item.id, slide: templateIndex, cells: populatePptxTableCells(item.cells, [richText, ...slideOutline.keyPoints]) })));
                 if (html && !pptxSource) {
                     try {
                         const generatedHtml = await this.llmService.generateSlideHtml({

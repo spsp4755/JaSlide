@@ -5,9 +5,9 @@ from html import escape
 from io import BytesIO
 
 from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
+from pptx.shapes.picture import Picture
 
 from .style_extractor import extract_template_tokens
 
@@ -128,7 +128,9 @@ def pptx_to_html(content: bytes) -> dict:
             height = _px(shape.height, presentation.slide_height, CANVAS_HEIGHT)
             position = f"position:absolute;left:{left}px;top:{top}px;width:{width}px;height:{height}px"
             source_object = {"id": str(shape.shape_id), "left": left, "top": top, "width": width, "height": height}
-            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            # A picture dropped into a layout's placeholder reports shape_type
+            # PLACEHOLDER, not PICTURE, so match on the class instead.
+            if isinstance(shape, Picture):
                 source_objects.append({**source_object, "kind": "image"})
                 image = shape.image
                 encoded = base64.b64encode(image.blob).decode("ascii")

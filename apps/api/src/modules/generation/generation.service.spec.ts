@@ -4,7 +4,7 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class LlmService {} }));
 jest.mock('../queue/queue.service', () => ({ QueueService: class QueueService {} }));
 
 import { GenerationService } from './generation.service';
-import { defaultLayoutForSlideType, populatePptxTableCells, preservesTemplateStructure } from './generation.service';
+import { defaultLayoutForSlideType, populatePptxTableCells, pptxObjectEdits, preservesTemplateStructure } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
@@ -348,5 +348,30 @@ describe('populatePptxTableCells', () => {
     it('replaces a long template content area while preserving compact labels', () => {
         expect(populatePptxTableCells([['추진실적', '추진계획'], ['기존 보고 내용\n두 번째 줄\n세 번째 줄', '']], ['• 완료\n  • 세부 작업', '• 다음 계획']))
             .toEqual([['추진실적', '추진계획'], ['• 완료\n  • 세부 작업', '• 다음 계획']]);
+    });
+
+    it('splits the lines across content cells instead of repeating them', () => {
+        expect(populatePptxTableCells([['추진실적', '추진계획'], ['기존 내용\n둘째 줄', '']], ['• A', '• B', '• C', '• D']))
+            .toEqual([['추진실적', '추진계획'], ['• A\n• B', '• C\n• D']]);
+    });
+});
+
+describe('pptxObjectEdits', () => {
+    const objects = [
+        { id: '11', kind: 'text', fontSize: 13, text: 'AI엔지니어링 파트' },
+        { id: '14', kind: 'table', cells: [['추진실적', '추진계획'], ['기존 내용\n둘째 줄', '']] },
+        { id: '6', kind: 'text', fontSize: 22, text: '주간업무 추진실적 및 계획' },
+    ];
+
+    it('writes the title into the largest text box, not the first one', () => {
+        expect(pptxObjectEdits(objects, 0, '주간 업무 보고', ['• A', '• B'])[0])
+            .toEqual({ objectId: '6', slide: 0, text: '주간 업무 보고' });
+    });
+
+    it('fills the table and leaves the remaining text boxes alone', () => {
+        expect(pptxObjectEdits(objects, 0, '주간 업무 보고', ['• A', '• B'])).toEqual([
+            { objectId: '6', slide: 0, text: '주간 업무 보고' },
+            { objectId: '14', slide: 0, cells: [['추진실적', '추진계획'], ['• A', '• B']] },
+        ]);
     });
 });

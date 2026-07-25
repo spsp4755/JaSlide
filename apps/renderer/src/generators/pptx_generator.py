@@ -130,12 +130,17 @@ class PPTXGenerator:
             used_slide_ids = set()
             kept_slide_ids = []
             for slide_data in slides_to_process:
-                edits = self._as_dict(getattr(slide_data, "content", {})).get("objectEdits", [])
+                content = self._as_dict(getattr(slide_data, "content", {}))
+                edits = content.get("objectEdits", [])
                 if not original_slide_count:
                     continue
+                # A template slide with nothing editable (a full-bleed image, say)
+                # carries no edits, so fall back to the layout the generator picked
+                # instead of silently rendering template slide 0 for every one.
+                fallback = content.get("templateIndex") if isinstance(content.get("templateIndex"), int) else 0
                 target = next(
                     (edit["slide"] for edit in edits if isinstance(edit, dict) and isinstance(edit.get("slide"), int)),
-                    0,
+                    fallback,
                 )
                 target = max(0, min(target, original_slide_count - 1))
                 original_slide = self.prs.slides[target]
@@ -148,10 +153,10 @@ class PPTXGenerator:
                     self._apply_native_edit(edit, slide)
                 kept_slide_ids.append(slide.slide_id)
 
-            if slide_index is not None:
-                # Single-slide export (e.g. a preview request): drop every
-                # other slide so the resulting deck contains exactly the
-                # requested slide, not the whole original template.
+            if kept_slide_ids:
+                # The export must contain exactly the generated slides, in their
+                # generated order — not the untouched template deck with the
+                # generated slides appended after it.
                 self._keep_only_slides(kept_slide_ids)
 
             buffer = BytesIO()
@@ -200,6 +205,12 @@ class PPTXGenerator:
             if int(sld.get("id")) not in keep:
                 self.prs.part.drop_rel(sld.get(qn("r:id")))
                 sld_id_lst.remove(sld)
+        # Re-appending an existing child moves it, so this reorders the deck to
+        # match the generated slide order.
+        remaining = {int(sld.get("id")): sld for sld in sld_id_lst}
+        for slide_id in keep_slide_ids:
+            if slide_id in remaining:
+                sld_id_lst.append(remaining[slide_id])
 
     @staticmethod
     def _safe_rgb(color: Any):

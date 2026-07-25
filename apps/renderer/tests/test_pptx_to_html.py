@@ -1,12 +1,15 @@
+import base64
 from io import BytesIO
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
 from apps.renderer.src.services.pptx_to_html import pptx_to_html
+
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL1nQAAAABJRU5ErkJggg==")
 
 
 def test_converts_pptx_shapes_and_text_to_positioned_html_slides():
@@ -123,6 +126,28 @@ def test_extracts_alignment_for_a_text_object():
     text_object = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "text")
 
     assert text_object["align"] == "center"
+
+
+def test_extracts_a_picture_placeholder_as_an_image_object():
+    # Real decks drop screenshots into a layout's picture placeholder, whose
+    # shape_type reports PLACEHOLDER rather than PICTURE. Matching only on
+    # PICTURE degraded those slides to an empty white box, losing the image.
+    presentation = Presentation()
+    layout = next(
+        item for item in presentation.slide_layouts
+        if any(place.placeholder_format.type == PP_PLACEHOLDER.PICTURE for place in item.placeholders)
+    )
+    slide = presentation.slides.add_slide(layout)
+    placeholder = next(item for item in slide.placeholders if item.placeholder_format.type == PP_PLACEHOLDER.PICTURE)
+    placeholder.insert_picture(BytesIO(PNG))
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    assert "image" in [obj["kind"] for obj in result["source"]["slides"][0]["objects"]]
+    assert 'data-object-type="image"' in result["htmlSlides"][0]
 
 
 def test_defaults_alignment_to_left_when_unset():

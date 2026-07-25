@@ -563,6 +563,43 @@ def test_sourcepptx_preview_for_a_later_slide_returns_only_that_slides_own_edit(
     assert generated.slides[0].shapes[0].text == "First"
 
 
+def _two_slide_template():
+    source = Presentation()
+    for label in ("First template", "Second template"):
+        slide = source.slides.add_slide(source.slide_layouts[6])
+        slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)).text = label
+    buffer = BytesIO(); source.save(buffer)
+    return SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+
+def _slide_texts(slide):
+    return [shape.text for shape in slide.shapes if shape.has_text_frame]
+
+
+def test_sourcepptx_renders_the_slides_own_template_index_without_object_edits():
+    # A picture-only template slide yields no editable objects, so the slide
+    # carries just templateIndex. Falling back to slide 0 rendered (and cloned)
+    # the wrong template slide, so the deck lost its real layouts.
+    output = PPTXGenerator(_two_slide_template()).generate(_presentation(_slide("CONTENT", "", {"templateIndex": 1})))
+
+    generated = Presentation(BytesIO(output))
+    assert len(generated.slides) == 1
+    assert _slide_texts(generated.slides[0]) == ["Second template"]
+
+
+def test_sourcepptx_keeps_only_the_generated_slides_in_their_generated_order():
+    # The whole template deck used to be shipped alongside the generated
+    # slides, so a 2-slide template plus 2 generated slides exported 4 slides
+    # with the originals' untouched content mixed in.
+    output = PPTXGenerator(_two_slide_template()).generate(_presentation(
+        _slide("CONTENT", "", {"templateIndex": 1}),
+        _slide("CONTENT", "", {"templateIndex": 0}),
+    ))
+
+    generated = Presentation(BytesIO(output))
+    assert [_slide_texts(slide) for slide in generated.slides] == [["Second template"], ["First template"]]
+
+
 def test_pptx_table_edits_survive_a_theme_colored_source_cell():
     # Many real-world decks color table text via a theme/scheme reference
     # (design-system driven) instead of an explicit RGB value. Reading
