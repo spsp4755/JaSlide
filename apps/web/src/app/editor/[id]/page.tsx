@@ -704,7 +704,11 @@ export default function EditorPage() {
     const saveSchedulerRef = useRef<ReturnType<typeof createSlideSaveScheduler> | null>(null);
     if (!saveSchedulerRef.current) {
         saveSchedulerRef.current = createSlideSaveScheduler(async (slideId: string, updates: Partial<any>) => {
-            const slide = presentation?.slides.find((s) => s.id === slideId);
+            // Read the slide from the store, not from this closure: the scheduler is
+            // built once on the first render, when `presentation` is still null, so a
+            // captured copy would never find the slide and the save would silently
+            // no-op — leaving the editor stuck on "저장 대기 중" forever.
+            const slide = useEditorStore.getState().presentation?.slides.find((s) => s.id === slideId);
             if (!slide) return;
             try {
                 // Only send allowed fields to the API
@@ -1813,7 +1817,10 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                         onSelectNativeObject(object.id);
                         setEditingNativeTextId(object.id);
                     }}>
-                        {object.kind === 'text' && (editingNativeTextId === object.id ? <textarea
+                        {/* The preview image underneath already shows this text, rendered by
+                            LibreOffice with the deck's real fonts. Painting it again here made
+                            every string appear twice, offset. Only the edit surface draws text. */}
+                        {object.kind === 'text' && editingNativeTextId === object.id && <textarea
                             autoFocus
                             aria-label="네이티브 텍스트 직접 편집"
                             value={edit.text ?? object.text ?? ''}
@@ -1821,8 +1828,9 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                             onChange={(event) => updateNativeObjectContent(object.id, { text: event.target.value })}
                             onBlur={() => setEditingNativeTextId(null)}
                             onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeTextId(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
-                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white/95 p-1 text-sm leading-tight outline-none"
-                        /> : <div className="pointer-events-none h-full w-full overflow-hidden p-1 text-sm leading-tight" style={{ textAlign: (edit.align ?? object.align ?? 'left') as any }}>{edit.text ?? object.text ?? ''}</div>)}
+                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any }}
+                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white p-1 text-sm leading-tight outline-none"
+                        />}
                         {object.kind === 'table' && (() => {
                             const cells: string[][] = edit.cells || object.cells || [];
                             const rowHeights: number[] = (object.rowHeights?.length === cells.length ? object.rowHeights : cells.map(() => 1));
@@ -1845,14 +1853,15 @@ function EditableSlidePreview({ slide, template, previewUrl, selectedHtmlTextInd
                                         }}
                                         onBlur={() => setEditingNativeCell(null)}
                                         onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeCell(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
-                                        className="resize-none border border-purple-600 bg-white/95 p-1 text-xs leading-tight outline-none"
+                                        className="resize-none border border-purple-600 bg-white p-1 text-xs leading-tight outline-none"
                                     /> : <div
                                         key={`${rowIndex}-${colIndex}`}
                                         data-native-table-cell
-                                        className="overflow-hidden border border-transparent p-1 text-xs leading-tight hover:border-purple-400/70"
+                                        // Hit target only — the preview image already shows the cell text.
+                                        className="overflow-hidden border border-transparent hover:border-purple-400/70"
                                         onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}
                                         onDoubleClick={(event) => { event.preventDefault(); event.stopPropagation(); onSelectNativeObject(object.id); setEditingNativeCell({ objectId: object.id, row: rowIndex, col: colIndex }); }}
-                                    >{cellText}</div>;
+                                    />;
                                 }))}
                             </div>;
                         })()}

@@ -40,3 +40,27 @@ test('the slide save scheduler exposes the API the editor calls', () => {
     // when slide B is edited inside the debounce window.
     assert.match(scheduler, /new Map<string/);
 });
+
+test('the debounced save reads the slide from the store, not a stale closure', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const callback = editor.slice(editor.indexOf('createSlideSaveScheduler(async'));
+
+    // The scheduler is built once while `presentation` is still null, so a
+    // captured copy never finds the slide: the save no-ops and the editor
+    // stays on "저장 대기 중" forever.
+    assert.match(callback.slice(0, 900), /useEditorStore\.getState\(\)\.presentation\?\.slides\.find/);
+    assert.doesNotMatch(callback.slice(0, 900), /const slide = presentation\?\.slides\.find/);
+});
+
+test('the native object overlay does not repaint text over the preview image', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
+
+    // The preview PNG already contains the deck's text. Drawing it again in the
+    // overlay showed every string twice, offset by the font difference.
+    assert.doesNotMatch(overlay, /\{edit\.text \?\? object\.text \?\? ''\}<\/div>/);
+    assert.doesNotMatch(overlay, />\{cellText\}<\/div>/);
+    // The edit surfaces still carry the text.
+    assert.match(overlay, /value=\{edit\.text \?\? object\.text \?\? ''\}/);
+    assert.match(overlay, /value=\{cellText\}/);
+});
