@@ -1,11 +1,12 @@
 'use client';
 
 import { Suspense, useState, useCallback, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { AppShell } from '@/components/layout/app-shell';
 import { Button as AstryxButton } from '@astryxdesign/core';
-import { useAuthStore } from '@/stores/auth-store';
+import { useAuthStore, isAdminRole } from '@/stores/auth-store';
 import { generationApi, skillsApi, templatesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { GenerationProgress } from '@/components/generation-progress';
@@ -47,7 +48,7 @@ interface Outline {
 function DashboardContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { isAuthenticated, hasHydrated } = useAuthStore();
+    const { isAuthenticated, hasHydrated, user } = useAuthStore();
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
     // Prompt state
@@ -608,7 +609,20 @@ function DashboardContent() {
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                         </div>
                     ) : templates.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-8">사용 가능한 템플릿이 없습니다.</p>
+                        // An empty list used to be a dead sentence. Say what a template
+                        // does, that generation works without one, and — for an admin —
+                        // where to add one.
+                        <div className="rounded-xl border border-dashed border-border py-10 text-center">
+                            <p className="text-sm font-medium text-gray-900">아직 등록된 템플릿이 없습니다</p>
+                            <p className="mt-1 text-sm text-gray-500">
+                                템플릿은 회사 서식의 표·색·글꼴을 그대로 유지합니다. 템플릿 없이 생성하면 기본 레이아웃을 사용합니다.
+                            </p>
+                            {isAdminRole(user?.role) && (
+                                <Link href="/admin/templates" className="mt-4 inline-block rounded-lg bg-foreground px-4 py-2 text-sm text-background hover:opacity-90">
+                                    PPTX 템플릿 등록
+                                </Link>
+                            )}
+                        </div>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {templates.map((template) => (

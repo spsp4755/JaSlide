@@ -119,6 +119,24 @@ test('a PPTX slide shows a rendering state instead of a fake slide', () => {
     );
 });
 
+test('an empty template list tells the user what to do next', () => {
+    const dashboard = fs.readFileSync(path.join(SRC, 'app', 'dashboard', 'page.tsx'), 'utf8');
+
+    // It used to be one dead sentence: "사용 가능한 템플릿이 없습니다."
+    assert.doesNotMatch(dashboard, /사용 가능한 템플릿이 없습니다/);
+    assert.match(dashboard, /템플릿 없이 생성하면 기본 레이아웃을 사용합니다/);
+    // Only an admin can add one, so only an admin is offered the link.
+    assert.match(dashboard, /isAdminRole\(user\?\.role\)[\s\S]{0,120}\/admin\/templates/);
+});
+
+test('the model connection test reports through a toast, not a blocking dialog', () => {
+    const models = fs.readFileSync(path.join(SRC, 'app', 'admin', 'models', 'page.tsx'), 'utf8');
+
+    assert.doesNotMatch(models, /^\s*alert\(/m);
+    assert.match(models, /showToast\(\n?\s*result\.success/);
+    assert.match(models, /role="status" aria-live="polite"/);
+});
+
 test('the admin template screen speaks Korean throughout', () => {
     const admin = fs.readFileSync(path.join(SRC, 'app', 'admin', 'templates', 'page.tsx'), 'utf8');
 
