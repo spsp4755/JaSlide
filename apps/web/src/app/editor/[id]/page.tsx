@@ -18,7 +18,7 @@ import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
-import { RESIZE_HANDLES, resizeBox, nudgeBox, type ResizeHandle } from '@/lib/object-transform';
+import { RESIZE_HANDLES, resizeBox, nudgeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
 import {
     ArrowLeft,
     Save,
@@ -1666,6 +1666,7 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
     const [inlineTextIndex, setInlineTextIndex] = useState<number | null>(null);
     const [editingNativeTextId, setEditingNativeTextId] = useState<string | null>(null);
     const [editingNativeCell, setEditingNativeCell] = useState<{ objectId: string; row: number; col: number } | null>(null);
+    const [snapGuides, setSnapGuides] = useState<{ vertical: number[]; horizontal: number[] } | null>(null);
     const htmlFrameRef = useRef<HTMLIFrameElement>(null);
     const htmlCanvasRef = useRef<HTMLDivElement>(null);
     const latestContentRef = useRef(content);
@@ -1903,16 +1904,36 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         const move = (moveEvent: PointerEvent) => {
             const dx = (moveEvent.clientX - startX) * 1920 / bounds.width;
             const dy = (moveEvent.clientY - startY) * 1080 / bounds.height;
-            const transform = handle
-                ? resizeBox(initial, handle, dx, dy)
-                : { left: Math.round(initial.left + dx), top: Math.round(initial.top + dy) };
+            let transform: Partial<Record<'left' | 'top' | 'width' | 'height', number>>;
+            if (handle) {
+                transform = resizeBox(initial, handle, dx, dy);
+                setSnapGuides(null);
+            } else {
+                // Snap against every other object on the slide, plus the slide centre.
+                const neighbours = nativeObjects
+                    .filter((item: any) => item.id !== object.id)
+                    .map((item: any) => {
+                        const other = (content.objectEdits || []).find((entry: any) => entry.objectId === item.id) || {};
+                        return {
+                            left: other.left ?? item.left ?? 0, top: other.top ?? item.top ?? 0,
+                            width: other.width ?? item.width ?? 0, height: other.height ?? item.height ?? 0,
+                        };
+                    });
+                const snapped = snapBox({ ...initial, left: initial.left + dx, top: initial.top + dy }, neighbours);
+                transform = { left: snapped.box.left, top: snapped.box.top };
+                setSnapGuides(snapped.guides.vertical.length || snapped.guides.horizontal.length ? snapped.guides : null);
+            }
             const objectEdits = [...(content.objectEdits || [])];
             const index = objectEdits.findIndex((item: any) => item.objectId === object.id);
             if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...transform };
             else objectEdits.push({ objectId: object.id, slide: content.templateIndex ?? slide.order ?? 0, ...transform });
             onUpdate({ content: { ...content, objectEdits } });
         };
-        const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); };
+        const stop = () => {
+            setSnapGuides(null);
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', stop);
+        };
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', stop, { once: true });
     };
@@ -1929,6 +1950,13 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         return (
             <div className="relative h-full w-full touch-pan-y" data-html-canvas onPointerDown={startSlideSwipe}>
                 <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
+                {/* Guides only exist mid-drag, so they never obscure the slide at rest. */}
+                {snapGuides?.vertical.map((x) => (
+                    <div key={`v${x}`} aria-hidden="true" className="pointer-events-none absolute top-0 h-full border-l border-dashed border-fuchsia-500" style={{ left: `${x / 19.2}%` }} />
+                ))}
+                {snapGuides?.horizontal.map((y) => (
+                    <div key={`h${y}`} aria-hidden="true" className="pointer-events-none absolute left-0 w-full border-t border-dashed border-fuchsia-500" style={{ top: `${y / 10.8}%` }} />
+                ))}
                 {nativeObjects.map((object: any) => {
                     const edit = (content.objectEdits || []).find((item: any) => item.objectId === object.id) || {};
                     if (edit.delete) return null;

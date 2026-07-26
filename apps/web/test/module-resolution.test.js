@@ -193,6 +193,12 @@ test('manual editing has the handles, keys and stacking Google Slides users expe
     // A rotation control, so an inserted arrow can point somewhere other than its preset.
     assert.match(editor, /aria-label="회전 각도"/);
     assert.match(editor, /rotation: Number\(event\.target\.value\)/);
+
+    // Snap guides while dragging; object-transform.test.js covers the geometry.
+    assert.match(editor, /snapBox\(\{ \.\.\.initial, left: initial\.left \+ dx, top: initial\.top \+ dy \}, neighbours\)/);
+    assert.match(editor, /snapGuides\?\.vertical\.map/);
+    // They must not linger once the pointer is released.
+    assert.match(editor, /const stop = \(\) => \{\n\s*setSnapGuides\(null\);/);
 });
 
 test('shapes accept in-slide text editing, like Google Slides', () => {

@@ -60,6 +60,64 @@ export function resizeBox(box: Box, handle: ResizeHandle, dx: number, dy: number
     return { left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) };
 }
 
+export const SLIDE_WIDTH = 1920;
+export const SLIDE_HEIGHT = 1080;
+export const SNAP_THRESHOLD = 8;
+
+export interface SnapResult {
+    box: Box;
+    /** Slide-space lines to draw while the snap holds. */
+    guides: { vertical: number[]; horizontal: number[] };
+}
+
+/**
+ * Pull a dragged box onto the nearest alignment of another object or the slide
+ * centre. Without this, lining two boxes up means zooming in and nudging one pixel
+ * at a time — the guides are what make dragging feel deliberate.
+ */
+export function snapBox(box: Box, others: Box[], threshold = SNAP_THRESHOLD): SnapResult {
+    const lines = (b: Box) => ({
+        x: [b.left, b.left + b.width / 2, b.left + b.width],
+        y: [b.top, b.top + b.height / 2, b.top + b.height],
+    });
+
+    const targets = {
+        x: [SLIDE_WIDTH / 2, ...others.flatMap((other) => lines(other).x)],
+        y: [SLIDE_HEIGHT / 2, ...others.flatMap((other) => lines(other).y)],
+    };
+
+    const nearest = (own: number[], candidates: number[]) => {
+        let best: { delta: number; line: number } | null = null;
+        for (const [index, value] of own.entries()) {
+            for (const candidate of candidates) {
+                const delta = candidate - value;
+                if (Math.abs(delta) <= threshold && (!best || Math.abs(delta) < Math.abs(best.delta))) {
+                    best = { delta, line: candidate };
+                }
+                // `index` is unused beyond ordering; own edges are checked left-to-right.
+                void index;
+            }
+        }
+        return best;
+    };
+
+    const own = lines(box);
+    const snapX = nearest(own.x, targets.x);
+    const snapY = nearest(own.y, targets.y);
+
+    return {
+        box: {
+            ...box,
+            left: Math.round(box.left + (snapX?.delta ?? 0)),
+            top: Math.round(box.top + (snapY?.delta ?? 0)),
+        },
+        guides: {
+            vertical: snapX ? [snapX.line] : [],
+            horizontal: snapY ? [snapY.line] : [],
+        },
+    };
+}
+
 /** Arrow-key nudge: one slide pixel, or ten with shift held. */
 export function nudgeBox(box: Box, key: string, coarse: boolean): Box | null {
     const step = coarse ? 10 : 1;
