@@ -32,7 +32,7 @@ export class ExportService {
         return `${error.response?.status ?? 'request'} ${detail}`;
     }
 
-    async exportToPptx(presentationId: string, userId: string) {
+    async exportToPptx(presentationId: string, userId: string, editable = false) {
         const presentation = await this.getPresentation(presentationId, userId);
 
         try {
@@ -41,6 +41,7 @@ export class ExportService {
                 `${this.rendererUrl}/api/render/pptx`,
                 {
                     presentation: await this.rendererPresentation(presentation),
+                    editable,
                 },
                 {
                     responseType: 'arraybuffer',

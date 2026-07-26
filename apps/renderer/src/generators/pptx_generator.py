@@ -34,8 +34,9 @@ class PPTXGenerator:
     DEFAULT_COLORS = {"background": "#FFFFFF", "text": "#1E293B"}
     DEFAULT_FONT = "Noto Sans KR"
 
-    def __init__(self, template_config: Optional[Any] = None):
+    def __init__(self, template_config: Optional[Any] = None, editable: bool = False):
         self.template_config = template_config
+        self.editable = editable
         config = self._as_dict(getattr(template_config, "config", template_config))
         self.html_tokens, extracted_layout = extract_html_template_style(config.get("htmlTemplate", ""))
         self.html_slides = [slide for slide in config.get("htmlSlides", []) if isinstance(slide, str)]
@@ -387,7 +388,10 @@ class PPTXGenerator:
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""
         content = self._as_dict(getattr(slide_data, "content", {}))
-        if isinstance(content.get("html"), str) and content["html"].strip():
+        # A rendered screenshot matches the HTML exactly but exports one flat picture per
+        # slide: nothing is selectable once the file leaves JaSlide. `editable` trades a
+        # little fidelity for a deck the recipient can actually revise.
+        if isinstance(content.get("html"), str) and content["html"].strip() and not self.editable:
             self._add_html_image_slide(content["html"])
             return
         if self.html_slides:

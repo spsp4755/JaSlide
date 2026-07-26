@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, Res, UseGuards, Body } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ExportService } from './export.service';
@@ -17,9 +17,10 @@ export class ExportController {
     async exportPptx(
         @CurrentUser() user: any,
         @Param('presentationId') presentationId: string,
+        @Body('editable') editable: boolean,
         @Res() res: Response,
     ) {
-        const result = await this.exportService.exportToPptx(presentationId, user.id);
+        const result = await this.exportService.exportToPptx(presentationId, user.id, editable);
 
         // Encode filename for non-ASCII characters (RFC 5987)
         const encodedFilename = encodeURIComponent(result.filename).replace(/['()]/g, escape);

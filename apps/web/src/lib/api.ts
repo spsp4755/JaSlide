@@ -122,8 +122,8 @@ export const skillsApi = {
 
 // Export
 export const exportApi = {
-    pptx: (presentationId: string) =>
-        api.post(`/export/${presentationId}/pptx`, {}, { responseType: 'blob' }),
+    pptx: (presentationId: string, editable = false) =>
+        api.post(`/export/${presentationId}/pptx`, { editable }, { responseType: 'blob' }),
     pdf: (presentationId: string) =>
         api.post(`/export/${presentationId}/pdf`, {}, { responseType: 'blob' }),
     googleSlides: (presentationId: string, accessToken: string) =>

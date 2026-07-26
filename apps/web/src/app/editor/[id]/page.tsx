@@ -887,7 +887,7 @@ export default function EditorPage() {
     };
 
     // Export handler
-    const handleExport = async (format: 'pptx' | 'pdf') => {
+    const handleExport = async (format: 'pptx' | 'pdf', editable = false) => {
         try {
             setIsExporting(true);
             setShowExportMenu(false);
@@ -897,7 +897,7 @@ export default function EditorPage() {
             await saveSchedulerRef.current?.flushAll();
 
             const response = format === 'pptx'
-                ? await exportApi.pptx(presentationId)
+                ? await exportApi.pptx(presentationId, editable)
                 : await exportApi.pdf(presentationId);
 
             // Create download link
@@ -1137,13 +1137,28 @@ export default function EditorPage() {
                                 내보내기
                             </Button>
                             {showExportMenu && (
-                                <div className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-lg border p-2 z-50">
+                                <div className="absolute right-0 top-10 w-72 bg-white rounded-lg shadow-lg border p-2 z-50">
                                     <button
                                         onClick={() => handleExport('pptx')}
-                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                                        className="w-full flex items-start gap-2 px-3 py-2 hover:bg-gray-100 rounded text-left text-sm"
                                     >
-                                        <FileSpreadsheet className="h-4 w-4 text-orange-500" />
-                                        PowerPoint (.pptx)
+                                        <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+                                        <span>
+                                            PowerPoint (.pptx)
+                                            <span className="block text-xs text-gray-500">디자인을 그대로 유지합니다.</span>
+                                        </span>
+                                    </button>
+                                    {/* An HTML-template deck otherwise exports one flat picture per
+                                        slide, so the recipient cannot revise a single word of it. */}
+                                    <button
+                                        onClick={() => handleExport('pptx', true)}
+                                        className="w-full flex items-start gap-2 px-3 py-2 hover:bg-gray-100 rounded text-left text-sm"
+                                    >
+                                        <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
+                                        <span>
+                                            PowerPoint · 편집 가능 (.pptx)
+                                            <span className="block text-xs text-gray-500">파워포인트에서 글자와 도형을 고칠 수 있습니다.</span>
+                                        </span>
                                     </button>
                                     <button
                                         onClick={() => handleExport('pdf')}

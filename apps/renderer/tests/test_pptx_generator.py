@@ -1,5 +1,7 @@
-from io import BytesIO
 import base64
+from io import BytesIO
+
+import pytest
 from types import SimpleNamespace
 
 from pptx import Presentation
@@ -220,6 +222,30 @@ def test_html_content_embeds_one_full_slide_browser_image(monkeypatch):
     picture = next(shape for shape in slide.shapes if shape.shape_type == 13)
     assert picture.left == 0 and picture.top == 0
     assert picture.width == Inches(13.333) and picture.height == Inches(7.5)
+
+
+def test_editable_export_writes_real_shapes_instead_of_a_slide_picture(monkeypatch):
+    # The default screenshot matches the HTML exactly, but exports one flat picture
+    # per slide: the recipient cannot revise a single word. `editable` asks for the
+    # same content as shapes and text.
+    monkeypatch.setattr(
+        "apps.renderer.src.generators.pptx_generator.render_slide_png",
+        lambda html: pytest.fail("editable export must not screenshot the slide"),
+    )
+    template = SimpleNamespace(config={"htmlSlides": [
+        '<div class="slide-container" style="width:1920px;height:1080px">'
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:120px;top:300px;width:800px;height:400px;background:#EEF1FB"></div>'
+        '<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1400px;height:90px;font-size:56px;color:#1A1A1A">제목</div>'
+        '</div>',
+    ]})
+
+    output = PPTXGenerator(template, editable=True).generate(_presentation(_slide(
+        "CONTENT", "보고", {"html": "<main data-object=\"true\">무시되어야 함</main>", "heading": "주간 보고"},
+    )))
+
+    shapes = Presentation(BytesIO(output)).slides[0].shapes
+    assert all(shape.shape_type != 13 for shape in shapes), "no slide-sized picture"
+    assert any(shape.has_text_frame and shape.text_frame.text for shape in shapes), "text must be real text"
 
 
 def test_html_template_chooses_layouts_by_slide_type_not_first_n_slides():

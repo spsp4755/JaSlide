@@ -75,6 +75,10 @@ class Presentation(BaseModel):
 
 class RenderRequest(BaseModel):
     presentation: Presentation
+    # HTML-template decks export as one picture per slide by default, which matches the
+    # design exactly but cannot be revised once it leaves JaSlide. Ask for editable and
+    # the same objects are written as real shapes and text instead.
+    editable: bool = False
 
 
 class PreviewRequest(BaseModel):
@@ -174,7 +178,7 @@ async def extract_content(file: UploadFile = File(...)):
 async def render_pptx(request: RenderRequest):
     """Generate PPTX file from presentation data"""
     try:
-        generator = PPTXGenerator(template_config=request.presentation.template)
+        generator = PPTXGenerator(template_config=request.presentation.template, editable=request.editable)
         pptx_buffer = await asyncio.to_thread(generator.generate, request.presentation)
 
         return StreamingResponse(
