@@ -18,6 +18,7 @@ import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
+import { RESIZE_HANDLES, resizeBox, nudgeBox, type ResizeHandle } from '@/lib/object-transform';
 import {
     ArrowLeft,
     Save,
@@ -25,6 +26,8 @@ import {
     Share2,
     Plus,
     Trash2,
+    BringToFront,
+    SendToBack,
     Copy,
     MoreVertical,
     Sparkles,
@@ -571,13 +574,29 @@ export default function EditorPage() {
                 else if (selectedSlideId) handleDuplicateSlide();
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
-                deleteSelectedHtmlObject();
+                // A selected PPTX object could only be removed from the side panel;
+                // the key everyone reaches for did nothing.
+                if (selectedNativeObjectId) deleteNativeObject();
+                else deleteSelectedHtmlObject();
+            } else if (selectedNativeObject && e.key.startsWith('Arrow')) {
+                // Nudging is how you line objects up without retyping coordinates.
+                const edit = (selectedSlide?.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObjectId) || {};
+                const box = nudgeBox({
+                    left: edit.left ?? selectedNativeObject.left ?? 0,
+                    top: edit.top ?? selectedNativeObject.top ?? 0,
+                    width: edit.width ?? selectedNativeObject.width ?? 0,
+                    height: edit.height ?? selectedNativeObject.height ?? 0,
+                }, e.key, e.shiftKey);
+                if (box) {
+                    e.preventDefault();
+                    updateNativeObject(selectedNativeObjectId!, { left: box.left, top: box.top });
+                }
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [canUndo, canRedo, undo, redo, selectedSlideId, selectedHtmlTextIndex, selectedSlide]);
+    }, [canUndo, canRedo, undo, redo, selectedSlideId, selectedHtmlTextIndex, selectedSlide, selectedNativeObjectId, selectedNativeObject]);
 
     useEffect(() => {
         // Wait for hydration before checking auth
@@ -1288,7 +1307,14 @@ export default function EditorPage() {
                                         <label className="text-xs text-gray-600">테두리<input type="color" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.lineColor ?? selectedNativeObject.lineColor ?? '#202124'} onChange={(event) => updateNativeObject(selectedNativeObject.id, { lineColor: event.target.value })} className="mt-1 h-8 w-full rounded border p-1" /></label>
                                         <label className="text-xs text-gray-600">선 굵기<input type="number" min="0" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.lineWidth ?? selectedNativeObject.lineWidth ?? 1} onChange={(event) => updateNativeObject(selectedNativeObject.id, { lineWidth: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
                                     </div>}
-                                    <Button type="button" variant="destructive" size="sm" className="w-full" onClick={deleteNativeObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제</Button>
+                                    {/* Overlapping objects are the norm on a slide, so being able to
+                                        reach the one underneath is basic, not advanced. */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => updateNativeObject(selectedNativeObject.id, { order: 'front' })}><BringToFront className="mr-1 h-4 w-4" /> 맨 앞으로</Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => updateNativeObject(selectedNativeObject.id, { order: 'back' })}><SendToBack className="mr-1 h-4 w-4" /> 맨 뒤로</Button>
+                                    </div>
+                                    <Button type="button" variant="destructive" size="sm" className="w-full" onClick={deleteNativeObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제 <span className="ml-1 text-xs opacity-70">Delete</span></Button>
+                                    <p className="text-xs text-gray-500">방향키로 1px, Shift+방향키로 10px 이동합니다.</p>
                                     <div className="grid grid-cols-2 gap-2">
                                         {(['left', 'top', 'width', 'height'] as const).map((property) => <label key={property} className="text-xs text-gray-600">{{ left: 'X', top: 'Y', width: 'W', height: 'H' }[property]}<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.[property] ?? selectedNativeObject[property] ?? 0} onChange={(event) => updateNativeObject(selectedNativeObject.id, { [property]: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>)}
                                     </div>
@@ -1755,7 +1781,8 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         );
     }
 
-    const startHtmlTransform = (event: any, index: number, resizing: boolean) => {
+    // `handle` null means drag the whole object; otherwise resize from that edge.
+    const startHtmlTransform = (event: any, index: number, handle: ResizeHandle | null) => {
         event.preventDefault();
         event.stopPropagation();
         const canvas = (event.currentTarget as HTMLElement).closest('[data-html-canvas]') as HTMLElement | null;
@@ -1773,9 +1800,11 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         const move = (moveEvent: PointerEvent) => {
             const dx = (moveEvent.clientX - startX) * 1920 / bounds.width;
             const dy = (moveEvent.clientY - startY) * 1080 / bounds.height;
-            const updates = resizing
-                ? { width: String(Math.max(40, Math.round(initial.width + dx))), height: String(Math.max(24, Math.round(initial.height + dy))) }
-                : { left: String(Math.round(initial.left + dx)), top: String(Math.round(initial.top + dy)) };
+            const box = handle
+                ? resizeBox(initial, handle, dx, dy)
+                : { ...initial, left: Math.round(initial.left + dx), top: Math.round(initial.top + dy) };
+            const changed = handle ? ['left', 'top', 'width', 'height'] as const : ['left', 'top'] as const;
+            const updates = Object.fromEntries(changed.map((key) => [key, String(box[key])]));
             onUpdate({ content: { ...content, html: updateHtmlText(content.html, index, updates) } });
         };
         const stop = () => {
@@ -1786,7 +1815,8 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         window.addEventListener('pointerup', stop, { once: true });
     };
 
-    const startNativeTransform = (event: any, object: any, resizing: boolean) => {
+    // `handle` null means drag the whole object; otherwise resize from that edge.
+    const startNativeTransform = (event: any, object: any, handle: ResizeHandle | null) => {
         event.preventDefault();
         event.stopPropagation();
         const canvas = (event.currentTarget as HTMLElement).closest('[data-html-canvas]') as HTMLElement | null;
@@ -1799,7 +1829,9 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         const move = (moveEvent: PointerEvent) => {
             const dx = (moveEvent.clientX - startX) * 1920 / bounds.width;
             const dy = (moveEvent.clientY - startY) * 1080 / bounds.height;
-            const transform = resizing ? { width: Math.max(40, Math.round(initial.width + dx)), height: Math.max(24, Math.round(initial.height + dy)) } : { left: Math.round(initial.left + dx), top: Math.round(initial.top + dy) };
+            const transform = handle
+                ? resizeBox(initial, handle, dx, dy)
+                : { left: Math.round(initial.left + dx), top: Math.round(initial.top + dy) };
             const objectEdits = [...(content.objectEdits || [])];
             const index = objectEdits.findIndex((item: any) => item.objectId === object.id);
             if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...transform };
@@ -1831,7 +1863,7 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
                     const width = edit.width ?? object.width ?? 0;
                     const height = edit.height ?? object.height ?? 0;
                     const selected = selectedNativeObjectId === object.id;
-                    return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }} onDoubleClick={(event) => {
+                    return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, null); }} onDoubleClick={(event) => {
                         // Shapes carry text too, the way they do in Google Slides: an
                         // autoshape has a text frame and the renderer already writes
                         // `text` into whichever object the edit targets.
@@ -1887,13 +1919,21 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
                                         data-native-table-cell
                                         // Hit target only, unless the preview still lags this edit.
                                         className={`overflow-hidden border border-transparent p-1 text-xs leading-tight hover:border-purple-400/70 ${previewStale && edit.cells ? 'bg-white' : ''}`}
-                                        onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, false); }}
+                                        onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, null); }}
                                         onDoubleClick={(event) => { event.preventDefault(); event.stopPropagation(); onSelectNativeObject(object.id); setEditingNativeCell({ objectId: object.id, row: rowIndex, col: colIndex }); }}
                                     >{previewStale && edit.cells ? cellText : ''}</div>;
                                 }))}
                             </div>;
                         })()}
-                        {selected && <button type="button" aria-label="native object resize" className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-sm border border-purple-700 bg-white" onPointerDown={(event) => startNativeTransform(event, object, true)} />}
+                        {selected && RESIZE_HANDLES.map(({ handle, label, cursor, position }) => (
+                            <button
+                                key={handle}
+                                type="button"
+                                aria-label={`크기 조절 ${label}`}
+                                className={`absolute ${position} ${cursor} h-3 w-3 rounded-sm border border-purple-700 bg-white`}
+                                onPointerDown={(event) => startNativeTransform(event, object, handle)}
+                            />
+                        ))}
                     </div>;
                 })}
                 {htmlSelectionAreas.map((area) => {
@@ -1906,7 +1946,7 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
                         style={{ left: `${(parseFloat(area.left) || 0) / 19.2}%`, top: `${(parseFloat(area.top) || 0) / 10.8}%`, width: `${Math.max(1, parseFloat(area.width) || 0) / 19.2}%`, height: `${Math.max(1, parseFloat(area.height) || 0) / 10.8}%` }}
                         onPointerDown={(event) => {
                             onSelectHtmlText(area.index);
-                            if (field.positionable) startHtmlTransform(event, area.index, false);
+                            if (field.positionable) startHtmlTransform(event, area.index, null);
                         }}
                         onDoubleClick={(event) => {
                             if (field.objectType === 'shape' || field.objectType === 'image') return;
@@ -1930,16 +1970,18 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
                             className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white/95 p-1 text-inherit leading-tight outline-none"
                             style={{ color: field.color, fontFamily: field.fontFamily, fontSize: `${Math.max(12, (parseFloat(field.fontSize) || 24) / 4)}px`, textAlign: field.textAlign as any }}
                         />}
-                        {selectedHtmlTextIndex === area.index && field.positionable && <button
-                            type="button"
-                            aria-label="텍스트 크기 조절"
-                            className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-sm border border-purple-700 bg-white"
-                            onPointerDown={(event) => {
-                                onSelectHtmlText(area.index);
-                                startHtmlTransform(event, area.index, true);
-                            }}
-                        />
-                        }
+                        {selectedHtmlTextIndex === area.index && field.positionable && RESIZE_HANDLES.map(({ handle, label, cursor, position }) => (
+                            <button
+                                key={handle}
+                                type="button"
+                                aria-label={`크기 조절 ${label}`}
+                                className={`absolute ${position} ${cursor} h-3 w-3 rounded-sm border border-purple-700 bg-white`}
+                                onPointerDown={(event) => {
+                                    onSelectHtmlText(area.index);
+                                    startHtmlTransform(event, area.index, handle);
+                                }}
+                            />
+                        ))}
                     </div>
                     );
                 })}

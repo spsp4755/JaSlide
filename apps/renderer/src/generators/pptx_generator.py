@@ -325,6 +325,16 @@ class PPTXGenerator:
             shape.line.color.rgb = RGBColor.from_string(edit["lineColor"].lstrip("#").upper())
         if isinstance(edit.get("lineWidth"), (int, float)):
             shape.line.width = int(max(0, edit["lineWidth"]) * 12700)
+        # Z-order is the shape's position in the slide's shape tree. Without this an
+        # object could be moved but never pulled out from under an overlapping one.
+        if edit.get("order") in ("front", "back"):
+            tree = shape._element.getparent()
+            tree.remove(shape._element)
+            if edit["order"] == "front":
+                tree.append(shape._element)
+            else:
+                # index 2 skips the tree's required non-shape children (nvGrpSpPr, grpSpPr).
+                tree.insert(2, shape._element)
         cells = edit.get("cells")
         if isinstance(cells, list) and getattr(shape, "has_table", False):
             for row_index, row in enumerate(cells):

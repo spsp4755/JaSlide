@@ -634,6 +634,29 @@ def test_an_inserted_shape_keeps_the_text_typed_into_it_on_the_canvas():
     assert shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE and shape.text_frame.text == "핵심 지표"
 
 
+def test_an_object_can_be_pulled_in_front_of_or_behind_the_others():
+    # Overlapping objects are normal on a slide; without this an object could be
+    # moved but never pulled out from under the one covering it.
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    first = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))
+    middle = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(2), Inches(1), Inches(2), Inches(1))
+    slide.shapes.add_shape(MSO_SHAPE.DIAMOND, Inches(3), Inches(1), Inches(2), Inches(1))
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [
+            {"slide": 0, "objectId": str(middle.shape_id), "order": "front"},
+            {"slide": 0, "objectId": str(first.shape_id), "order": "back"},
+        ],
+    })))
+
+    shapes = Presentation(BytesIO(output)).slides[0].shapes
+    assert shapes[0].shape_id == first.shape_id, "sent to back must be drawn first"
+    assert shapes[-1].shape_id == middle.shape_id, "brought to front must be drawn last"
+    assert len(shapes) == 3
+
+
 def test_unknown_shape_names_fall_back_to_a_rectangle_instead_of_failing():
     source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
     buffer = BytesIO(); source.save(buffer)

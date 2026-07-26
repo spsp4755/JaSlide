@@ -158,6 +158,23 @@ test('the admin template screen speaks Korean throughout', () => {
     assert.deepEqual(english, []);
 });
 
+test('manual editing has the handles, keys and stacking Google Slides users expect', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // Both canvases draw the same eight-handle ring; a single bottom-right handle
+    // meant an object could only ever grow down and right.
+    assert.equal((editor.match(/RESIZE_HANDLES\.map/g) || []).length, 2);
+    assert.match(editor, /startNativeTransform\(event, object, handle\)/);
+    assert.match(editor, /startHtmlTransform\(event, area\.index, handle\)/);
+
+    // Delete used to only remove HTML objects, so a selected PPTX object ignored the key.
+    assert.match(editor, /if \(selectedNativeObjectId\) deleteNativeObject\(\)/);
+    assert.match(editor, /nudgeBox\(/);
+    // Z-order: reaching the object underneath an overlapping one.
+    assert.match(editor, /order: 'front'/);
+    assert.match(editor, /order: 'back'/);
+});
+
 test('shapes accept in-slide text editing, like Google Slides', () => {
     const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
     const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
