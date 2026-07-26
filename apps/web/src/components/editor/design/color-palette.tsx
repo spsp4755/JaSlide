@@ -112,7 +112,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
         <div className="space-y-4">
             {/* 헤더 */}
             <div className="flex items-center justify-between">
-                <label className="block text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                <label className="block text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                     <Palette className="h-3.5 w-3.5" />
                     컬러 팔레트
                 </label>
@@ -126,7 +126,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
             </div>
 
             {/* 현재 선택된 색상 */}
-            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2 p-2 bg-secondary rounded-lg">
                 <div
                     className="w-10 h-10 rounded-lg border-2 border-white shadow-sm"
                     style={{ backgroundColor: customColor }}
@@ -144,7 +144,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
                         className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
                         placeholder="#000000"
                     />
-                    <span className="text-xs text-gray-400 mt-0.5 block">
+                    <span className="text-xs text-muted-foreground mt-0.5 block">
                         {hexToRgb(customColor)}
                     </span>
                 </div>
@@ -158,7 +158,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
 
             {/* 프리셋 색상 */}
             <div>
-                <span className="text-xs text-gray-500 mb-1.5 block">빠른 선택</span>
+                <span className="text-xs text-muted-foreground mb-1.5 block">빠른 선택</span>
                 <div className="flex flex-wrap gap-1">
                     {PRESET_COLORS.map((color) => (
                         <button
@@ -172,7 +172,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
                             title={color}
                         >
                             {customColor === color && (
-                                <Check className={`w-4 h-4 mx-auto ${color === '#FFFFFF' || color === '#E4E4E7' ? 'text-gray-800' : 'text-white'
+                                <Check className={`w-4 h-4 mx-auto ${color === '#FFFFFF' || color === '#E4E4E7' ? 'text-foreground' : 'text-white'
                                     }`} />
                             )}
                         </button>
@@ -182,18 +182,18 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
 
             {/* 브랜드 팔레트 */}
             <div className="space-y-2">
-                <span className="text-xs text-gray-500 block">브랜드 팔레트</span>
+                <span className="text-xs text-muted-foreground block">브랜드 팔레트</span>
                 {palettes.map((palette) => (
                     <div
                         key={palette.id}
                         className={`p-2 rounded-lg border transition-colors cursor-pointer ${selectedPalette === palette.id
                                 ? 'border-purple-300 bg-purple-50'
-                                : 'border-gray-200 hover:border-gray-300'
+                                : 'border-border hover:border-border'
                             }`}
                         onClick={() => handlePaletteSelect(palette.id)}
                     >
                         <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-medium text-gray-700">
+                            <span className="text-xs font-medium text-foreground">
                                 {palette.name}
                                 {palette.isPrimary && (
                                     <span className="ml-1.5 text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">
@@ -233,7 +233,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
 
                     <div className="flex flex-wrap gap-1 min-h-[32px]">
                         {newPaletteColors.length === 0 ? (
-                            <span className="text-xs text-gray-400">색상을 추가하세요</span>
+                            <span className="text-xs text-muted-foreground">색상을 추가하세요</span>
                         ) : (
                             newPaletteColors.map((color, idx) => (
                                 <div key={idx} className="relative group">
@@ -255,7 +255,7 @@ export function ColorPalette({ value, onChange, onSavePalette }: ColorPalettePro
                     <div className="flex gap-2">
                         <button
                             onClick={handleAddToPalette}
-                            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-white border rounded hover:bg-gray-50"
+                            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-card border rounded hover:bg-secondary"
                         >
                             <Plus className="h-3 w-3" />
                             현재 색상 추가

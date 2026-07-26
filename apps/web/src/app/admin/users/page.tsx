@@ -68,20 +68,20 @@ export default function AdminUsersPage() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">사용자 관리</h1>
-                    <p className="text-sm text-gray-500">총 {total}명의 사용자</p>
+                    <h1 className="text-2xl font-bold text-foreground">사용자 관리</h1>
+                    <p className="text-sm text-muted-foreground">총 {total}명의 사용자</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                     <Plus size={20} />
                     사용자 추가
                 </button>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-lg p-4 mb-6 shadow-sm">
+            <div className="bg-card rounded-lg p-4 mb-6 shadow-sm">
                 <form onSubmit={handleSearch} className="flex items-center gap-4">
                     <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                         <input
                             type="text"
                             placeholder="이메일 또는 이름으로 검색..."
@@ -113,47 +113,47 @@ export default function AdminUsersPage() {
                         <option value="SUSPENDED">정지</option>
                     </select>
 
-                    <button type="submit" className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    <button type="submit" className="px-4 py-2 bg-secondary rounded-lg hover:bg-muted">
                         <Filter size={20} />
                     </button>
 
-                    <button type="button" onClick={fetchUsers} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    <button type="button" onClick={fetchUsers} className="px-4 py-2 bg-secondary rounded-lg hover:bg-muted">
                         <RefreshCw size={20} />
                     </button>
                 </form>
             </div>
 
             {/* Users Table */}
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-card rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : (
                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
+                        <thead className="bg-secondary border-b">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용자</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">역할</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">조직</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">최근 로그인</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">작업</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">사용자</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">역할</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">상태</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">조직</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">최근 로그인</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">작업</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-border">
                             {users.map((user) => (
-                                <tr key={user.id} className="hover:bg-gray-50">
+                                <tr key={user.id} className="hover:bg-secondary">
                                     <td className="px-6 py-4">
                                         <div>
-                                            <div className="font-medium text-gray-900">{user.name || '-'}</div>
-                                            <div className="text-sm text-gray-500">{user.email}</div>
+                                            <div className="font-medium text-foreground">{user.name || '-'}</div>
+                                            <div className="text-sm text-muted-foreground">{user.email}</div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 text-xs rounded-full ${user.role === 'ADMIN' ? 'bg-gray-100 text-gray-800' :
+                                        <span className={`px-2 py-1 text-xs rounded-full ${user.role === 'ADMIN' ? 'bg-secondary text-foreground' :
                                             user.role === 'ORG_ADMIN' ? 'bg-blue-100 text-blue-800' :
-                                                'bg-gray-100 text-gray-800'
+                                                'bg-secondary text-foreground'
                                             }`}>
                                             {user.role}
                                         </span>
@@ -161,20 +161,20 @@ export default function AdminUsersPage() {
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs rounded-full ${user.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
                                             user.status === 'SUSPENDED' ? 'bg-red-100 text-red-800' :
-                                                'bg-gray-100 text-gray-800'
+                                                'bg-secondary text-foreground'
                                             }`}>
                                             {user.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">
                                         {user.organization?.name || '-'}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">
                                         {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('ko-KR') : '-'}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button className="p-1 hover:bg-gray-100 rounded">
-                                            <MoreVertical size={16} className="text-gray-500" />
+                                        <button className="p-1 hover:bg-secondary rounded">
+                                            <MoreVertical size={16} className="text-muted-foreground" />
                                         </button>
                                     </td>
                                 </tr>
@@ -186,7 +186,7 @@ export default function AdminUsersPage() {
                 {/* Pagination */}
                 {total > limit && (
                     <div className="px-6 py-4 border-t flex items-center justify-between">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             {(page - 1) * limit + 1} - {Math.min(page * limit, total)} / {total}
                         </p>
                         <div className="flex gap-2">

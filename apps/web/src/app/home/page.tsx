@@ -29,11 +29,11 @@ export default function WorkspaceHomePage() {
     };
 
     if (!hasHydrated || !isAuthenticated) {
-        return <div className="min-h-screen bg-white" />;
+        return <div className="min-h-screen bg-card" />;
     }
 
     return (
-        <div className="min-h-screen bg-white text-zinc-950">
+        <div className="min-h-screen bg-card text-zinc-950">
             <aside className="fixed inset-y-0 left-0 z-10 flex w-14 flex-col items-center border-r border-zinc-200 bg-zinc-50 py-3">
                 <Link href="/home" aria-label="TaeSlide 홈" className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950 text-white">
                     <Sparkles className="h-4 w-4" />
@@ -42,7 +42,7 @@ export default function WorkspaceHomePage() {
                     <button type="button" onClick={openSlides} className="flex w-11 flex-col items-center gap-1 rounded-lg py-1 hover:bg-zinc-200" aria-label="새 AI 슬라이드">
                         <Plus className="h-5 w-5" /><span>새로</span>
                     </button>
-                    <Link href="/home" className="flex w-11 flex-col items-center gap-1 rounded-lg bg-white py-1 text-zinc-950 shadow-sm" aria-current="page">
+                    <Link href="/home" className="flex w-11 flex-col items-center gap-1 rounded-lg bg-card py-1 text-zinc-950 shadow-sm" aria-current="page">
                         <Home className="h-4 w-4 fill-current" /><span>홈</span>
                     </Link>
                     <Link href="/skills" className="flex w-11 flex-col items-center gap-1 rounded-lg py-1 hover:bg-zinc-200">
@@ -56,7 +56,7 @@ export default function WorkspaceHomePage() {
                 </Link>
             </aside>
 
-            <header className="fixed inset-x-14 top-0 z-10 flex h-14 items-center border-b border-zinc-200 bg-white px-6">
+            <header className="fixed inset-x-14 top-0 z-10 flex h-14 items-center border-b border-zinc-200 bg-card px-6">
                 <Menu className="h-5 w-5 text-zinc-600" />
                 <span className="ml-4 text-sm font-semibold tracking-tight">TaeSlide Workspace</span>
             </header>
@@ -64,7 +64,7 @@ export default function WorkspaceHomePage() {
             <main className="ml-14 flex min-h-screen flex-col items-center px-6 pt-14">
                 <section className="flex w-full max-w-5xl flex-1 flex-col items-center justify-center pb-28">
                     <h1 className="mb-9 text-center text-4xl font-bold tracking-[-0.04em] sm:text-5xl">TaeSlide AI 워크스페이스</h1>
-                    <div className="w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-3 shadow-[0_16px_38px_rgba(0,0,0,0.06)]">
+                    <div className="w-full max-w-3xl rounded-2xl border border-zinc-200 bg-card p-3 shadow-[0_16px_38px_rgba(0,0,0,0.06)]">
                         <textarea
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
@@ -87,7 +87,7 @@ export default function WorkspaceHomePage() {
                         {apps.map(({ name, description, icon: Icon, href, active }) => (
                             active ? (
                                 <Link key={name} href={href!} className="group flex flex-col items-center px-5 py-4 text-center">
-                                    <span className="grid h-14 w-14 place-items-center rounded-2xl border-2 border-zinc-950 bg-white transition-transform group-hover:-translate-y-1"><Icon className="h-7 w-7" /></span>
+                                    <span className="grid h-14 w-14 place-items-center rounded-2xl border-2 border-zinc-950 bg-card transition-transform group-hover:-translate-y-1"><Icon className="h-7 w-7" /></span>
                                     <span className="mt-3 text-sm font-semibold">{name}</span><span className="mt-1 text-xs text-zinc-500">{description}</span>
                                     <span className="mt-3 text-xs font-medium text-zinc-950">● 사용 가능</span>
                                 </Link>

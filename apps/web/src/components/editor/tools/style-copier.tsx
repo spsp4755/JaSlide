@@ -79,10 +79,10 @@ export function StyleCopier({
                 {/* 스타일 복사 버튼 */}
                 <button
                     onClick={onCopyStyle}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-border hover:bg-secondary transition-colors"
                 >
-                    <Copy className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm text-gray-700">스타일 복사</span>
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-foreground">스타일 복사</span>
                 </button>
 
                 {/* 스타일 적용 버튼 */}
@@ -91,7 +91,7 @@ export function StyleCopier({
                     disabled={!hasCopiedStyle}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border transition-colors ${hasCopiedStyle
                             ? 'border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-700'
-                            : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'border-border bg-secondary text-muted-foreground cursor-not-allowed'
                         }`}
                 >
                     <Paintbrush className="h-4 w-4" />
@@ -103,13 +103,13 @@ export function StyleCopier({
             <div
                 className={`p-3 rounded-lg border-2 transition-all ${isActive
                         ? 'border-purple-400 bg-purple-50'
-                        : 'border-dashed border-gray-300 bg-gray-50'
+                        : 'border-dashed border-border bg-secondary'
                     }`}
             >
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                        <Paintbrush className={`h-4 w-4 ${isActive ? 'text-purple-600' : 'text-gray-500'}`} />
-                        <span className={`text-sm font-medium ${isActive ? 'text-purple-700' : 'text-gray-600'}`}>
+                        <Paintbrush className={`h-4 w-4 ${isActive ? 'text-purple-600' : 'text-muted-foreground'}`} />
+                        <span className={`text-sm font-medium ${isActive ? 'text-purple-700' : 'text-muted-foreground'}`}>
                             서식 복사 모드
                         </span>
                     </div>
@@ -126,14 +126,14 @@ export function StyleCopier({
                             disabled={!hasCopiedStyle}
                             className={`px-2 py-1 text-xs rounded ${hasCopiedStyle
                                     ? 'bg-purple-600 text-white hover:bg-purple-700'
-                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-gray-300 text-muted-foreground cursor-not-allowed'
                                 }`}
                         >
                             활성화
                         </button>
                     )}
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                     {isActive
                         ? '요소를 클릭하면 스타일이 적용됩니다'
                         : '스타일을 복사한 후 활성화하세요'}
@@ -145,29 +145,29 @@ export function StyleCopier({
                 <div className="space-y-2">
                     <button
                         onClick={() => setShowDetails(!showDetails)}
-                        className="w-full flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="w-full flex items-center justify-between p-2 bg-secondary rounded-lg hover:bg-secondary transition-colors"
                     >
                         <div className="flex items-center gap-2">
                             <Check className="h-3.5 w-3.5 text-green-500" />
-                            <span className="text-xs text-gray-600">
+                            <span className="text-xs text-muted-foreground">
                                 복사됨: {getStyleSummary()}
                             </span>
                         </div>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                             {showDetails ? '접기' : '자세히'}
                         </span>
                     </button>
 
                     {showDetails && (
-                        <div className="p-3 bg-gray-100 rounded-lg space-y-3 text-xs">
+                        <div className="p-3 bg-secondary rounded-lg space-y-3 text-xs">
                             {/* 텍스트 스타일 */}
                             {copiedStyle.text && (
                                 <div>
-                                    <div className="flex items-center gap-1 mb-1.5 text-gray-600 font-medium">
+                                    <div className="flex items-center gap-1 mb-1.5 text-muted-foreground font-medium">
                                         <TypeIcon className="h-3 w-3" />
                                         텍스트
                                     </div>
-                                    <div className="grid grid-cols-2 gap-1 text-gray-500">
+                                    <div className="grid grid-cols-2 gap-1 text-muted-foreground">
                                         {copiedStyle.text.fontFamily && (
                                             <span>폰트: {copiedStyle.text.fontFamily}</span>
                                         )}
@@ -193,11 +193,11 @@ export function StyleCopier({
                             {/* 채우기 스타일 */}
                             {copiedStyle.fill && (
                                 <div>
-                                    <div className="flex items-center gap-1 mb-1.5 text-gray-600 font-medium">
+                                    <div className="flex items-center gap-1 mb-1.5 text-muted-foreground font-medium">
                                         <Droplet className="h-3 w-3" />
                                         채우기
                                     </div>
-                                    <div className="grid grid-cols-2 gap-1 text-gray-500">
+                                    <div className="grid grid-cols-2 gap-1 text-muted-foreground">
                                         {copiedStyle.fill.backgroundColor && (
                                             <div className="flex items-center gap-1">
                                                 배경:
@@ -220,11 +220,11 @@ export function StyleCopier({
                             {/* 레이아웃 스타일 */}
                             {copiedStyle.layout && (
                                 <div>
-                                    <div className="flex items-center gap-1 mb-1.5 text-gray-600 font-medium">
+                                    <div className="flex items-center gap-1 mb-1.5 text-muted-foreground font-medium">
                                         <LayoutIcon className="h-3 w-3" />
                                         레이아웃
                                     </div>
-                                    <div className="grid grid-cols-2 gap-1 text-gray-500">
+                                    <div className="grid grid-cols-2 gap-1 text-muted-foreground">
                                         {copiedStyle.layout.textAlign && (
                                             <span>정렬: {copiedStyle.layout.textAlign}</span>
                                         )}

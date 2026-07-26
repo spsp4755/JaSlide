@@ -102,10 +102,10 @@ export default function AdminRolesPage() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">권한 관리</h1>
-                    <p className="text-sm text-gray-500">역할 및 권한 설정</p>
+                    <h1 className="text-2xl font-bold text-foreground">권한 관리</h1>
+                    <p className="text-sm text-muted-foreground">역할 및 권한 설정</p>
                 </div>
-                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
+                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                     <Plus size={20} />
                     역할 추가
                 </button>
@@ -119,21 +119,21 @@ export default function AdminRolesPage() {
                     </div>
                 ) : (
                     roles.map((role) => (
-                        <div key={role.id} className="bg-white rounded-lg shadow-sm p-6">
+                        <div key={role.id} className="bg-card rounded-lg shadow-sm p-6">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${role.isSystem ? 'bg-orange-100' : 'bg-gray-100'}`}>
-                                        <Shield className={role.isSystem ? 'text-orange-600' : 'text-gray-900'} size={20} />
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${role.isSystem ? 'bg-orange-100' : 'bg-secondary'}`}>
+                                        <Shield className={role.isSystem ? 'text-orange-600' : 'text-foreground'} size={20} />
                                     </div>
                                     <div>
-                                        <h3 className="font-semibold text-gray-900">{role.name}</h3>
+                                        <h3 className="font-semibold text-foreground">{role.name}</h3>
                                         {role.isSystem && <span className="text-xs text-orange-600">시스템 역할</span>}
                                     </div>
                                 </div>
                                 {!role.isSystem && (
                                     <div className="flex gap-1">
-                                        <button onClick={() => openEditModal(role)} className="p-1.5 hover:bg-gray-100 rounded">
-                                            <Edit size={16} className="text-gray-500" />
+                                        <button onClick={() => openEditModal(role)} className="p-1.5 hover:bg-secondary rounded">
+                                            <Edit size={16} className="text-muted-foreground" />
                                         </button>
                                         <button onClick={() => deleteRole(role.id)} className="p-1.5 hover:bg-red-50 rounded">
                                             <Trash2 size={16} className="text-red-500" />
@@ -142,14 +142,14 @@ export default function AdminRolesPage() {
                                 )}
                             </div>
 
-                            <p className="text-sm text-gray-500 mb-4">{role.description || '설명 없음'}</p>
+                            <p className="text-sm text-muted-foreground mb-4">{role.description || '설명 없음'}</p>
 
                             <div className="flex items-center justify-between text-sm">
-                                <div className="flex items-center gap-1 text-gray-500">
+                                <div className="flex items-center gap-1 text-muted-foreground">
                                     <Users size={16} />
                                     <span>{role._count.users}명</span>
                                 </div>
-                                <span className="text-gray-900">{role.permissions.length}개 권한</span>
+                                <span className="text-foreground">{role.permissions.length}개 권한</span>
                             </div>
                         </div>
                     ))
@@ -159,11 +159,11 @@ export default function AdminRolesPage() {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="bg-card rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                         <h2 className="text-lg font-semibold mb-4">{editingRole ? '역할 수정' : '역할 추가'}</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">역할 이름</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">역할 이름</label>
                                 <input
                                     type="text"
                                     value={formData.name}
@@ -173,7 +173,7 @@ export default function AdminRolesPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">설명</label>
                                 <input
                                     type="text"
                                     value={formData.description}
@@ -182,15 +182,15 @@ export default function AdminRolesPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">권한</label>
-                                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-lg bg-gray-50">
+                                <label className="block text-sm font-medium text-foreground mb-2">권한</label>
+                                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-lg bg-secondary">
                                     {allPermissions.map((perm) => (
                                         <label key={perm} className="flex items-center gap-2 text-sm cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={formData.permissions.includes(perm)}
                                                 onChange={() => togglePermission(perm)}
-                                                className="rounded text-gray-900"
+                                                className="rounded text-foreground"
                                             />
                                             <span>{perm}</span>
                                         </label>
@@ -201,7 +201,7 @@ export default function AdminRolesPage() {
                                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border rounded-lg">
                                     취소
                                 </button>
-                                <button type="submit" className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
+                                <button type="submit" className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                                     {editingRole ? '수정' : '추가'}
                                 </button>
                             </div>

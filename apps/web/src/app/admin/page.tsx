@@ -100,8 +100,8 @@ export default function AdminDashboard() {
     return (
         <div className="p-6">
             <header className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-900">관리자 대시보드</h1>
-                <p className="text-sm text-gray-500">JaSlide 시스템 현황</p>
+                <h1 className="text-2xl font-bold text-foreground">관리자 대시보드</h1>
+                <p className="text-sm text-muted-foreground">JaSlide 시스템 현황</p>
             </header>
 
             {/* Stats Grid */}
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
                     title="총 프레젠테이션"
                     value={stats?.totalPresentations.toLocaleString() || '0'}
                     change="+23%"
-                    icon={<FileText className="h-6 w-6 text-gray-500" />}
+                    icon={<FileText className="h-6 w-6 text-muted-foreground" />}
                     trend="up"
                 />
                 <StatCard
@@ -138,39 +138,39 @@ export default function AdminDashboard() {
 
             {/* Secondary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className="bg-white rounded-lg p-6 shadow-sm">
+                <div className="bg-card rounded-lg p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-medium text-gray-700">시스템 상태</h3>
+                        <h3 className="font-medium text-foreground">시스템 상태</h3>
                         <CheckCircle2 className="h-5 w-5 text-green-500" />
                     </div>
                     <p className="text-3xl font-bold text-green-600">정상</p>
-                    <p className="text-sm text-gray-500 mt-1">모든 서비스 운영 중</p>
+                    <p className="text-sm text-muted-foreground mt-1">모든 서비스 운영 중</p>
                 </div>
 
-                <div className="bg-white rounded-lg p-6 shadow-sm">
+                <div className="bg-card rounded-lg p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-medium text-gray-700">오류율</h3>
+                        <h3 className="font-medium text-foreground">오류율</h3>
                         <AlertTriangle className="h-5 w-5 text-yellow-500" />
                     </div>
-                    <p className="text-3xl font-bold text-gray-900">{stats?.errorRate}%</p>
-                    <p className="text-sm text-gray-500 mt-1">최근 24시간</p>
+                    <p className="text-3xl font-bold text-foreground">{stats?.errorRate}%</p>
+                    <p className="text-sm text-muted-foreground mt-1">최근 24시간</p>
                 </div>
             </div>
 
             {/* System Health */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h3 className="font-medium text-gray-900 mb-4">서비스 상태</h3>
+            <div className="bg-card rounded-lg p-6 shadow-sm">
+                <h3 className="font-medium text-foreground mb-4">서비스 상태</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {Object.entries(health).map(([name, status]) => (
-                        <div key={name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={name} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                             <div className="flex items-center gap-3">
                                 <div
                                     className={`h-2.5 w-2.5 rounded-full ${status.status === 'up' ? 'bg-green-500' : 'bg-red-500'
                                         }`}
                                 />
-                                <span className="font-medium text-gray-700 capitalize">{name}</span>
+                                <span className="font-medium text-foreground capitalize">{name}</span>
                             </div>
-                            <span className="text-sm text-gray-500">{status.latency}ms</span>
+                            <span className="text-sm text-muted-foreground">{status.latency}ms</span>
                         </div>
                     ))}
                 </div>
@@ -178,18 +178,18 @@ export default function AdminDashboard() {
 
             {/* Recent Activity */}
             {activities.length > 0 && (
-                <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
-                    <h3 className="font-medium text-gray-900 mb-4">최근 활동</h3>
+                <div className="mt-8 bg-card rounded-lg p-6 shadow-sm">
+                    <h3 className="font-medium text-foreground mb-4">최근 활동</h3>
                     <div className="space-y-3">
                         {activities.slice(0, 5).map((activity) => (
                             <div key={activity.id} className="flex items-start gap-3 text-sm">
-                                <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
+                                <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
                                 <div>
-                                    <span className="text-gray-500">
+                                    <span className="text-muted-foreground">
                                         {new Date(activity.createdAt).toLocaleTimeString('ko-KR')}
                                     </span>
-                                    <span className="text-gray-400 mx-2">•</span>
-                                    <span className="text-gray-700">{activity.message}</span>
+                                    <span className="text-muted-foreground mx-2">•</span>
+                                    <span className="text-foreground">{activity.message}</span>
                                 </div>
                             </div>
                         ))}
@@ -214,13 +214,13 @@ function StatCard({
     trend: 'up' | 'down';
 }) {
     return (
-        <div className="bg-white rounded-lg p-6 shadow-sm">
+        <div className="bg-card rounded-lg p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-gray-500">{title}</span>
+                <span className="text-sm font-medium text-muted-foreground">{title}</span>
                 {icon}
             </div>
             <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-gray-900">{value}</span>
+                <span className="text-3xl font-bold text-foreground">{value}</span>
                 <span className={`text-sm ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
                     {change}
                 </span>

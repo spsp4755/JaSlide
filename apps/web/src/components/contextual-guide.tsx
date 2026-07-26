@@ -197,7 +197,7 @@ export function ContextualGuide({
                             ? 'bg-amber-50 border-amber-200'
                             : tip.priority === 'medium'
                                 ? 'bg-blue-50 border-blue-200'
-                                : 'bg-gray-50 border-gray-200'
+                                : 'bg-secondary border-border'
                         }
                     `}
                 >
@@ -208,13 +208,13 @@ export function ContextualGuide({
                                 ? 'text-amber-500'
                                 : tip.priority === 'medium'
                                     ? 'text-blue-500'
-                                    : 'text-gray-400'
+                                    : 'text-muted-foreground'
                             }
                         `}
                     />
                     <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-gray-900">{tip.title}</p>
-                        <p className="text-sm text-gray-600 mt-0.5">{tip.message}</p>
+                        <p className="font-medium text-sm text-foreground">{tip.title}</p>
+                        <p className="text-sm text-muted-foreground mt-0.5">{tip.message}</p>
                         {tip.action && (
                             <button
                                 onClick={tip.action.onClick}
@@ -230,7 +230,7 @@ export function ContextualGuide({
                         className="p-1 hover:bg-black/5 rounded transition-colors"
                         aria-label="팁 닫기"
                     >
-                        <X className="h-4 w-4 text-gray-400" />
+                        <X className="h-4 w-4 text-muted-foreground" />
                     </button>
                 </div>
             ))}
@@ -238,7 +238,7 @@ export function ContextualGuide({
             {relevantTips.length > 1 && (
                 <button
                     onClick={handleHideAll}
-                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                     모든 팁 숨기기
                 </button>

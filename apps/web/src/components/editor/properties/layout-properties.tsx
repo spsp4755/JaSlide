@@ -63,7 +63,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
         <div className="space-y-4">
             {/* Text Alignment */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     텍스트 정렬
                 </label>
                 <div className="flex gap-1">
@@ -80,7 +80,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
                                 onClick={() => handleStyleChange('textAlign', align.value)}
                                 className={`flex-1 p-2 rounded transition-colors ${style.textAlign === align.value
                                         ? 'bg-purple-100 text-purple-700'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        : 'bg-secondary text-muted-foreground hover:bg-muted'
                                     }`}
                                 title={align.label}
                             >
@@ -93,7 +93,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
 
             {/* Vertical Alignment */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     세로 정렬
                 </label>
                 <div className="flex gap-1">
@@ -107,7 +107,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
                             onClick={() => handleStyleChange('alignItems', align.value)}
                             className={`flex-1 py-1.5 text-xs rounded transition-colors ${style.alignItems === align.value
                                     ? 'bg-purple-100 text-purple-700 font-medium'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    : 'bg-secondary text-muted-foreground hover:bg-muted'
                                 }`}
                         >
                             {align.label}
@@ -118,12 +118,12 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
 
             {/* Position */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     위치
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-500 w-4">X</span>
+                        <span className="text-xs text-muted-foreground w-4">X</span>
                         <input
                             type="number"
                             value={position.x || 0}
@@ -132,7 +132,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
                         />
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-500 w-4">Y</span>
+                        <span className="text-xs text-muted-foreground w-4">Y</span>
                         <input
                             type="number"
                             value={position.y || 0}
@@ -145,12 +145,12 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
 
             {/* Size */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     크기
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-500 w-4">W</span>
+                        <span className="text-xs text-muted-foreground w-4">W</span>
                         <input
                             type="number"
                             value={typeof size.width === 'number' ? size.width : ''}
@@ -160,7 +160,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
                         />
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-500 w-4">H</span>
+                        <span className="text-xs text-muted-foreground w-4">H</span>
                         <input
                             type="number"
                             value={typeof size.height === 'number' ? size.height : ''}
@@ -174,7 +174,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
 
             {/* Padding */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     안쪽 여백
                 </label>
                 <div className="grid grid-cols-4 gap-1">
@@ -187,7 +187,7 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
                         const Icon = padding.icon;
                         return (
                             <div key={padding.key} className="relative">
-                                <Icon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                                <Icon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                                 <input
                                     type="number"
                                     value={style[padding.key] || 0}
@@ -203,20 +203,20 @@ export function LayoutProperties({ value, onChange }: LayoutPropertiesProps) {
 
             {/* Layer Order */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     레이어 순서
                 </label>
                 <div className="flex gap-1">
                     <button
                         onClick={() => handleStyleChange('zIndex', (style.zIndex || 0) + 1)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-muted rounded transition-colors"
                     >
                         <Layers className="h-3 w-3" />
                         앞으로
                     </button>
                     <button
                         onClick={() => handleStyleChange('zIndex', Math.max(0, (style.zIndex || 0) - 1))}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-muted rounded transition-colors"
                     >
                         <Layers className="h-3 w-3 rotate-180" />
                         뒤로

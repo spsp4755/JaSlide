@@ -248,20 +248,20 @@ export function AccessibilityChecker({
     };
 
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-card">
             {/* 헤더 */}
             <div className="px-3 py-2 border-b">
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                         <Accessibility className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm font-medium text-gray-700">접근성 검사</span>
+                        <span className="text-sm font-medium text-foreground">접근성 검사</span>
                     </div>
                     <button
                         onClick={handleScan}
                         disabled={isScanning}
-                        className={`p-1.5 rounded hover:bg-gray-100 ${isScanning ? 'animate-spin' : ''}`}
+                        className={`p-1.5 rounded hover:bg-secondary ${isScanning ? 'animate-spin' : ''}`}
                     >
-                        <RefreshCw className="h-4 w-4 text-gray-500" />
+                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
                     </button>
                 </div>
 
@@ -271,7 +271,7 @@ export function AccessibilityChecker({
                         <div className={`text-3xl font-bold ${getScoreColor()}`}>
                             {score}
                         </div>
-                        <div className="text-xs text-gray-600">접근성 점수</div>
+                        <div className="text-xs text-muted-foreground">접근성 점수</div>
                     </div>
                 </div>
             </div>
@@ -284,7 +284,7 @@ export function AccessibilityChecker({
                         onClick={() => setFilterLevel(level)}
                         className={`px-2 py-1 text-xs rounded transition-colors ${filterLevel === level
                                 ? 'bg-blue-100 text-blue-700'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                : 'bg-secondary text-muted-foreground hover:bg-muted'
                             }`}
                     >
                         {level === 'all' ? '전체' : `Level ${level}`}
@@ -297,10 +297,10 @@ export function AccessibilityChecker({
                 {filteredIssues.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
                         <CheckCircle2 className="h-10 w-10 text-green-500 mb-2" />
-                        <span className="text-sm font-medium text-gray-700">
+                        <span className="text-sm font-medium text-foreground">
                             접근성 이슈 없음
                         </span>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                             WCAG 가이드라인을 준수합니다
                         </span>
                     </div>
@@ -314,15 +314,15 @@ export function AccessibilityChecker({
                                 <div key={slideId} className="border-b last:border-b-0">
                                     <button
                                         onClick={() => toggleSlide(slideId)}
-                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50"
+                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-secondary"
                                     >
                                         <div className="flex items-center gap-2">
                                             {isExpanded ? (
-                                                <ChevronDown className="h-4 w-4 text-gray-400" />
+                                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                             ) : (
-                                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                             )}
-                                            <span className="text-sm text-gray-700">
+                                            <span className="text-sm text-foreground">
                                                 {slide?.title || `슬라이드 ${slideId}`}
                                             </span>
                                             <span className="text-xs text-red-500">
@@ -338,7 +338,7 @@ export function AccessibilityChecker({
                                                 return (
                                                     <div
                                                         key={issue.id}
-                                                        className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50"
+                                                        className="flex items-start gap-2 p-2 rounded-lg hover:bg-secondary"
                                                     >
                                                         {issue.severity === 'error' ? (
                                                             <XCircle className="h-4 w-4 text-red-500 mt-0.5" />
@@ -347,17 +347,17 @@ export function AccessibilityChecker({
                                                         )}
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-xs font-medium text-gray-700">
+                                                                <span className="text-xs font-medium text-foreground">
                                                                     {issue.title}
                                                                 </span>
                                                                 <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
                                                                     {issue.level}
                                                                 </span>
                                                             </div>
-                                                            <div className="text-[10px] text-gray-400">
+                                                            <div className="text-[10px] text-muted-foreground">
                                                                 {issue.description}
                                                             </div>
-                                                            <div className="text-[10px] text-gray-400 mt-0.5">
+                                                            <div className="text-[10px] text-muted-foreground mt-0.5">
                                                                 WCAG: {issue.wcag}
                                                             </div>
                                                         </div>

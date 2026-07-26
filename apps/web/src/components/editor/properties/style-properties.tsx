@@ -71,16 +71,16 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
     }) => (
         <button
             onClick={() => toggleSection(section)}
-            className="w-full flex items-center justify-between py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+            className="w-full flex items-center justify-between py-2 text-sm font-medium text-foreground hover:text-foreground"
         >
             <div className="flex items-center gap-2">
                 <Icon className="h-4 w-4" />
                 {title}
             </div>
             {sections[section] ? (
-                <ChevronUp className="h-4 w-4 text-gray-400" />
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
             ) : (
-                <ChevronDown className="h-4 w-4 text-gray-400" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
             )}
         </button>
     );
@@ -110,7 +110,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                                     }}
                                     className={`flex-1 py-1.5 text-xs rounded transition-colors ${fillType === option.type
                                             ? 'bg-purple-100 text-purple-700 font-medium'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            : 'bg-secondary text-muted-foreground hover:bg-muted'
                                         }`}
                                 >
                                     {option.label}
@@ -160,7 +160,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                     <div className="pt-2 space-y-3">
                         <div className="grid grid-cols-3 gap-2">
                             <div>
-                                <span className="text-xs text-gray-500 block mb-1">두께</span>
+                                <span className="text-xs text-muted-foreground block mb-1">두께</span>
                                 <input
                                     type="number"
                                     value={style.borderWidth || 0}
@@ -170,7 +170,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                                 />
                             </div>
                             <div>
-                                <span className="text-xs text-gray-500 block mb-1">스타일</span>
+                                <span className="text-xs text-muted-foreground block mb-1">스타일</span>
                                 <select
                                     value={style.borderStyle || 'solid'}
                                     onChange={(e) => handleStyleChange('borderStyle', e.target.value)}
@@ -182,7 +182,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                                 </select>
                             </div>
                             <div>
-                                <span className="text-xs text-gray-500 block mb-1">색상</span>
+                                <span className="text-xs text-muted-foreground block mb-1">색상</span>
                                 <input
                                     type="color"
                                     value={style.borderColor || '#000000'}
@@ -195,8 +195,8 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                         {/* 모서리 둥글기 */}
                         <div>
                             <div className="flex justify-between mb-1">
-                                <span className="text-xs text-gray-500">모서리 둥글기</span>
-                                <span className="text-xs text-gray-600">{style.borderRadius || 0}px</span>
+                                <span className="text-xs text-muted-foreground">모서리 둥글기</span>
+                                <span className="text-xs text-muted-foreground">{style.borderRadius || 0}px</span>
                             </div>
                             <input
                                 type="range"
@@ -219,8 +219,8 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                         {/* 투명도 */}
                         <div>
                             <div className="flex justify-between mb-1">
-                                <span className="text-xs text-gray-500">투명도</span>
-                                <span className="text-xs text-gray-600">{Math.round((style.opacity ?? 1) * 100)}%</span>
+                                <span className="text-xs text-muted-foreground">투명도</span>
+                                <span className="text-xs text-muted-foreground">{Math.round((style.opacity ?? 1) * 100)}%</span>
                             </div>
                             <input
                                 type="range"
@@ -235,7 +235,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                         {/* 그림자 */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs text-gray-500">그림자</span>
+                                <span className="text-xs text-muted-foreground">그림자</span>
                                 <label className="flex items-center gap-1.5 cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -248,7 +248,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                                         }}
                                         className="rounded text-purple-600 focus:ring-purple-500"
                                     />
-                                    <span className="text-xs text-gray-600">활성화</span>
+                                    <span className="text-xs text-muted-foreground">활성화</span>
                                 </label>
                             </div>
                             {style.boxShadow && (
@@ -263,7 +263,7 @@ export function StyleProperties({ value, onChange }: StylePropertiesProps) {
                                             onClick={() => handleStyleChange('boxShadow', shadow.value)}
                                             className={`flex-1 py-1 text-xs rounded transition-colors ${style.boxShadow === shadow.value
                                                     ? 'bg-purple-100 text-purple-700'
-                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    : 'bg-secondary text-muted-foreground hover:bg-muted'
                                                 }`}
                                         >
                                             {shadow.label}

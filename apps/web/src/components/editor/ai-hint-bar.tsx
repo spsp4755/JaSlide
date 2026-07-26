@@ -167,22 +167,22 @@ export function AiHintBar({ slideId, slideType, onApplyHint, onDismissHint }: Ai
 
                         {/* Hint content */}
                         <div className="flex-1 flex items-center gap-3">
-                            <div className="flex-shrink-0 p-2 bg-white rounded-full shadow-sm">
+                            <div className="flex-shrink-0 p-2 bg-card rounded-full shadow-sm">
                                 <HintIcon className="h-5 w-5 text-purple-600" />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <h4 className="text-sm font-medium text-gray-900">{currentHint.title}</h4>
+                                    <h4 className="text-sm font-medium text-foreground">{currentHint.title}</h4>
                                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${currentHint.priority === 'high'
                                             ? 'bg-red-100 text-red-700'
                                             : currentHint.priority === 'medium'
                                                 ? 'bg-yellow-100 text-yellow-700'
-                                                : 'bg-gray-100 text-gray-700'
+                                                : 'bg-secondary text-foreground'
                                         }`}>
                                         {currentHint.priority === 'high' ? '추천' : currentHint.priority === 'medium' ? '선택' : '참고'}
                                     </span>
                                 </div>
-                                <p className="text-xs text-gray-600 truncate">{currentHint.description}</p>
+                                <p className="text-xs text-muted-foreground truncate">{currentHint.description}</p>
                             </div>
                         </div>
 
@@ -199,9 +199,9 @@ export function AiHintBar({ slideId, slideType, onApplyHint, onDismissHint }: Ai
                             </Button>
                             <button
                                 onClick={() => handleDismissHint(currentHint.id)}
-                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                className="p-1 hover:bg-muted rounded transition-colors"
                             >
-                                <X className="h-4 w-4 text-gray-500" />
+                                <X className="h-4 w-4 text-muted-foreground" />
                             </button>
                         </div>
 
@@ -217,7 +217,7 @@ export function AiHintBar({ slideId, slideType, onApplyHint, onDismissHint }: Ai
 
                         {/* Hint counter */}
                         {hints.length > 1 && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                                 {currentHintIndex + 1}/{hints.length}
                             </span>
                         )}

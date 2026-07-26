@@ -71,17 +71,17 @@ export default function AdminPoliciesPage() {
         retention: 'bg-yellow-100 text-yellow-800',
         limits: 'bg-blue-100 text-blue-800',
         features: 'bg-green-100 text-green-800',
-        general: 'bg-gray-100 text-gray-800',
+        general: 'bg-secondary text-foreground',
     };
 
     return (
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">정책 관리</h1>
-                    <p className="text-sm text-gray-500">시스템 정책 및 설정</p>
+                    <h1 className="text-2xl font-bold text-foreground">정책 관리</h1>
+                    <p className="text-sm text-muted-foreground">시스템 정책 및 설정</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
+                <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                     <Plus size={20} />
                     정책 추가
                 </button>
@@ -89,59 +89,59 @@ export default function AdminPoliciesPage() {
 
             {/* Category Tabs */}
             <div className="flex gap-2 mb-6 flex-wrap">
-                <button onClick={() => setCategoryFilter('')} className={`px-4 py-2 rounded-lg text-sm ${!categoryFilter ? 'bg-gray-900 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                <button onClick={() => setCategoryFilter('')} className={`px-4 py-2 rounded-lg text-sm ${!categoryFilter ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-muted'}`}>
                     전체
                 </button>
                 {categories.map((cat) => (
-                    <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-4 py-2 rounded-lg text-sm capitalize ${categoryFilter === cat ? 'bg-gray-900 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                    <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-4 py-2 rounded-lg text-sm capitalize ${categoryFilter === cat ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-muted'}`}>
                         {cat}
                     </button>
                 ))}
             </div>
 
             {/* Policies Table */}
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-card rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" /></div>
                 ) : (
                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
+                        <thead className="bg-secondary border-b">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">카테고리</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">키</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">값</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">설명</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">작업</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">카테고리</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">키</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">값</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">설명</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">작업</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {policies.map((policy) => (
-                                <tr key={policy.id} className="hover:bg-gray-50">
+                                <tr key={policy.id} className="hover:bg-secondary">
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs rounded-full capitalize ${categoryColors[policy.category] || ''}`}>
                                             {policy.category}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 font-mono text-sm text-gray-900">{policy.key}</td>
+                                    <td className="px-6 py-4 font-mono text-sm text-foreground">{policy.key}</td>
                                     <td className="px-6 py-4">
                                         {editingId === policy.id ? (
                                             <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
                                                 className="px-2 py-1 border rounded text-sm w-full max-w-xs" autoFocus />
                                         ) : (
-                                            <span className="text-sm text-gray-600 font-mono">
+                                            <span className="text-sm text-muted-foreground font-mono">
                                                 {typeof policy.value === 'object' ? JSON.stringify(policy.value) : String(policy.value)}
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{policy.description || '-'}</td>
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">{policy.description || '-'}</td>
                                     <td className="px-6 py-4 text-right">
                                         {editingId === policy.id ? (
                                             <button onClick={() => saveEdit(policy.id)} className="p-1.5 hover:bg-green-50 rounded">
                                                 <Save size={16} className="text-green-600" />
                                             </button>
                                         ) : (
-                                            <button onClick={() => startEdit(policy)} className="p-1.5 hover:bg-gray-100 rounded">
-                                                <Edit size={16} className="text-gray-500" />
+                                            <button onClick={() => startEdit(policy)} className="p-1.5 hover:bg-secondary rounded">
+                                                <Edit size={16} className="text-muted-foreground" />
                                             </button>
                                         )}
                                         <button onClick={() => deletePolicy(policy.id)} className="p-1.5 hover:bg-red-50 rounded">

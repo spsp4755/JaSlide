@@ -114,7 +114,7 @@ export default function AdminPromptsPage() {
     const categoryColors: Record<string, string> = {
         generation: 'bg-blue-100 text-blue-800',
         outline: 'bg-green-100 text-green-800',
-        content: 'bg-gray-100 text-gray-800',
+        content: 'bg-secondary text-foreground',
         design: 'bg-orange-100 text-orange-800',
     };
 
@@ -122,10 +122,10 @@ export default function AdminPromptsPage() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">프롬프트 관리</h1>
-                    <p className="text-sm text-gray-500">프롬프트 템플릿 및 버전 관리</p>
+                    <h1 className="text-2xl font-bold text-foreground">프롬프트 관리</h1>
+                    <p className="text-sm text-muted-foreground">프롬프트 템플릿 및 버전 관리</p>
                 </div>
-                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
+                <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                     <Plus size={20} />
                     프롬프트 추가
                 </button>
@@ -133,14 +133,14 @@ export default function AdminPromptsPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Prompts List */}
-                <div className="lg:col-span-1 bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div className="p-4 border-b font-medium text-gray-900">프롬프트 목록</div>
+                <div className="lg:col-span-1 bg-card rounded-lg shadow-sm overflow-hidden">
+                    <div className="p-4 border-b font-medium text-foreground">프롬프트 목록</div>
                     {loading ? (
                         <div className="p-8 text-center">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                         </div>
                     ) : prompts.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">
+                        <div className="p-8 text-center text-muted-foreground">
                             등록된 프롬프트가 없습니다.
                         </div>
                     ) : (
@@ -149,18 +149,18 @@ export default function AdminPromptsPage() {
                                 <button
                                     key={prompt.id}
                                     onClick={() => selectPrompt(prompt.id)}
-                                    className={`w-full p-4 text-left hover:bg-gray-50 flex items-center justify-between ${selectedPrompt?.id === prompt.id ? 'bg-gray-100' : ''}`}
+                                    className={`w-full p-4 text-left hover:bg-secondary flex items-center justify-between ${selectedPrompt?.id === prompt.id ? 'bg-secondary' : ''}`}
                                 >
                                     <div>
-                                        <div className="font-medium text-gray-900">{prompt.name}</div>
+                                        <div className="font-medium text-foreground">{prompt.name}</div>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <span className={`px-2 py-0.5 text-xs rounded ${categoryColors[prompt.category] || 'bg-gray-100'}`}>
+                                            <span className={`px-2 py-0.5 text-xs rounded ${categoryColors[prompt.category] || 'bg-secondary'}`}>
                                                 {prompt.category}
                                             </span>
-                                            <span className="text-xs text-gray-500">{prompt._count.versions}개 버전</span>
+                                            <span className="text-xs text-muted-foreground">{prompt._count.versions}개 버전</span>
                                         </div>
                                     </div>
-                                    <ChevronRight size={16} className="text-gray-400" />
+                                    <ChevronRight size={16} className="text-muted-foreground" />
                                 </button>
                             ))}
                         </div>
@@ -172,11 +172,11 @@ export default function AdminPromptsPage() {
                     {selectedPrompt ? (
                         <>
                             {/* Header */}
-                            <div className="bg-white rounded-lg shadow-sm p-6">
+                            <div className="bg-card rounded-lg shadow-sm p-6">
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
-                                        <h2 className="text-xl font-semibold text-gray-900">{selectedPrompt.name}</h2>
-                                        <p className="text-sm text-gray-500">{selectedPrompt.description}</p>
+                                        <h2 className="text-xl font-semibold text-foreground">{selectedPrompt.name}</h2>
+                                        <p className="text-sm text-muted-foreground">{selectedPrompt.description}</p>
                                     </div>
                                     <button onClick={() => deletePrompt(selectedPrompt.id)} className="p-2 hover:bg-red-50 rounded"><Trash2 size={20} className="text-red-500" /></button>
                                 </div>
@@ -185,10 +185,10 @@ export default function AdminPromptsPage() {
                                 {selectedPrompt.versions[0] && (
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-gray-700">현재 버전 (v{selectedPrompt.versions[0].version})</span>
+                                            <span className="text-sm font-medium text-foreground">현재 버전 (v{selectedPrompt.versions[0].version})</span>
                                             <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">활성</span>
                                         </div>
-                                        <pre className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 overflow-x-auto whitespace-pre-wrap max-h-48">
+                                        <pre className="p-4 bg-secondary rounded-lg text-sm text-foreground overflow-x-auto whitespace-pre-wrap max-h-48">
                                             {selectedPrompt.versions[0].content}
                                         </pre>
                                     </div>
@@ -196,8 +196,8 @@ export default function AdminPromptsPage() {
                             </div>
 
                             {/* Test */}
-                            <div className="bg-white rounded-lg shadow-sm p-6">
-                                <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                            <div className="bg-card rounded-lg shadow-sm p-6">
+                                <h3 className="font-medium text-foreground mb-4 flex items-center gap-2">
                                     <Play size={18} />
                                     프롬프트 테스트
                                 </h3>
@@ -216,32 +216,32 @@ export default function AdminPromptsPage() {
                                         }}
                                         className="w-full px-4 py-2 border rounded-lg text-sm"
                                     />
-                                    <button onClick={testPrompt} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-gray-700">
+                                    <button onClick={testPrompt} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:opacity-90">
                                         테스트 실행
                                     </button>
                                 </div>
                                 {testResult && (
-                                    <pre className="p-4 bg-gray-900 text-green-400 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap max-h-48">
+                                    <pre className="p-4 bg-primary text-green-400 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap max-h-48">
                                         {testResult}
                                     </pre>
                                 )}
                             </div>
 
                             {/* Version History */}
-                            <div className="bg-white rounded-lg shadow-sm p-6">
-                                <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                            <div className="bg-card rounded-lg shadow-sm p-6">
+                                <h3 className="font-medium text-foreground mb-4 flex items-center gap-2">
                                     <History size={18} />
                                     버전 기록
                                 </h3>
                                 <div className="space-y-2">
                                     {selectedPrompt.versions.map((v) => (
-                                        <div key={v.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div key={v.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                             <div className="flex items-center gap-3">
-                                                <span className="font-mono text-sm text-gray-600">v{v.version}</span>
+                                                <span className="font-mono text-sm text-muted-foreground">v{v.version}</span>
                                                 {v.isActive && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded">활성</span>}
                                             </div>
                                             {!v.isActive && (
-                                                <button onClick={() => rollbackVersion(v.version)} className="px-3 py-1 text-sm text-gray-900 hover:bg-gray-100 rounded">
+                                                <button onClick={() => rollbackVersion(v.version)} className="px-3 py-1 text-sm text-foreground hover:bg-secondary rounded">
                                                     롤백
                                                 </button>
                                             )}
@@ -251,8 +251,8 @@ export default function AdminPromptsPage() {
                             </div>
                         </>
                     ) : (
-                        <div className="bg-white rounded-lg shadow-sm p-12 text-center text-gray-500">
-                            <MessageSquare size={48} className="mx-auto mb-4 text-gray-300" />
+                        <div className="bg-card rounded-lg shadow-sm p-12 text-center text-muted-foreground">
+                            <MessageSquare size={48} className="mx-auto mb-4 text-muted-foreground" />
                             프롬프트를 선택하세요
                         </div>
                     )}
@@ -262,19 +262,19 @@ export default function AdminPromptsPage() {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+                    <div className="bg-card rounded-lg shadow-xl w-full max-w-lg mx-4">
                         <div className="flex items-center justify-between p-4 border-b">
                             <h2 className="text-lg font-semibold">새 프롬프트 추가</h2>
-                            <button onClick={() => setShowModal(false)} className="p-1 hover:bg-gray-100 rounded"><X size={20} /></button>
+                            <button onClick={() => setShowModal(false)} className="p-1 hover:bg-secondary rounded"><X size={20} /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-4 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">프롬프트 이름</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">프롬프트 이름</label>
                                 <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     className="w-full px-3 py-2 border rounded-lg" required placeholder="예: PPT 생성 프롬프트" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">카테고리</label>
                                 <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                     className="w-full px-3 py-2 border rounded-lg">
                                     <option value="generation">Generation</option>
@@ -284,25 +284,25 @@ export default function AdminPromptsPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">설명</label>
                                 <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     className="w-full px-3 py-2 border rounded-lg" placeholder="선택사항" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">프롬프트 내용</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">프롬프트 내용</label>
                                 <textarea value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                                     className="w-full px-3 py-2 border rounded-lg h-32" required placeholder="{{variable}} 형식으로 변수를 사용할 수 있습니다" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">변수 (쉼표로 구분)</label>
+                                <label className="block text-sm font-medium text-foreground mb-1">변수 (쉼표로 구분)</label>
                                 <input type="text" value={formData.variables} onChange={(e) => setFormData({ ...formData, variables: e.target.value })}
                                     className="w-full px-3 py-2 border rounded-lg" placeholder="예: topic, industry, language" />
                             </div>
                             <div className="flex justify-end gap-2 pt-4 border-t">
-                                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50">
+                                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-foreground border rounded-lg hover:bg-secondary">
                                     취소
                                 </button>
-                                <button type="submit" disabled={submitting} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50">
+                                <button type="submit" disabled={submitting} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
                                     {submitting ? '저장 중...' : '추가'}
                                 </button>
                             </div>

@@ -133,7 +133,7 @@ export function ShareDialog({
                         onClick={() => setActiveTab('link')}
                         className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'link'
                                 ? 'border-purple-500 text-purple-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                     >
                         <Link className="h-4 w-4 inline mr-1.5" />
@@ -143,7 +143,7 @@ export function ShareDialog({
                         onClick={() => setActiveTab('invite')}
                         className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'invite'
                                 ? 'border-purple-500 text-purple-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                     >
                         <Mail className="h-4 w-4 inline mr-1.5" />
@@ -157,7 +157,7 @@ export function ShareDialog({
                         <div className="space-y-4">
                             {/* Permission Selection */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-foreground mb-2">
                                     권한 설정
                                 </label>
                                 <div className="flex gap-2">
@@ -172,28 +172,28 @@ export function ShareDialog({
                                                     flex-1 flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all
                                                     ${isSelected
                                                         ? 'border-purple-500 bg-purple-50'
-                                                        : 'border-gray-200 hover:border-purple-300'
+                                                        : 'border-border hover:border-purple-300'
                                                     }
                                                 `}
                                             >
-                                                <Icon className={`h-4 w-4 ${isSelected ? 'text-purple-600' : 'text-gray-500'}`} />
-                                                <span className={`text-xs font-medium ${isSelected ? 'text-purple-700' : 'text-gray-600'}`}>
+                                                <Icon className={`h-4 w-4 ${isSelected ? 'text-purple-600' : 'text-muted-foreground'}`} />
+                                                <span className={`text-xs font-medium ${isSelected ? 'text-purple-700' : 'text-muted-foreground'}`}>
                                                     {perm.title}
                                                 </span>
                                             </button>
                                         );
                                     })}
                                 </div>
-                                <p className="text-xs text-gray-500 mt-2">
+                                <p className="text-xs text-muted-foreground mt-2">
                                     {PERMISSIONS.find((p) => p.id === permission)?.description}
                                 </p>
                             </div>
 
                             {/* Link Generation */}
                             {!shareToken ? (
-                                <div className="text-center py-6 border rounded-lg bg-gray-50">
-                                    <Globe className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                                    <p className="text-sm text-gray-500 mb-3">
+                                <div className="text-center py-6 border rounded-lg bg-secondary">
+                                    <Globe className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                                    <p className="text-sm text-muted-foreground mb-3">
                                         공유 링크를 생성하면 선택한 권한으로 접근이 가능합니다
                                     </p>
                                     <Button onClick={generateShareLink} disabled={generating}>
@@ -208,7 +208,7 @@ export function ShareDialog({
                                             type="text"
                                             value={shareUrl || ''}
                                             readOnly
-                                            className="flex-1 px-3 py-2 border rounded-lg text-sm bg-gray-50"
+                                            className="flex-1 px-3 py-2 border rounded-lg text-sm bg-secondary"
                                         />
                                         <Button
                                             variant="outline"
@@ -245,7 +245,7 @@ export function ShareDialog({
                     {activeTab === 'invite' && (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-foreground mb-2">
                                     이메일로 초대
                                 </label>
                                 <div className="flex gap-2">
@@ -265,7 +265,7 @@ export function ShareDialog({
 
                             {/* Permission for invite */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-foreground mb-2">
                                     초대할 권한
                                 </label>
                                 <select
@@ -281,7 +281,7 @@ export function ShareDialog({
                                 </select>
                             </div>
 
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                                 초대받은 사람은 이메일을 통해 프레젠테이션에 접근할 수 있습니다.
                             </p>
                         </div>

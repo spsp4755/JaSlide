@@ -101,10 +101,10 @@ export default function AdminOperationsPage() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">운영 도구</h1>
-                    <p className="text-sm text-gray-500">시스템 상태 및 관리 도구</p>
+                    <h1 className="text-2xl font-bold text-foreground">운영 도구</h1>
+                    <p className="text-sm text-muted-foreground">시스템 상태 및 관리 도구</p>
                 </div>
-                <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+                <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg hover:bg-muted">
                     <RefreshCw size={20} />
                     새로고침
                 </button>
@@ -112,8 +112,8 @@ export default function AdminOperationsPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* System Health */}
-                <div className="bg-white rounded-lg p-6 shadow-sm">
-                    <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-card rounded-lg p-6 shadow-sm">
+                    <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Server size={20} />
                         시스템 상태
                     </h2>
@@ -131,35 +131,35 @@ export default function AdminOperationsPage() {
                                         {health.status === 'healthy' ? '정상' : '문제 발생'}
                                     </span>
                                 </div>
-                                <p className="text-sm text-gray-500">Uptime: {formatUptime(health.uptime)}</p>
+                                <p className="text-sm text-muted-foreground">Uptime: {formatUptime(health.uptime)}</p>
                             </div>
 
                             <div className="space-y-3">
                                 {Object.entries(health.services).map(([name, service]) => (
-                                    <div key={name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div key={name} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                         <div className="flex items-center gap-3">
                                             <div className={`h-2.5 w-2.5 rounded-full ${service.status === 'up' ? 'bg-green-500' : 'bg-red-500'}`} />
-                                            <span className="font-medium text-gray-700 capitalize">{name}</span>
+                                            <span className="font-medium text-foreground capitalize">{name}</span>
                                         </div>
-                                        <span className="text-sm text-gray-500">{service.latency}ms</span>
+                                        <span className="text-sm text-muted-foreground">{service.latency}ms</span>
                                     </div>
                                 ))}
                             </div>
 
                             <div className="mt-4 pt-4 border-t">
-                                <h3 className="text-sm font-medium text-gray-700 mb-2">메모리 사용량</h3>
+                                <h3 className="text-sm font-medium text-foreground mb-2">메모리 사용량</h3>
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-500">Heap Used</span>
-                                        <span className="text-gray-900">{health.memory.heapUsed} MB</span>
+                                        <span className="text-muted-foreground">Heap Used</span>
+                                        <span className="text-foreground">{health.memory.heapUsed} MB</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-500">Heap Total</span>
-                                        <span className="text-gray-900">{health.memory.heapTotal} MB</span>
+                                        <span className="text-muted-foreground">Heap Total</span>
+                                        <span className="text-foreground">{health.memory.heapTotal} MB</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-500">RSS</span>
-                                        <span className="text-gray-900">{health.memory.rss} MB</span>
+                                        <span className="text-muted-foreground">RSS</span>
+                                        <span className="text-foreground">{health.memory.rss} MB</span>
                                     </div>
                                 </div>
                             </div>
@@ -170,36 +170,36 @@ export default function AdminOperationsPage() {
                 {/* Queue Status & Actions */}
                 <div className="space-y-6">
                     {/* Queue Status */}
-                    <div className="bg-white rounded-lg p-6 shadow-sm">
-                        <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-card rounded-lg p-6 shadow-sm">
+                        <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Database size={20} />
                             큐 상태
                         </h2>
                         {queue && (
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div className="text-3xl font-bold text-gray-900">{queue.queued}</div>
-                                    <div className="text-sm text-gray-500">대기중</div>
+                                <div className="text-center p-4 bg-secondary rounded-lg">
+                                    <div className="text-3xl font-bold text-foreground">{queue.queued}</div>
+                                    <div className="text-sm text-muted-foreground">대기중</div>
                                 </div>
                                 <div className="text-center p-4 bg-blue-50 rounded-lg">
                                     <div className="text-3xl font-bold text-blue-600">{queue.processing}</div>
-                                    <div className="text-sm text-gray-500">처리중</div>
+                                    <div className="text-sm text-muted-foreground">처리중</div>
                                 </div>
                             </div>
                         )}
                     </div>
 
                     {/* Cache Actions */}
-                    <div className="bg-white rounded-lg p-6 shadow-sm">
-                        <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-card rounded-lg p-6 shadow-sm">
+                        <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Trash2 size={20} />
                             캐시 관리
                         </h2>
                         <div className="flex flex-wrap gap-3">
-                            <button onClick={() => clearCache('templates')} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">
+                            <button onClick={() => clearCache('templates')} className="px-4 py-2 bg-secondary rounded-lg hover:bg-muted text-sm">
                                 템플릿 캐시
                             </button>
-                            <button onClick={() => clearCache('models')} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">
+                            <button onClick={() => clearCache('models')} className="px-4 py-2 bg-secondary rounded-lg hover:bg-muted text-sm">
                                 모델 캐시
                             </button>
                             <button onClick={() => clearCache('all')} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm">
@@ -209,8 +209,8 @@ export default function AdminOperationsPage() {
                     </div>
 
                     {/* Emergency Actions */}
-                    <div className="bg-white rounded-lg p-6 shadow-sm">
-                        <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-card rounded-lg p-6 shadow-sm">
+                        <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <StopCircle size={20} />
                             긴급 작업
                         </h2>
@@ -224,8 +224,8 @@ export default function AdminOperationsPage() {
                     </div>
 
                     {/* Model Test */}
-                    <div className="bg-white rounded-lg p-6 shadow-sm">
-                        <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-card rounded-lg p-6 shadow-sm">
+                        <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Play size={20} />
                             모델 테스트
                         </h2>
@@ -237,12 +237,12 @@ export default function AdminOperationsPage() {
                                 onChange={(e) => setTestModelId(e.target.value)}
                                 className="flex-1 px-4 py-2 border rounded-lg"
                             />
-                            <button onClick={testModel} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700">
+                            <button onClick={testModel} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                                 테스트
                             </button>
                         </div>
                         {testResult && (
-                            <div className="p-4 bg-gray-50 rounded-lg text-sm">
+                            <div className="p-4 bg-secondary rounded-lg text-sm">
                                 <pre>{JSON.stringify(testResult, null, 2)}</pre>
                             </div>
                         )}

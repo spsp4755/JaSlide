@@ -37,7 +37,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
         <div className="space-y-4">
             {/* Font Family */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     글꼴
                 </label>
                 <select
@@ -55,7 +55,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
 
             {/* Font Size */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     크기
                 </label>
                 <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
 
             {/* Font Weight */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     굵기
                 </label>
                 <div className="flex gap-1">
@@ -98,7 +98,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
                             onClick={() => handleStyleChange('fontWeight', weight.value)}
                             className={`flex-1 py-1.5 text-xs rounded transition-colors ${(style.fontWeight || '400') === weight.value
                                     ? 'bg-purple-100 text-purple-700 font-medium'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    : 'bg-secondary text-muted-foreground hover:bg-muted'
                                 }`}
                         >
                             {weight.label}
@@ -109,7 +109,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
 
             {/* Line Height */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     행간
                 </label>
                 <input
@@ -121,7 +121,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
                     onChange={(e) => handleStyleChange('lineHeight', Number(e.target.value))}
                     className="w-full accent-purple-600"
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
                     <span>촘촘하게</span>
                     <span>{style.lineHeight?.toFixed(1) || '1.5'}</span>
                     <span>넓게</span>
@@ -130,7 +130,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
 
             {/* Letter Spacing */}
             <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     자간
                 </label>
                 <input
@@ -142,7 +142,7 @@ export function TextProperties({ value, onChange }: TextPropertiesProps) {
                     onChange={(e) => handleStyleChange('letterSpacing', Number(e.target.value))}
                     className="w-full accent-purple-600"
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
                     <span>좁게</span>
                     <span>{style.letterSpacing || 0}px</span>
                     <span>넓게</span>

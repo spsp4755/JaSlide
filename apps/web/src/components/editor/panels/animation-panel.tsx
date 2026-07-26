@@ -140,9 +140,9 @@ export function AnimationPanel({
 
     if (!elementId) {
         return (
-            <div className="h-full flex flex-col items-center justify-center bg-white p-4 text-center">
-                <Sparkles className="h-10 w-10 text-gray-300 mb-3" />
-                <span className="text-sm text-gray-500">
+            <div className="h-full flex flex-col items-center justify-center bg-card p-4 text-center">
+                <Sparkles className="h-10 w-10 text-muted-foreground mb-3" />
+                <span className="text-sm text-muted-foreground">
                     요소를 선택하여<br />애니메이션을 추가하세요
                 </span>
             </div>
@@ -150,7 +150,7 @@ export function AnimationPanel({
     }
 
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-card">
             {/* CSS Keyframes 주입 */}
             <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
 
@@ -158,7 +158,7 @@ export function AnimationPanel({
             <div className="px-3 py-2 border-b">
                 <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-purple-600" />
-                    <span className="text-sm font-medium text-gray-700">애니메이션</span>
+                    <span className="text-sm font-medium text-foreground">애니메이션</span>
                 </div>
             </div>
 
@@ -172,7 +172,7 @@ export function AnimationPanel({
                             onClick={() => setActiveCategory(category)}
                             className={`flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${activeCategory === category
                                     ? 'text-purple-700 border-b-2 border-purple-600 bg-purple-50'
-                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                                 }`}
                         >
                             <Icon className={`h-3.5 w-3.5 ${category === 'exit' ? 'rotate-180' : ''}`} />
@@ -191,7 +191,7 @@ export function AnimationPanel({
                             onClick={() => handleSelectPreset(preset)}
                             className={`aspect-square flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${selectedPreset?.id === preset.id
                                     ? 'border-purple-400 bg-purple-50 text-purple-700'
-                                    : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
+                                    : 'border-border hover:border-border text-muted-foreground hover:bg-secondary'
                                 }`}
                         >
                             {/* 미리보기 아이콘 */}
@@ -214,13 +214,13 @@ export function AnimationPanel({
                 <div className="border-t p-3 space-y-3">
                     {/* 타이밍 */}
                     <div>
-                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
                             <Clock className="h-3.5 w-3.5" />
                             타이밍
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             <div>
-                                <label className="text-[10px] text-gray-400">지속 시간</label>
+                                <label className="text-[10px] text-muted-foreground">지속 시간</label>
                                 <div className="flex items-center gap-1">
                                     <input
                                         type="range"
@@ -231,13 +231,13 @@ export function AnimationPanel({
                                         onChange={(e) => setDuration(Number(e.target.value))}
                                         className="flex-1 accent-purple-600"
                                     />
-                                    <span className="text-[10px] text-gray-500 w-10 text-right">
+                                    <span className="text-[10px] text-muted-foreground w-10 text-right">
                                         {duration}ms
                                     </span>
                                 </div>
                             </div>
                             <div>
-                                <label className="text-[10px] text-gray-400">지연</label>
+                                <label className="text-[10px] text-muted-foreground">지연</label>
                                 <div className="flex items-center gap-1">
                                     <input
                                         type="range"
@@ -248,7 +248,7 @@ export function AnimationPanel({
                                         onChange={(e) => setDelay(Number(e.target.value))}
                                         className="flex-1 accent-purple-600"
                                     />
-                                    <span className="text-[10px] text-gray-500 w-10 text-right">
+                                    <span className="text-[10px] text-muted-foreground w-10 text-right">
                                         {delay}ms
                                     </span>
                                 </div>
@@ -258,7 +258,7 @@ export function AnimationPanel({
 
                     {/* 트리거 */}
                     <div>
-                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
                             <MousePointer className="h-3.5 w-3.5" />
                             트리거
                         </div>
@@ -273,7 +273,7 @@ export function AnimationPanel({
                                     onClick={() => setTrigger(opt.value as any)}
                                     className={`flex-1 py-1.5 text-[10px] rounded transition-colors ${trigger === opt.value
                                             ? 'bg-purple-100 text-purple-700 font-medium'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            : 'bg-secondary text-muted-foreground hover:bg-muted'
                                         }`}
                                 >
                                     {opt.label}
@@ -287,7 +287,7 @@ export function AnimationPanel({
                         <button
                             onClick={handlePreview}
                             disabled={isPlaying}
-                            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs bg-secondary hover:bg-muted rounded transition-colors"
                         >
                             {isPlaying ? (
                                 <Pause className="h-3.5 w-3.5" />
@@ -311,7 +311,7 @@ export function AnimationPanel({
             {currentAnimation && (
                 <div className="border-t p-2">
                     <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">적용된 애니메이션</span>
+                        <span className="text-muted-foreground">적용된 애니메이션</span>
                         <button
                             onClick={onRemoveAnimation}
                             className="p-1 text-red-500 hover:bg-red-50 rounded"

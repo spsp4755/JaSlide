@@ -135,10 +135,10 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mb-4">
                     <Sparkles className="h-8 w-8 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                <h2 className="text-2xl font-bold text-foreground mb-2">
                     발표 목적을 선택해주세요
                 </h2>
-                <p className="text-gray-500">
+                <p className="text-muted-foreground">
                     목적에 맞는 최적화된 슬라이드를 생성해 드립니다
                 </p>
             </div>
@@ -159,7 +159,7 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
                                 relative p-4 rounded-xl border-2 transition-all duration-200 text-left
                                 ${isSelected
                                     ? 'border-purple-500 bg-purple-50 shadow-lg shadow-purple-500/20'
-                                    : 'border-gray-200 bg-white hover:border-purple-300 hover:shadow-md'
+                                    : 'border-border bg-card hover:border-purple-300 hover:shadow-md'
                                 }
                             `}
                         >
@@ -192,10 +192,10 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
                             </div>
 
                             {/* Content */}
-                            <h3 className="font-semibold text-gray-900 mb-1">
+                            <h3 className="font-semibold text-foreground mb-1">
                                 {purpose.title}
                             </h3>
-                            <p className="text-sm text-gray-500 mb-2">
+                            <p className="text-sm text-muted-foreground mb-2">
                                 {purpose.description}
                             </p>
 
@@ -204,7 +204,7 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
                                 {purpose.examples.slice(0, 2).map((example) => (
                                     <span
                                         key={example}
-                                        className="text-xs px-2 py-0.5 bg-gray-100 rounded-full text-gray-600"
+                                        className="text-xs px-2 py-0.5 bg-secondary rounded-full text-muted-foreground"
                                     >
                                         {example}
                                     </span>
@@ -213,7 +213,7 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
 
                             {/* Slide count hint */}
                             {purpose.recommendedSlideCount && (
-                                <div className="mt-2 text-xs text-gray-400">
+                                <div className="mt-2 text-xs text-muted-foreground">
                                     권장 {purpose.recommendedSlideCount}장
                                 </div>
                             )}
@@ -231,19 +231,19 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                            <span className="text-gray-500">추천 슬라이드 수:</span>
+                            <span className="text-muted-foreground">추천 슬라이드 수:</span>
                             <span className="ml-2 font-semibold text-purple-700">
                                 {recommendation.recommendedSlideCount}장
                             </span>
                         </div>
                         <div>
-                            <span className="text-gray-500">AI 효과 점수:</span>
+                            <span className="text-muted-foreground">AI 효과 점수:</span>
                             <span className="ml-2 font-semibold text-green-600">
                                 {recommendation.score}%
                             </span>
                         </div>
                     </div>
-                    <p className="mt-2 text-sm text-gray-600">{recommendation.reason}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">{recommendation.reason}</p>
                 </div>
             )}
 
@@ -252,7 +252,7 @@ export function PurposeOnboarding({ onComplete, onSkip }: PurposeOnboardingProps
                 <Button
                     variant="ghost"
                     onClick={onSkip}
-                    className="text-gray-500"
+                    className="text-muted-foreground"
                 >
                     건너뛰기
                 </Button>

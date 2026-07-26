@@ -145,7 +145,7 @@ export function SlideThumbnail({
                     {isMultiSelected ? (
                         <CheckSquare className="h-4 w-4 text-blue-500" />
                     ) : (
-                        <Square className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Square className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     )}
                 </div>
             )}
@@ -154,7 +154,7 @@ export function SlideThumbnail({
             <div className="absolute top-1 right-1 flex gap-1">
                 {slide.isHidden && (
                     <span title="숨김">
-                        <EyeOff className="h-3 w-3 text-gray-400" />
+                        <EyeOff className="h-3 w-3 text-muted-foreground" />
                     </span>
                 )}
                 {slide.isLocked && (
@@ -167,8 +167,8 @@ export function SlideThumbnail({
             {/* Thumbnail preview */}
             <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-50 rounded flex items-center justify-center mb-2 overflow-hidden">
                 <div className="text-center p-2">
-                    <Icon className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                    <p className="text-[8px] text-gray-500 line-clamp-2 leading-tight">
+                    <Icon className="h-6 w-6 text-muted-foreground mx-auto mb-1" />
+                    <p className="text-[8px] text-muted-foreground line-clamp-2 leading-tight">
                         {heading}
                     </p>
                 </div>
@@ -176,7 +176,7 @@ export function SlideThumbnail({
 
             {/* Slide info */}
             <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-600 truncate flex-1">
+                <span className="text-xs font-medium text-muted-foreground truncate flex-1">
                     {index + 1}. {slide.title || heading}
                 </span>
                 <button
@@ -184,9 +184,9 @@ export function SlideThumbnail({
                         e.stopPropagation();
                         setShowContextMenu(!showContextMenu);
                     }}
-                    className="p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="p-1 hover:bg-secondary rounded opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                    <MoreVertical className="h-3 w-3 text-gray-500" />
+                    <MoreVertical className="h-3 w-3 text-muted-foreground" />
                 </button>
             </div>
 
@@ -200,17 +200,17 @@ export function SlideThumbnail({
                             setShowContextMenu(false);
                         }}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border p-1 z-50">
+                    <div className="absolute right-0 top-full mt-1 w-36 bg-card rounded-lg shadow-lg border p-1 z-50">
                         <button
                             onClick={(e) => handleContextAction('duplicate', e)}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded text-sm text-left"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded text-sm text-left"
                         >
                             <Copy className="h-3 w-3" />
                             복제
                         </button>
                         <button
                             onClick={(e) => handleContextAction('visibility', e)}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded text-sm text-left"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded text-sm text-left"
                         >
                             {slide.isHidden ? (
                                 <>

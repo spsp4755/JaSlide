@@ -141,7 +141,7 @@ export function IconPickerDialog({ open, onClose, onSelect }: IconPickerDialogPr
                                     onClick={() => setSelectedCategory(category)}
                                     className={`px-3 py-1 text-sm rounded-full whitespace-nowrap transition-colors ${selectedCategory === category
                                         ? 'bg-purple-100 text-purple-700'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        : 'bg-secondary text-muted-foreground hover:bg-muted'
                                         }`}
                                 >
                                     {category}
@@ -162,13 +162,13 @@ export function IconPickerDialog({ open, onClose, onSelect }: IconPickerDialogPr
                                 className="aspect-square flex items-center justify-center rounded-lg border hover:bg-purple-50 hover:border-purple-500 transition-colors"
                                 title={name}
                             >
-                                <Icon className="h-5 w-5 text-gray-600" />
+                                <Icon className="h-5 w-5 text-muted-foreground" />
                             </button>
                         ))}
                     </div>
 
                     {filteredIcons.length === 0 && (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="text-center py-8 text-muted-foreground">
                             검색 결과가 없습니다
                         </div>
                     )}

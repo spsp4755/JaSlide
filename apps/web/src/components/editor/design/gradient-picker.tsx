@@ -154,7 +154,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
         <div className="space-y-4">
             {/* 헤더 */}
             <div className="flex items-center justify-between">
-                <label className="block text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                <label className="block text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                     <Palette className="h-3.5 w-3.5" />
                     그라데이션
                 </label>
@@ -163,7 +163,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                         setLocalValue(DEFAULT_GRADIENT);
                         onChange(DEFAULT_GRADIENT);
                     }}
-                    className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                 >
                     <RotateCcw className="h-3 w-3" />
                     초기화
@@ -182,7 +182,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                     onClick={() => updateGradient({ type: 'linear' })}
                     className={`flex-1 py-1.5 text-xs rounded transition-colors ${localValue.type === 'linear'
                         ? 'bg-purple-100 text-purple-700 font-medium'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-secondary text-muted-foreground hover:bg-muted'
                         }`}
                 >
                     선형
@@ -191,7 +191,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                     onClick={() => updateGradient({ type: 'radial' })}
                     className={`flex-1 py-1.5 text-xs rounded transition-colors ${localValue.type === 'radial'
                         ? 'bg-purple-100 text-purple-700 font-medium'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-secondary text-muted-foreground hover:bg-muted'
                         }`}
                 >
                     방사형
@@ -202,8 +202,8 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
             {localValue.type === 'linear' && (
                 <div>
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-500">각도</span>
-                        <span className="text-xs text-gray-600 font-mono">{localValue.angle}°</span>
+                        <span className="text-xs text-muted-foreground">각도</span>
+                        <span className="text-xs text-muted-foreground font-mono">{localValue.angle}°</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <input
@@ -215,10 +215,10 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                             className="flex-1 accent-purple-600"
                         />
                         <div
-                            className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center"
+                            className="w-6 h-6 rounded-full border-2 border-border flex items-center justify-center"
                             style={{ transform: `rotate(${localValue.angle}deg)` }}
                         >
-                            <ArrowRight className="h-3 w-3 text-gray-600" />
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
                         </div>
                     </div>
                 </div>
@@ -227,11 +227,11 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
             {/* 색상 스톱 */}
             <div>
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-gray-500">색상 포인트</span>
+                    <span className="text-xs text-muted-foreground">색상 포인트</span>
                     <button
                         onClick={addStop}
                         disabled={localValue.stops.length >= 5}
-                        className="text-xs text-purple-600 hover:text-purple-700 disabled:text-gray-400"
+                        className="text-xs text-purple-600 hover:text-purple-700 disabled:text-muted-foreground"
                     >
                         + 추가
                     </button>
@@ -261,7 +261,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                 {localValue.stops[activeStop] && (
                     <div className="grid grid-cols-2 gap-2">
                         <div>
-                            <span className="text-xs text-gray-500 block mb-1">색상</span>
+                            <span className="text-xs text-muted-foreground block mb-1">색상</span>
                             <div className="flex items-center gap-1">
                                 <input
                                     type="color"
@@ -278,7 +278,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                             </div>
                         </div>
                         <div>
-                            <span className="text-xs text-gray-500 block mb-1">위치</span>
+                            <span className="text-xs text-muted-foreground block mb-1">위치</span>
                             <div className="flex items-center gap-1">
                                 <input
                                     type="range"
@@ -288,7 +288,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
                                     onChange={(e) => updateStop(activeStop, { position: Number(e.target.value) })}
                                     className="flex-1 accent-purple-600"
                                 />
-                                <span className="text-xs text-gray-600 w-8 text-right">
+                                <span className="text-xs text-muted-foreground w-8 text-right">
                                     {localValue.stops[activeStop].position}%
                                 </span>
                             </div>
@@ -299,7 +299,7 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
 
             {/* 프리셋 */}
             <div>
-                <span className="text-xs text-gray-500 block mb-2">프리셋</span>
+                <span className="text-xs text-muted-foreground block mb-2">프리셋</span>
                 <div className="grid grid-cols-3 gap-2">
                     {GRADIENT_PRESETS.map((preset, idx) => {
                         const presetCss = preset.gradient.type === 'linear'
@@ -325,8 +325,8 @@ export function GradientPicker({ value = DEFAULT_GRADIENT, onChange }: GradientP
 
             {/* CSS 출력 */}
             <div>
-                <span className="text-xs text-gray-500 block mb-1">CSS</span>
-                <div className="p-2 bg-gray-100 rounded text-xs font-mono text-gray-600 break-all">
+                <span className="text-xs text-muted-foreground block mb-1">CSS</span>
+                <div className="p-2 bg-secondary rounded text-xs font-mono text-muted-foreground break-all">
                     {gradientCss}
                 </div>
             </div>

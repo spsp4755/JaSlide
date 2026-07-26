@@ -170,24 +170,24 @@ export function ComponentLibrary({
     };
 
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-card">
             {/* 헤더 */}
             <div className="px-3 py-2 border-b">
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                         <Package className="h-4 w-4 text-purple-600" />
-                        <span className="text-sm font-medium text-gray-700">컴포넌트</span>
+                        <span className="text-sm font-medium text-foreground">컴포넌트</span>
                     </div>
                     <div className="flex gap-1">
                         <button
                             onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-purple-100 text-purple-600' : 'text-gray-400 hover:bg-gray-100'}`}
+                            className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-purple-100 text-purple-600' : 'text-muted-foreground hover:bg-secondary'}`}
                         >
                             <Grid className="h-3.5 w-3.5" />
                         </button>
                         <button
                             onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-purple-100 text-purple-600' : 'text-gray-400 hover:bg-gray-100'}`}
+                            className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-purple-100 text-purple-600' : 'text-muted-foreground hover:bg-secondary'}`}
                         >
                             <List className="h-3.5 w-3.5" />
                         </button>
@@ -196,7 +196,7 @@ export function ComponentLibrary({
 
                 {/* 검색 */}
                 <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <input
                         type="text"
                         value={searchQuery}
@@ -215,7 +215,7 @@ export function ComponentLibrary({
                         onClick={() => setSelectedCategory(cat.id)}
                         className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full whitespace-nowrap transition-colors ${selectedCategory === cat.id
                                 ? 'bg-purple-100 text-purple-700'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                : 'bg-secondary text-muted-foreground hover:bg-muted'
                             }`}
                     >
                         <cat.icon className="h-3 w-3" />
@@ -227,7 +227,7 @@ export function ComponentLibrary({
             {/* 컴포넌트 목록 */}
             <div className="flex-1 overflow-y-auto p-2">
                 {filteredComponents.length === 0 ? (
-                    <div className="text-center text-xs text-gray-400 py-8">
+                    <div className="text-center text-xs text-muted-foreground py-8">
                         검색 결과가 없습니다
                     </div>
                 ) : viewMode === 'grid' ? (
@@ -242,16 +242,16 @@ export function ComponentLibrary({
                                 >
                                     {/* 미리보기 영역 */}
                                     <div className="aspect-video bg-gray-100 rounded mb-2 flex items-center justify-center relative">
-                                        <TypeIcon className="h-6 w-6 text-gray-400" />
+                                        <TypeIcon className="h-6 w-6 text-muted-foreground" />
                                         {comp.isFavorite && (
                                             <Star className="absolute top-1 right-1 h-3 w-3 text-amber-400 fill-amber-400" />
                                         )}
                                     </div>
-                                    <div className="text-xs font-medium text-gray-700 truncate">
+                                    <div className="text-xs font-medium text-foreground truncate">
                                         {comp.name}
                                     </div>
                                     {comp.description && (
-                                        <div className="text-[10px] text-gray-400 truncate">
+                                        <div className="text-[10px] text-muted-foreground truncate">
                                             {comp.description}
                                         </div>
                                     )}
@@ -266,15 +266,15 @@ export function ComponentLibrary({
                             return (
                                 <div
                                     key={comp.id}
-                                    className="group flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                    className="group flex items-center gap-2 p-2 rounded-lg hover:bg-secondary transition-colors cursor-pointer"
                                     onClick={() => onInsertComponent(comp)}
                                 >
-                                    <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
-                                        <TypeIcon className="h-4 w-4 text-gray-500" />
+                                    <div className="w-8 h-8 bg-secondary rounded flex items-center justify-center">
+                                        <TypeIcon className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1">
-                                            <span className="text-xs font-medium text-gray-700 truncate">
+                                            <span className="text-xs font-medium text-foreground truncate">
                                                 {comp.name}
                                             </span>
                                             {comp.isFavorite && (
@@ -282,7 +282,7 @@ export function ComponentLibrary({
                                             )}
                                         </div>
                                         {comp.description && (
-                                            <div className="text-[10px] text-gray-400 truncate">
+                                            <div className="text-[10px] text-muted-foreground truncate">
                                                 {comp.description}
                                             </div>
                                         )}
@@ -292,9 +292,9 @@ export function ComponentLibrary({
                                             e.stopPropagation();
                                             toggleFavorite(comp.id);
                                         }}
-                                        className="p-1 opacity-0 group-hover:opacity-100 hover:bg-gray-200 rounded transition-all"
+                                        className="p-1 opacity-0 group-hover:opacity-100 hover:bg-muted rounded transition-all"
                                     >
-                                        <Star className={`h-3 w-3 ${comp.isFavorite ? 'text-amber-400 fill-amber-400' : 'text-gray-400'}`} />
+                                        <Star className={`h-3 w-3 ${comp.isFavorite ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground'}`} />
                                     </button>
                                 </div>
                             );
@@ -341,7 +341,7 @@ export function ComponentLibrary({
                                     setNewComponentName('');
                                     setNewComponentDesc('');
                                 }}
-                                className="flex-1 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                                className="flex-1 py-1.5 text-xs bg-secondary text-muted-foreground rounded hover:bg-muted"
                             >
                                 취소
                             </button>

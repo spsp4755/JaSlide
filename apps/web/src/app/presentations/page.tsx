@@ -63,7 +63,7 @@ export default function PresentationsPage() {
 
     if (!hasHydrated || !isAuthenticated || loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-secondary flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
         );
@@ -74,13 +74,13 @@ export default function PresentationsPage() {
             <div className="container mx-auto px-6 py-8">
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">내 발표함</h1>
-                        <div className="flex items-center gap-3 mt-1 text-gray-500">
+                        <h1 className="text-2xl font-bold text-foreground">내 발표함</h1>
+                        <div className="flex items-center gap-3 mt-1 text-muted-foreground">
                             <span>{presentations.length}개의 프레젠테이션</span>
                         </div>
                     </div>
                     <Link href="/dashboard">
-                        <Button className="bg-gray-900 hover:bg-gray-700">
+                        <Button className="bg-primary hover:opacity-90">
                             <Plus className="h-4 w-4 mr-2" />
                             새 프레젠테이션
                         </Button>
@@ -88,12 +88,12 @@ export default function PresentationsPage() {
                 </div>
 
                 {presentations.length === 0 ? (
-                    <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed">
-                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">프레젠테이션이 없습니다</h3>
-                        <p className="text-gray-500 mb-6">첫 번째 프레젠테이션을 만들어보세요</p>
+                    <div className="text-center py-20 bg-card rounded-xl border-2 border-dashed">
+                        <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-foreground mb-2">프레젠테이션이 없습니다</h3>
+                        <p className="text-muted-foreground mb-6">첫 번째 프레젠테이션을 만들어보세요</p>
                         <Link href="/dashboard">
-                            <Button className="bg-gray-900 hover:bg-gray-700">
+                            <Button className="bg-primary hover:opacity-90">
                                 <Plus className="h-4 w-4 mr-2" />
                                 새 프레젠테이션 만들기
                             </Button>
@@ -102,14 +102,14 @@ export default function PresentationsPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {presentations.map((pres) => (
-                            <div key={pres.id} className="relative bg-white rounded-xl border hover:shadow-lg transition-shadow overflow-hidden">
+                            <div key={pres.id} className="relative bg-card rounded-xl border hover:shadow-lg transition-shadow overflow-hidden">
                             <Link href={`/editor/${pres.id}`} className="block">
                                 <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                                    <FileText className="h-12 w-12 text-gray-500" />
+                                    <FileText className="h-12 w-12 text-muted-foreground" />
                                 </div>
                                 <div className="p-4">
-                                    <h3 className="font-medium text-gray-900 truncate">{pres.title}</h3>
-                                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                                    <h3 className="font-medium text-foreground truncate">{pres.title}</h3>
+                                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                                         <span>{pres._count.slides} 슬라이드</span>
                                         <span className="flex items-center gap-1">
                                             <Clock className="h-3 w-3" />
@@ -125,7 +125,7 @@ export default function PresentationsPage() {
                                                       ? 'bg-yellow-100 text-yellow-700'
                                                       : pres.status === 'FAILED'
                                                         ? 'bg-red-100 text-red-700'
-                                                        : 'bg-gray-100 text-gray-700'
+                                                        : 'bg-secondary text-foreground'
                                             }`}
                                         >
                                             {pres.status === 'COMPLETED' && '완료'}
@@ -141,7 +141,7 @@ export default function PresentationsPage() {
                                 aria-label={`${pres.title} 삭제`}
                                 disabled={deletingId === pres.id}
                                 onClick={() => deletePresentation(pres)}
-                                className="absolute right-3 top-3 rounded-md bg-white/90 p-2 text-red-600 shadow hover:bg-red-50 disabled:opacity-50"
+                                className="absolute right-3 top-3 rounded-md bg-card/90 p-2 text-red-600 shadow hover:bg-red-50 disabled:opacity-50"
                             >
                                 <Trash2 className="h-4 w-4" />
                             </button>

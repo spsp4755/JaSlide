@@ -68,7 +68,7 @@ interface KeyboardShortcutsProps {
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[80vh] overflow-hidden animate-in">
+            <div className="bg-card rounded-xl shadow-2xl max-w-xl w-full max-h-[80vh] overflow-hidden animate-in">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-pink-50">
                     <div className="flex items-center gap-3">
@@ -76,13 +76,13 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
                             <Keyboard className="h-5 w-5 text-purple-600" />
                         </div>
                         <div>
-                            <h2 className="font-bold text-gray-900">키보드 단축키</h2>
-                            <p className="text-sm text-gray-500">빠른 작업을 위한 단축키 모음</p>
+                            <h2 className="font-bold text-foreground">키보드 단축키</h2>
+                            <p className="text-sm text-muted-foreground">빠른 작업을 위한 단축키 모음</p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                        className="p-2 text-muted-foreground hover:text-muted-foreground hover:bg-secondary rounded-lg"
                     >
                         <X className="h-5 w-5" />
                     </button>
@@ -93,24 +93,24 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {SHORTCUTS.map((group) => (
                             <div key={group.title}>
-                                <h3 className="font-medium text-gray-900 mb-3">{group.title}</h3>
+                                <h3 className="font-medium text-foreground mb-3">{group.title}</h3>
                                 <div className="space-y-2">
                                     {group.shortcuts.map((shortcut, index) => (
                                         <div
                                             key={index}
                                             className="flex items-center justify-between py-2"
                                         >
-                                            <span className="text-sm text-gray-600">
+                                            <span className="text-sm text-muted-foreground">
                                                 {shortcut.description}
                                             </span>
                                             <div className="flex items-center gap-1">
                                                 {shortcut.keys.map((key, keyIndex) => (
                                                     <span key={keyIndex}>
-                                                        <kbd className="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-mono text-gray-700">
+                                                        <kbd className="px-2 py-1 bg-secondary border border-border rounded text-xs font-mono text-foreground">
                                                             {key}
                                                         </kbd>
                                                         {keyIndex < shortcut.keys.length - 1 && (
-                                                            <span className="text-gray-400 mx-0.5">+</span>
+                                                            <span className="text-muted-foreground mx-0.5">+</span>
                                                         )}
                                                     </span>
                                                 ))}
@@ -124,9 +124,9 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t bg-gray-50">
-                    <p className="text-xs text-gray-500 text-center">
-                        <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600 font-mono">?</kbd>
+                <div className="px-6 py-4 border-t bg-secondary">
+                    <p className="text-xs text-muted-foreground text-center">
+                        <kbd className="px-1.5 py-0.5 bg-muted rounded text-muted-foreground font-mono">?</kbd>
                         를 눌러 언제든 이 도움말을 열 수 있습니다
                     </p>
                 </div>
@@ -163,11 +163,11 @@ export function ShortcutHint({ shortcut, className = '' }: { shortcut: string[];
         <div className={`inline-flex items-center gap-0.5 ${className}`}>
             {shortcut.map((key, index) => (
                 <span key={index}>
-                    <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-[10px] font-mono text-gray-500">
+                    <kbd className="px-1 py-0.5 bg-secondary border border-border rounded text-[10px] font-mono text-muted-foreground">
                         {key}
                     </kbd>
                     {index < shortcut.length - 1 && (
-                        <span className="text-gray-300 mx-0.5">+</span>
+                        <span className="text-muted-foreground mx-0.5">+</span>
                     )}
                 </span>
             ))}

@@ -141,7 +141,7 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
     };
 
     return (
-        <div className="bg-white border-l shadow-lg w-80 flex flex-col h-full">
+        <div className="bg-card border-l shadow-lg w-80 flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-2">
@@ -149,14 +149,14 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                     <h3 className="font-medium">
                         댓글 {slideId ? '(슬라이드)' : '(전체)'}
                     </h3>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                    <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
                         {filteredComments.length}
                     </span>
                 </div>
                 <div className="flex items-center gap-1">
                     <button
                         onClick={toggleResolvedComments}
-                        className={`p-1 rounded ${showResolvedComments ? 'bg-purple-100 text-purple-600' : 'hover:bg-gray-100'
+                        className={`p-1 rounded ${showResolvedComments ? 'bg-purple-100 text-purple-600' : 'hover:bg-secondary'
                             }`}
                         title={showResolvedComments ? '해결됨 숨기기' : '해결됨 보기'}
                     >
@@ -167,7 +167,7 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                         )}
                     </button>
                     {onClose && (
-                        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+                        <button onClick={onClose} className="p-1 hover:bg-secondary rounded">
                             <X className="h-4 w-4" />
                         </button>
                     )}
@@ -181,14 +181,14 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
                     </div>
                 ) : filteredComments.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 text-sm">
+                    <div className="text-center py-8 text-muted-foreground text-sm">
                         댓글이 없습니다
                     </div>
                 ) : (
                     filteredComments.map((comment) => (
                         <div
                             key={comment.id}
-                            className={`p-3 rounded-lg ${comment.isResolved ? 'bg-green-50' : 'bg-gray-50'
+                            className={`p-3 rounded-lg ${comment.isResolved ? 'bg-green-50' : 'bg-secondary'
                                 }`}
                         >
                             <div className="flex items-start justify-between mb-2">
@@ -205,10 +205,10 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                                         </div>
                                     )}
                                     <div>
-                                        <p className="text-sm font-medium text-gray-900">
+                                        <p className="text-sm font-medium text-foreground">
                                             {comment.user.name}
                                         </p>
-                                        <p className="text-xs text-gray-500">
+                                        <p className="text-xs text-muted-foreground">
                                             {formatDate(comment.createdAt)}
                                         </p>
                                     </div>
@@ -218,7 +218,7 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                                         onClick={() => handleResolve(comment.id, comment.isResolved)}
                                         className={`p-1 rounded ${comment.isResolved
                                             ? 'text-green-600 hover:bg-green-100'
-                                            : 'text-gray-400 hover:bg-gray-200'
+                                            : 'text-muted-foreground hover:bg-muted'
                                             }`}
                                         title={comment.isResolved ? '다시 열기' : '해결됨 표시'}
                                     >
@@ -229,14 +229,14 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                                             setEditingId(comment.id);
                                             setEditContent(comment.content);
                                         }}
-                                        className="p-1 hover:bg-gray-200 rounded text-gray-400"
+                                        className="p-1 hover:bg-muted rounded text-muted-foreground"
                                         title="수정"
                                     >
                                         <Edit2 className="h-4 w-4" />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(comment.id)}
-                                        className="p-1 hover:bg-gray-200 rounded text-gray-400"
+                                        className="p-1 hover:bg-muted rounded text-muted-foreground"
                                         title="삭제"
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -269,7 +269,7 @@ export function CommentsPanel({ presentationId, slideId, onClose }: CommentsPane
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-sm text-gray-700">{comment.content}</p>
+                                <p className="text-sm text-foreground">{comment.content}</p>
                             )}
                         </div>
                     ))

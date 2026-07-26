@@ -81,11 +81,11 @@ export function FocusMode({
             {/* 포커스 모드 해제 힌트 */}
             {isActive && (
                 <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/90 text-white text-sm rounded-full shadow-lg">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-primary/90 text-primary-foreground text-sm rounded-full shadow-lg">
                         <span>ESC를 눌러 포커스 모드 종료</span>
                         <button
                             onClick={onToggle}
-                            className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                            className="p-1 hover:bg-card/20 rounded-full transition-colors"
                         >
                             <X className="h-4 w-4" />
                         </button>
@@ -117,7 +117,7 @@ export function FocusModeToggle({
                 flex items-center gap-2 px-3 py-2 rounded-lg transition-all
                 ${isActive
                     ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-secondary text-muted-foreground hover:bg-muted'
                 }
                 ${className}
             `}

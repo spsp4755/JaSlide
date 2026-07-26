@@ -110,11 +110,11 @@ export default function DemoPage() {
     const slide = demoSlides[currentSlide];
 
     return (
-        <div className="min-h-screen bg-slate-900 flex flex-col">
+        <div className="min-h-screen bg-primary flex flex-col">
             {/* Header */}
             <header className="container mx-auto px-4 py-4">
                 <nav className="flex items-center justify-between">
-                    <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                    <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-white transition-colors">
                         <ArrowLeft className="h-4 w-4" />
                         홈으로
                     </Link>
@@ -154,7 +154,7 @@ export default function DemoPage() {
                                                 className="flex items-center gap-4 text-xl text-white/90"
                                                 style={{ animationDelay: `${index * 0.1}s` }}
                                             >
-                                                <div className="w-3 h-3 bg-white/80 rounded-full" />
+                                                <div className="w-3 h-3 bg-card/80 rounded-full" />
                                                 {bullet}
                                             </li>
                                         ))}
@@ -168,7 +168,7 @@ export default function DemoPage() {
                                     <div className="grid grid-cols-3 gap-8">
                                         {slide.features?.map((feature, index) => (
                                             <div key={index} className="text-center">
-                                                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                                <div className="w-16 h-16 bg-card/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                                     <feature.icon className="h-8 w-8 text-white" />
                                                 </div>
                                                 <h3 className="text-xl font-semibold text-white mb-2">{feature.title}</h3>
@@ -186,9 +186,9 @@ export default function DemoPage() {
                                         {slide.exports?.map((exp, index) => (
                                             <div
                                                 key={index}
-                                                className="flex items-center gap-6 bg-white/10 rounded-xl p-6"
+                                                className="flex items-center gap-6 bg-card/10 rounded-xl p-6"
                                             >
-                                                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                                                <div className="w-12 h-12 bg-card/20 rounded-lg flex items-center justify-center">
                                                     <Download className="h-6 w-6 text-white" />
                                                 </div>
                                                 <div>
@@ -206,7 +206,7 @@ export default function DemoPage() {
                                     <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">{slide.title}</h1>
                                     <p className="text-xl md:text-2xl text-white/80 mb-10">{slide.subtitle}</p>
                                     <Link href="/register">
-                                        <Button size="lg" className="bg-white text-purple-600 hover:bg-gray-100 text-lg px-8 py-6">
+                                        <Button size="lg" className="bg-card text-purple-600 hover:bg-secondary text-lg px-8 py-6">
                                             무료로 시작하기
                                             <ArrowRight className="ml-2 h-5 w-5" />
                                         </Button>
@@ -261,7 +261,7 @@ export default function DemoPage() {
                     </div>
 
                     {/* Info Text */}
-                    <p className="mt-8 text-center text-gray-400">
+                    <p className="mt-8 text-center text-muted-foreground">
                         이 데모는 JaSlide로 생성된 프레젠테이션의 예시입니다.
                         <br />
                         <Link href="/dashboard" className="text-purple-400 hover:text-purple-300">

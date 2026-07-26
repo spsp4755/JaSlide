@@ -79,7 +79,7 @@ export function AIEditDialog({
                 <div className="py-4 space-y-4">
                     {/* Quick Actions */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">빠른 편집</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">빠른 편집</label>
                         <div className="flex flex-wrap gap-2">
                             {QUICK_ACTIONS.map((action) => (
                                 <button
@@ -99,20 +99,20 @@ export function AIEditDialog({
                             <span className="w-full border-t" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-white px-2 text-gray-500">또는</span>
+                            <span className="bg-card px-2 text-muted-foreground">또는</span>
                         </div>
                     </div>
 
                     {/* Custom Instruction */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">직접 입력</label>
+                        <label className="block text-sm font-medium text-foreground mb-2">직접 입력</label>
                         <textarea
                             value={instruction}
                             onChange={(e) => setInstruction(e.target.value)}
                             placeholder="예: 마지막 문장을 더 강하게 마무리해주세요..."
                             rows={3}
                             disabled={processing}
-                            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none disabled:bg-gray-50"
+                            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none disabled:bg-secondary"
                         />
                     </div>
                 </div>

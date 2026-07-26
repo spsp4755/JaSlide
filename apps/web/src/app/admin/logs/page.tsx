@@ -91,25 +91,25 @@ export default function AdminLogsPage() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">로그 & 감사</h1>
-                    <p className="text-sm text-gray-500">시스템 활동 및 API 호출 로그</p>
+                    <h1 className="text-2xl font-bold text-foreground">로그 & 감사</h1>
+                    <p className="text-sm text-muted-foreground">시스템 활동 및 API 호출 로그</p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => exportLogs('json')}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+                        className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg hover:bg-muted"
                     >
                         <Download size={18} />
                         JSON
                     </button>
                     <button
                         onClick={() => exportLogs('csv')}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+                        className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg hover:bg-muted"
                     >
                         <Download size={18} />
                         CSV
                     </button>
-                    <button onClick={fetchLogs} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    <button onClick={fetchLogs} className="p-2 bg-secondary rounded-lg hover:bg-muted">
                         <RefreshCw size={20} />
                     </button>
                 </div>
@@ -119,7 +119,7 @@ export default function AdminLogsPage() {
             <div className="flex border-b mb-6">
                 <button
                     onClick={() => { setTab('audit'); setPage(1); }}
-                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'audit' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'
+                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'audit' ? 'border-gray-900 text-foreground' : 'border-transparent text-muted-foreground'
                         }`}
                 >
                     <FileText size={18} />
@@ -127,7 +127,7 @@ export default function AdminLogsPage() {
                 </button>
                 <button
                     onClick={() => { setTab('api'); setPage(1); }}
-                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'api' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500'
+                    className={`flex items-center gap-2 px-4 py-3 border-b-2 -mb-px ${tab === 'api' ? 'border-gray-900 text-foreground' : 'border-transparent text-muted-foreground'
                         }`}
                 >
                     <Activity size={18} />
@@ -136,53 +136,53 @@ export default function AdminLogsPage() {
             </div>
 
             {/* Logs Table */}
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-card rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : tab === 'audit' ? (
                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
+                        <thead className="bg-secondary border-b">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">시간</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용자</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">리소스</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">시간</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">사용자</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">작업</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">리소스</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">IP</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-border">
                             {auditLogs.map((log) => (
-                                <tr key={log.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                <tr key={log.id} className="hover:bg-secondary">
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">
                                         {new Date(log.createdAt).toLocaleString('ko-KR')}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900">{log.user?.email || 'System'}</td>
+                                    <td className="px-6 py-4 text-sm text-foreground">{log.user?.email || 'System'}</td>
                                     <td className="px-6 py-4">
-                                        <span className="px-2 py-1 text-xs bg-gray-100 rounded">{log.action}</span>
+                                        <span className="px-2 py-1 text-xs bg-secondary rounded">{log.action}</span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{log.resource}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{log.ipAddress || '-'}</td>
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">{log.resource}</td>
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">{log.ipAddress || '-'}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 ) : (
                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
+                        <thead className="bg-secondary border-b">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">시간</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">메소드</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">경로</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">응답시간</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">시간</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">메소드</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">경로</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">상태</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">응답시간</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-border">
                             {apiLogs.map((log) => (
-                                <tr key={log.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                <tr key={log.id} className="hover:bg-secondary">
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">
                                         {new Date(log.createdAt).toLocaleString('ko-KR')}
                                     </td>
                                     <td className="px-6 py-4">
@@ -194,7 +194,7 @@ export default function AdminLogsPage() {
                                             {log.method}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm font-mono text-gray-500">{log.path}</td>
+                                    <td className="px-6 py-4 text-sm font-mono text-muted-foreground">{log.path}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs rounded ${log.statusCode < 300 ? 'bg-green-100 text-green-800' :
                                             log.statusCode < 400 ? 'bg-yellow-100 text-yellow-800' :
@@ -203,7 +203,7 @@ export default function AdminLogsPage() {
                                             {log.statusCode}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{log.responseTime}ms</td>
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">{log.responseTime}ms</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -213,7 +213,7 @@ export default function AdminLogsPage() {
                 {/* Pagination */}
                 {total > limit && (
                     <div className="px-6 py-4 border-t flex items-center justify-between">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             {(page - 1) * limit + 1} - {Math.min(page * limit, total)} / {total}
                         </p>
                         <div className="flex gap-2">

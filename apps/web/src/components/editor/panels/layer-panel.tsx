@@ -104,13 +104,13 @@ function LayerItem({
             className={`flex items-center gap-1 py-1.5 pr-2 rounded transition-colors cursor-pointer group ${isDragging ? 'opacity-50 bg-purple-50' : ''
                 } ${isSelected
                     ? 'bg-purple-100 text-purple-800'
-                    : 'hover:bg-gray-100 text-gray-700'
+                    : 'hover:bg-secondary text-foreground'
                 }`}
             onClick={onSelect}
         >
             {/* 드래그 핸들 */}
-            <div className="p-0.5 cursor-grab hover:bg-gray-200 rounded">
-                <GripVertical className="h-3 w-3 text-gray-400" />
+            <div className="p-0.5 cursor-grab hover:bg-muted rounded">
+                <GripVertical className="h-3 w-3 text-muted-foreground" />
             </div>
 
             {/* 그룹 확장/축소 */}
@@ -146,7 +146,7 @@ function LayerItem({
                         e.stopPropagation();
                         onToggleVisibility();
                     }}
-                    className={`p-1 rounded hover:bg-gray-200 ${layer.visible ? 'text-gray-600' : 'text-gray-300'
+                    className={`p-1 rounded hover:bg-muted ${layer.visible ? 'text-muted-foreground' : 'text-muted-foreground'
                         }`}
                     title={layer.visible ? '숨기기' : '보이기'}
                 >
@@ -163,7 +163,7 @@ function LayerItem({
                         e.stopPropagation();
                         onToggleLock();
                     }}
-                    className={`p-1 rounded hover:bg-gray-200 ${layer.locked ? 'text-amber-500' : 'text-gray-400'
+                    className={`p-1 rounded hover:bg-muted ${layer.locked ? 'text-amber-500' : 'text-muted-foreground'
                         }`}
                     title={layer.locked ? '잠금 해제' : '잠금'}
                 >
@@ -238,20 +238,20 @@ export function LayerPanel({
     const selectedLayer = layers.find(l => l.id === selectedLayerId);
 
     return (
-        <div className="h-full flex flex-col bg-white border-l">
+        <div className="h-full flex flex-col bg-card border-l">
             {/* 헤더 */}
             <div className="flex items-center justify-between px-3 py-2 border-b">
                 <div className="flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-700">레이어</span>
-                    <span className="text-xs text-gray-400">({layers.length})</span>
+                    <Layers className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">레이어</span>
+                    <span className="text-xs text-muted-foreground">({layers.length})</span>
                 </div>
             </div>
 
             {/* 레이어 목록 */}
             <div className="flex-1 overflow-y-auto">
                 {layers.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-gray-400">
+                    <div className="p-4 text-center text-xs text-muted-foreground">
                         레이어가 없습니다
                     </div>
                 ) : (
@@ -283,7 +283,7 @@ export function LayerPanel({
                 <div className="border-t p-2 flex gap-1">
                     <button
                         onClick={() => onDuplicateLayer(selectedLayer.id)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs bg-secondary hover:bg-muted rounded transition-colors"
                         title="복제"
                     >
                         <Copy className="h-3 w-3" />

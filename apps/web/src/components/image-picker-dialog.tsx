@@ -98,7 +98,7 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                         onClick={() => setTab('upload')}
                         className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'upload'
                                 ? 'border-purple-500 text-purple-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                     >
                         <Upload className="h-4 w-4 inline-block mr-1" />
@@ -108,7 +108,7 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                         onClick={() => setTab('stock')}
                         className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'stock'
                                 ? 'border-purple-500 text-purple-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                     >
                         <Search className="h-4 w-4 inline-block mr-1" />
@@ -118,7 +118,7 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                         onClick={() => setTab('url')}
                         className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'url'
                                 ? 'border-purple-500 text-purple-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                     >
                         <Link className="h-4 w-4 inline-block mr-1" />
@@ -133,7 +133,7 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                             {...getRootProps()}
                             className={`h-64 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${isDragActive
                                     ? 'border-purple-500 bg-purple-50'
-                                    : 'border-gray-300 hover:border-purple-400'
+                                    : 'border-border hover:border-purple-400'
                                 }`}
                         >
                             <input {...getInputProps()} />
@@ -141,11 +141,11 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                                 <Loader2 className="h-10 w-10 text-purple-500 animate-spin" />
                             ) : (
                                 <>
-                                    <ImageIcon className="h-10 w-10 text-gray-400 mb-3" />
-                                    <p className="text-gray-600 font-medium">
+                                    <ImageIcon className="h-10 w-10 text-muted-foreground mb-3" />
+                                    <p className="text-muted-foreground font-medium">
                                         이미지를 드래그하거나 클릭하여 업로드
                                     </p>
-                                    <p className="text-sm text-gray-400 mt-1">
+                                    <p className="text-sm text-muted-foreground mt-1">
                                         JPG, PNG, GIF, WebP (최대 10MB)
                                     </p>
                                 </>
@@ -190,7 +190,7 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-12 text-gray-500">
+                                <div className="text-center py-12 text-muted-foreground">
                                     검색어를 입력하여 이미지를 찾아보세요
                                 </div>
                             )}
@@ -201,7 +201,7 @@ export function ImagePickerDialog({ open, onClose, onSelect }: ImagePickerDialog
                     {tab === 'url' && (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-foreground mb-2">
                                     이미지 URL
                                 </label>
                                 <input

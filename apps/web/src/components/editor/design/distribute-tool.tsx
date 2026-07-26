@@ -148,15 +148,15 @@ export function DistributeTool({
 
     const buttonClass = (disabled: boolean) =>
         `p-2 rounded transition-colors ${disabled
-            ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-            : 'bg-gray-100 text-gray-600 hover:bg-purple-100 hover:text-purple-600'
+            ? 'bg-secondary text-muted-foreground cursor-not-allowed'
+            : 'bg-secondary text-muted-foreground hover:bg-purple-100 hover:text-purple-600'
         }`;
 
     return (
         <div className="space-y-3">
             {/* 정렬 도구 */}
             <div>
-                <span className="text-xs font-medium text-gray-600 block mb-2">정렬</span>
+                <span className="text-xs font-medium text-muted-foreground block mb-2">정렬</span>
                 <div className="flex gap-1">
                     <button
                         onClick={() => handleAlign('left')}
@@ -182,7 +182,7 @@ export function DistributeTool({
                     >
                         <AlignEndHorizontal className="h-4 w-4" />
                     </button>
-                    <div className="w-px bg-gray-200 mx-1" />
+                    <div className="w-px bg-muted mx-1" />
                     <button
                         onClick={() => handleAlign('top')}
                         disabled={selectedElements.length === 0}
@@ -212,7 +212,7 @@ export function DistributeTool({
 
             {/* 분배 도구 */}
             <div>
-                <span className="text-xs font-medium text-gray-600 block mb-2">분배</span>
+                <span className="text-xs font-medium text-muted-foreground block mb-2">분배</span>
                 <div className="flex gap-1">
                     <button
                         onClick={() => handleDistribute('horizontal')}
@@ -242,7 +242,7 @@ export function DistributeTool({
             </div>
 
             {/* 선택 상태 표시 */}
-            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+            <div className="text-xs text-muted-foreground bg-secondary p-2 rounded">
                 {selectedElements.length === 0
                     ? '요소를 선택하세요'
                     : selectedElements.length === 1

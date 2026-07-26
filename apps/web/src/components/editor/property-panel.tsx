@@ -67,8 +67,8 @@ export function PropertyPanel({ selectedObject, objectType, onUpdate }: Property
     if (!selectedObject) {
         return (
             <div className="p-4">
-                <h3 className="font-medium text-gray-900 mb-4">속성</h3>
-                <p className="text-sm text-gray-500">객체를 선택하면 속성을 편집할 수 있습니다.</p>
+                <h3 className="font-medium text-foreground mb-4">속성</h3>
+                <p className="text-sm text-muted-foreground">객체를 선택하면 속성을 편집할 수 있습니다.</p>
             </div>
         );
     }
@@ -76,8 +76,8 @@ export function PropertyPanel({ selectedObject, objectType, onUpdate }: Property
     return (
         <div className="h-full flex flex-col">
             <div className="p-4 border-b">
-                <h3 className="font-medium text-gray-900">속성</h3>
-                <p className="text-xs text-gray-500 mt-1">
+                <h3 className="font-medium text-foreground">속성</h3>
+                <p className="text-xs text-muted-foreground mt-1">
                     {objectType === 'slide' ? '슬라이드' : objectType || '객체'} 편집
                 </p>
             </div>
@@ -92,18 +92,18 @@ export function PropertyPanel({ selectedObject, objectType, onUpdate }: Property
                         <div key={section.id} className="border-b">
                             <button
                                 onClick={() => toggleSection(section.id)}
-                                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                                className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary transition-colors"
                             >
                                 <div className="flex items-center gap-2">
-                                    <Icon className="h-4 w-4 text-gray-500" />
-                                    <span className="text-sm font-medium text-gray-700">
+                                    <Icon className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-foreground">
                                         {section.title}
                                     </span>
                                 </div>
                                 {isExpanded ? (
-                                    <ChevronUp className="h-4 w-4 text-gray-400" />
+                                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
                                 ) : (
-                                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                 )}
                             </button>
 

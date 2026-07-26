@@ -73,14 +73,14 @@ export function LayoutPicker({ value, onChange, slideType }: LayoutPickerProps) 
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center gap-3 px-3 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2 border rounded-lg hover:bg-secondary transition-colors"
             >
-                <Icon className="h-5 w-5 text-gray-500" />
+                <Icon className="h-5 w-5 text-muted-foreground" />
                 <div className="flex-1 text-left">
                     <div className="text-sm font-medium">{selectedLayout.label}</div>
-                    <div className="text-xs text-gray-500">{selectedLayout.description}</div>
+                    <div className="text-xs text-muted-foreground">{selectedLayout.description}</div>
                 </div>
-                <LayoutGrid className="h-4 w-4 text-gray-400" />
+                <LayoutGrid className="h-4 w-4 text-muted-foreground" />
             </button>
 
             {isOpen && (
@@ -89,7 +89,7 @@ export function LayoutPicker({ value, onChange, slideType }: LayoutPickerProps) 
                         className="fixed inset-0 z-10"
                         onClick={() => setIsOpen(false)}
                     />
-                    <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-lg shadow-xl border z-20 p-2">
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-card rounded-lg shadow-xl border z-20 p-2">
                         <div className="grid grid-cols-2 gap-2">
                             {availableLayouts.map((layout) => {
                                 const LayoutIcon = layout.icon;
@@ -103,16 +103,16 @@ export function LayoutPicker({ value, onChange, slideType }: LayoutPickerProps) 
                                         }}
                                         className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all ${isSelected
                                                 ? 'border-purple-500 bg-purple-50'
-                                                : 'border-transparent hover:bg-gray-50'
+                                                : 'border-transparent hover:bg-secondary'
                                             }`}
                                     >
                                         <div
                                             className={`w-full aspect-video rounded border-2 flex items-center justify-center ${isSelected ? 'border-purple-300 bg-purple-100' : 'border-gray-200 bg-gray-50'
                                                 }`}
                                         >
-                                            <LayoutIcon className={`h-6 w-6 ${isSelected ? 'text-purple-600' : 'text-gray-400'}`} />
+                                            <LayoutIcon className={`h-6 w-6 ${isSelected ? 'text-purple-600' : 'text-muted-foreground'}`} />
                                         </div>
-                                        <span className={`text-xs font-medium ${isSelected ? 'text-purple-700' : 'text-gray-600'}`}>
+                                        <span className={`text-xs font-medium ${isSelected ? 'text-purple-700' : 'text-muted-foreground'}`}>
                                             {layout.label}
                                         </span>
                                     </button>

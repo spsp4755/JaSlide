@@ -155,7 +155,7 @@ export default function SettingsPage() {
     if (!authHydrated || !settingsHydrated || !isAuthenticated) {
         return (
             <AppShell>
-                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                <div className="min-h-screen bg-secondary dark:bg-gray-900 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 </div>
             </AppShell>
@@ -164,15 +164,15 @@ export default function SettingsPage() {
 
     return (
         <AppShell>
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            <div className="min-h-screen bg-secondary dark:bg-gray-900 transition-colors">
             <div className="container mx-auto px-4 py-8">
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center justify-between mb-8">
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.settings.title}</h1>
+                        <h1 className="text-2xl font-bold text-foreground dark:text-white">{t.settings.title}</h1>
                         <Button
                             onClick={handleSave}
                             disabled={saving}
-                            className="bg-gray-900 hover:bg-gray-700 min-w-[100px]"
+                            className="bg-primary hover:opacity-90 min-w-[100px]"
                         >
                             {saving ? (
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
@@ -201,8 +201,8 @@ export default function SettingsPage() {
                                             <button
                                                 onClick={() => setActiveSection(section.id)}
                                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === section.id
-                                                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-500 font-medium'
-                                                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                                                        ? 'bg-secondary dark:bg-gray-800 text-foreground dark:text-muted-foreground font-medium'
+                                                        : 'text-muted-foreground dark:text-muted-foreground hover:bg-secondary dark:hover:bg-gray-800 hover:text-foreground dark:hover:text-white'
                                                     }`}
                                             >
                                                 <Icon className="h-5 w-5" />
@@ -215,11 +215,11 @@ export default function SettingsPage() {
                         </nav>
 
                         {/* Main Content */}
-                        <main className="flex-1 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 p-6 shadow-sm">
+                        <main className="flex-1 bg-card dark:bg-gray-800 rounded-xl border dark:border-gray-700 p-6 shadow-sm">
                             {/* Profile Section */}
                             {activeSection === 'profile' && (
                                 <div className="animate-in">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                                    <h2 className="text-lg font-semibold text-foreground dark:text-white mb-6">
                                         {t.profile.title}
                                     </h2>
 
@@ -255,7 +255,7 @@ export default function SettingsPage() {
                                                     <Upload className="h-4 w-4 mr-2" />
                                                     {t.profile.changePhoto}
                                                 </Button>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                                <p className="text-xs text-muted-foreground dark:text-muted-foreground mt-2">
                                                     {t.profile.photoHint}
                                                 </p>
                                             </div>
@@ -263,30 +263,30 @@ export default function SettingsPage() {
 
                                         {/* Display Name */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            <label className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-2">
                                                 {t.profile.displayName}
                                             </label>
                                             <input
                                                 type="text"
                                                 value={displayName}
                                                 onChange={(e) => setDisplayName(e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-400 focus:border-transparent outline-none transition-all"
+                                                className="w-full px-4 py-2 border border-border dark:border-gray-600 rounded-lg bg-card dark:bg-gray-700 text-foreground dark:text-white focus:ring-2 focus:ring-gray-400 focus:border-transparent outline-none transition-all"
                                                 placeholder="이름을 입력하세요"
                                             />
                                         </div>
 
                                         {/* Email */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            <label className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-2">
                                                 {t.profile.email}
                                             </label>
                                             <input
                                                 type="email"
                                                 value={user?.email || ''}
-                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                                                className="w-full px-4 py-2 border border-border dark:border-gray-600 rounded-lg bg-secondary dark:bg-gray-600 text-muted-foreground dark:text-muted-foreground cursor-not-allowed"
                                                 disabled
                                             />
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                            <p className="text-xs text-muted-foreground dark:text-muted-foreground mt-2">
                                                 {t.profile.emailHint}
                                             </p>
                                         </div>
@@ -297,13 +297,13 @@ export default function SettingsPage() {
                             {/* Appearance Section */}
                             {activeSection === 'appearance' && (
                                 <div className="animate-in">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                                    <h2 className="text-lg font-semibold text-foreground dark:text-white mb-6">
                                         {t.appearance.title}
                                     </h2>
 
                                     <div className="space-y-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                                            <label className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-4">
                                                 {t.appearance.theme}
                                             </label>
                                             <div className="grid grid-cols-3 gap-4">
@@ -314,17 +314,17 @@ export default function SettingsPage() {
                                                             key={theme.id}
                                                             onClick={() => setTheme(theme.id)}
                                                             className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all ${settings.theme === theme.id
-                                                                    ? 'border-gray-900 bg-gray-100 dark:bg-gray-800'
-                                                                    : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                                                                    ? 'border-gray-900 bg-secondary dark:bg-gray-800'
+                                                                    : 'border-border dark:border-gray-600 hover:border-border dark:hover:border-gray-500'
                                                                 }`}
                                                         >
                                                             <Icon className={`h-6 w-6 ${settings.theme === theme.id
-                                                                    ? 'text-gray-900 dark:text-gray-300'
-                                                                    : 'text-gray-500 dark:text-gray-400'
+                                                                    ? 'text-foreground dark:text-muted-foreground'
+                                                                    : 'text-muted-foreground dark:text-muted-foreground'
                                                                 }`} />
                                                             <span className={`text-sm font-medium ${settings.theme === theme.id
-                                                                    ? 'text-gray-700 dark:text-gray-500'
-                                                                    : 'text-gray-600 dark:text-gray-400'
+                                                                    ? 'text-foreground dark:text-muted-foreground'
+                                                                    : 'text-muted-foreground dark:text-muted-foreground'
                                                                 }`}>
                                                                 {theme.label}
                                                             </span>
@@ -340,7 +340,7 @@ export default function SettingsPage() {
                             {/* Notifications Section */}
                             {activeSection === 'notifications' && (
                                 <div className="animate-in">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                                    <h2 className="text-lg font-semibold text-foreground dark:text-white mb-6">
                                         {t.notifications.title}
                                     </h2>
 
@@ -350,20 +350,20 @@ export default function SettingsPage() {
                                             { key: 'push' as const, label: t.notifications.push, description: t.notifications.pushDesc },
                                             { key: 'marketing' as const, label: t.notifications.marketing, description: t.notifications.marketingDesc },
                                         ].map((item) => (
-                                            <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                            <div key={item.key} className="flex items-center justify-between p-4 bg-secondary dark:bg-gray-700/50 rounded-lg">
                                                 <div>
-                                                    <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
+                                                    <p className="font-medium text-foreground dark:text-white">{item.label}</p>
+                                                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">{item.description}</p>
                                                 </div>
                                                 <button
                                                     onClick={() => updateNotification(item.key, !settings.notifications[item.key])}
                                                     className={`relative w-12 h-6 rounded-full transition-colors ${settings.notifications[item.key]
-                                                            ? 'bg-gray-900'
+                                                            ? 'bg-primary'
                                                             : 'bg-gray-300 dark:bg-gray-600'
                                                         }`}
                                                 >
                                                     <span
-                                                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${settings.notifications[item.key]
+                                                        className={`absolute top-1 w-4 h-4 bg-card rounded-full transition-transform shadow-sm ${settings.notifications[item.key]
                                                                 ? 'translate-x-7'
                                                                 : 'translate-x-1'
                                                             }`}
@@ -378,7 +378,7 @@ export default function SettingsPage() {
                             {/* Privacy Section */}
                             {activeSection === 'privacy' && (
                                 <div className="animate-in">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                                    <h2 className="text-lg font-semibold text-foreground dark:text-white mb-6">
                                         {t.privacy.title}
                                     </h2>
 
@@ -387,20 +387,20 @@ export default function SettingsPage() {
                                             { key: 'shareAnalytics' as const, label: t.privacy.shareAnalytics, description: t.privacy.shareAnalyticsDesc },
                                             { key: 'showProfile' as const, label: t.privacy.showProfile, description: t.privacy.showProfileDesc },
                                         ].map((item) => (
-                                            <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                            <div key={item.key} className="flex items-center justify-between p-4 bg-secondary dark:bg-gray-700/50 rounded-lg">
                                                 <div>
-                                                    <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
+                                                    <p className="font-medium text-foreground dark:text-white">{item.label}</p>
+                                                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">{item.description}</p>
                                                 </div>
                                                 <button
                                                     onClick={() => updatePrivacy(item.key, !settings.privacy[item.key])}
                                                     className={`relative w-12 h-6 rounded-full transition-colors ${settings.privacy[item.key]
-                                                            ? 'bg-gray-900'
+                                                            ? 'bg-primary'
                                                             : 'bg-gray-300 dark:bg-gray-600'
                                                         }`}
                                                 >
                                                     <span
-                                                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${settings.privacy[item.key]
+                                                        className={`absolute top-1 w-4 h-4 bg-card rounded-full transition-transform shadow-sm ${settings.privacy[item.key]
                                                                 ? 'translate-x-7'
                                                                 : 'translate-x-1'
                                                             }`}
@@ -432,25 +432,25 @@ export default function SettingsPage() {
                             {/* Shortcuts Section */}
                             {activeSection === 'shortcuts' && (
                                 <div className="animate-in">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                                    <h2 className="text-lg font-semibold text-foreground dark:text-white mb-6">
                                         {t.shortcuts.title}
                                     </h2>
 
                                     <div className="mb-6">
-                                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <div className="flex items-center justify-between p-4 bg-secondary dark:bg-gray-700/50 rounded-lg">
                                             <div>
-                                                <p className="font-medium text-gray-900 dark:text-white">{t.shortcuts.enable}</p>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400">{t.shortcuts.enableDesc}</p>
+                                                <p className="font-medium text-foreground dark:text-white">{t.shortcuts.enable}</p>
+                                                <p className="text-sm text-muted-foreground dark:text-muted-foreground">{t.shortcuts.enableDesc}</p>
                                             </div>
                                             <button
                                                 onClick={toggleShortcuts}
                                                 className={`relative w-12 h-6 rounded-full transition-colors ${settings.shortcuts.enabled
-                                                        ? 'bg-gray-900'
+                                                        ? 'bg-primary'
                                                         : 'bg-gray-300 dark:bg-gray-600'
                                                     }`}
                                             >
                                                 <span
-                                                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${settings.shortcuts.enabled
+                                                    className={`absolute top-1 w-4 h-4 bg-card rounded-full transition-transform shadow-sm ${settings.shortcuts.enabled
                                                             ? 'translate-x-7'
                                                             : 'translate-x-1'
                                                         }`}
@@ -460,20 +460,20 @@ export default function SettingsPage() {
                                     </div>
 
                                     <div className="space-y-3">
-                                        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                        <h3 className="text-sm font-medium text-foreground dark:text-muted-foreground mb-3">
                                             {t.shortcuts.available}
                                         </h3>
                                         {shortcutsList.map((shortcut, index) => (
-                                            <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                                                <span className="text-gray-600 dark:text-gray-400">{shortcut.description}</span>
+                                            <div key={index} className="flex items-center justify-between py-2 border-b border-border dark:border-gray-700 last:border-0">
+                                                <span className="text-muted-foreground dark:text-muted-foreground">{shortcut.description}</span>
                                                 <div className="flex items-center gap-1">
                                                     {shortcut.keys.map((key, i) => (
                                                         <span key={i} className="flex items-center">
-                                                            <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono text-gray-700 dark:text-gray-300">
+                                                            <kbd className="px-2 py-1 bg-secondary dark:bg-gray-700 border border-border dark:border-gray-600 rounded text-xs font-mono text-foreground dark:text-muted-foreground">
                                                                 {key}
                                                             </kbd>
                                                             {i < shortcut.keys.length - 1 && (
-                                                                <span className="mx-1 text-gray-400">+</span>
+                                                                <span className="mx-1 text-muted-foreground">+</span>
                                                             )}
                                                         </span>
                                                     ))}
@@ -487,12 +487,12 @@ export default function SettingsPage() {
                             {/* Language Section */}
                             {activeSection === 'language' && (
                                 <div className="animate-in">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                                    <h2 className="text-lg font-semibold text-foreground dark:text-white mb-6">
                                         {t.language.title}
                                     </h2>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                                        <label className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-4">
                                             {t.language.interfaceLanguage}
                                         </label>
                                         <div className="space-y-3">
@@ -501,19 +501,19 @@ export default function SettingsPage() {
                                                     key={lang.id}
                                                     onClick={() => setLanguage(lang.id)}
                                                     className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${settings.language === lang.id
-                                                            ? 'border-gray-900 bg-gray-100 dark:bg-gray-800'
-                                                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                                                            ? 'border-gray-900 bg-secondary dark:bg-gray-800'
+                                                            : 'border-border dark:border-gray-600 hover:border-border dark:hover:border-gray-500'
                                                         }`}
                                                 >
                                                     <span className="text-2xl">{lang.flag}</span>
                                                     <span className={`font-medium ${settings.language === lang.id
-                                                            ? 'text-gray-700 dark:text-gray-500'
-                                                            : 'text-gray-700 dark:text-gray-300'
+                                                            ? 'text-foreground dark:text-muted-foreground'
+                                                            : 'text-foreground dark:text-muted-foreground'
                                                         }`}>
                                                         {lang.label}
                                                     </span>
                                                     {settings.language === lang.id && (
-                                                        <Check className="h-5 w-5 text-gray-900 dark:text-gray-300 ml-auto" />
+                                                        <Check className="h-5 w-5 text-foreground dark:text-muted-foreground ml-auto" />
                                                     )}
                                                 </button>
                                             ))}

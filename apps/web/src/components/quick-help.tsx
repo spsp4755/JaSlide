@@ -85,7 +85,7 @@ export function QuickHelp({ onShortcutsClick, className = '' }: QuickHelpProps) 
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsOpen(!isOpen)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-muted-foreground hover:text-foreground"
             >
                 <HelpCircle className="h-5 w-5" />
             </Button>
@@ -100,14 +100,14 @@ export function QuickHelp({ onShortcutsClick, className = '' }: QuickHelpProps) 
                     />
 
                     {/* Menu */}
-                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border shadow-lg z-50 animate-in">
+                    <div className="absolute right-0 top-full mt-2 w-72 bg-card rounded-xl border shadow-lg z-50 animate-in">
                         {/* Header */}
                         <div className="p-4 border-b">
                             <div className="flex items-center justify-between mb-3">
-                                <span className="font-medium text-gray-900">도움말</span>
+                                <span className="font-medium text-foreground">도움말</span>
                                 <button
                                     onClick={() => setIsOpen(false)}
-                                    className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                                    className="p-1 text-muted-foreground hover:text-muted-foreground rounded"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
@@ -115,7 +115,7 @@ export function QuickHelp({ onShortcutsClick, className = '' }: QuickHelpProps) 
 
                             {/* Search */}
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input
                                     type="text"
                                     value={searchQuery}
@@ -134,37 +134,37 @@ export function QuickHelp({ onShortcutsClick, className = '' }: QuickHelpProps) 
                                     <button
                                         key={item.id}
                                         onClick={() => handleItemClick(item)}
-                                        className="w-full flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                                        className="w-full flex items-start gap-3 px-4 py-2.5 hover:bg-secondary transition-colors"
                                     >
-                                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <Icon className="h-4 w-4 text-gray-600" />
+                                        <div className="w-8 h-8 bg-secondary rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <Icon className="h-4 w-4 text-muted-foreground" />
                                         </div>
                                         <div className="flex-1 text-left">
                                             <div className="flex items-center gap-1">
-                                                <span className="text-sm font-medium text-gray-900">
+                                                <span className="text-sm font-medium text-foreground">
                                                     {item.title}
                                                 </span>
                                                 {item.link && !item.link.startsWith('mailto:') && (
-                                                    <ExternalLink className="h-3 w-3 text-gray-400" />
+                                                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
                                                 )}
                                             </div>
-                                            <p className="text-xs text-gray-500">{item.description}</p>
+                                            <p className="text-xs text-muted-foreground">{item.description}</p>
                                         </div>
                                     </button>
                                 );
                             })}
 
                             {filteredItems.length === 0 && (
-                                <p className="text-sm text-gray-400 text-center py-4">
+                                <p className="text-sm text-muted-foreground text-center py-4">
                                     검색 결과가 없습니다
                                 </p>
                             )}
                         </div>
 
                         {/* Footer */}
-                        <div className="p-3 border-t bg-gray-50">
-                            <p className="text-xs text-gray-500 text-center">
-                                <kbd className="px-1 py-0.5 bg-gray-200 rounded text-gray-600 font-mono">?</kbd>
+                        <div className="p-3 border-t bg-secondary">
+                            <p className="text-xs text-muted-foreground text-center">
+                                <kbd className="px-1 py-0.5 bg-muted rounded text-muted-foreground font-mono">?</kbd>
                                 키를 눌러 단축키를 확인하세요
                             </p>
                         </div>
@@ -203,7 +203,7 @@ export function Tooltip({ content, children, position = 'top', className = '' }:
             {isVisible && (
                 <div
                     className={`
-                        absolute z-50 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap
+                        absolute z-50 px-2 py-1 text-xs text-primary-foreground bg-primary rounded whitespace-nowrap
                         ${positionClasses[position]}
                         animate-in fade-in-0 zoom-in-95
                     `}

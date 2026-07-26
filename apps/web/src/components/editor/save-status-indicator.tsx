@@ -85,9 +85,9 @@ export function SaveStatusIndicator({ presentationId, isDirty = false }: SaveSta
                 };
             case 'offline':
                 return {
-                    icon: <CloudOff className="h-4 w-4 text-gray-500" />,
+                    icon: <CloudOff className="h-4 w-4 text-muted-foreground" />,
                     text: '오프라인',
-                    className: 'text-gray-600',
+                    className: 'text-muted-foreground',
                 };
         }
     };

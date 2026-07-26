@@ -93,9 +93,9 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in">
+            <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in">
                 {/* Progress bar */}
-                <div className="h-1 bg-gray-100">
+                <div className="h-1 bg-secondary">
                     <div
                         className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
                         style={{ width: `${progress}%` }}
@@ -110,12 +110,12 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                     </div>
 
                     {/* Title */}
-                    <h2 className="text-xl font-bold text-gray-900 mb-3">
+                    <h2 className="text-xl font-bold text-foreground mb-3">
                         {step.title}
                     </h2>
 
                     {/* Description */}
-                    <p className="text-gray-500 mb-8 leading-relaxed">
+                    <p className="text-muted-foreground mb-8 leading-relaxed">
                         {step.description}
                     </p>
 
@@ -130,7 +130,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                                         ? 'w-6 bg-purple-500'
                                         : index < currentStep
                                             ? 'bg-purple-300'
-                                            : 'bg-gray-200'
+                                            : 'bg-muted'
                                     }
                                 `}
                             />
@@ -142,7 +142,7 @@ export function TutorialOverlay({ onComplete, onSkip }: TutorialOverlayProps) {
                         <Button
                             variant="ghost"
                             onClick={handleSkip}
-                            className="text-gray-400 hover:text-gray-600"
+                            className="text-muted-foreground hover:text-muted-foreground"
                         >
                             건너뛰기
                         </Button>

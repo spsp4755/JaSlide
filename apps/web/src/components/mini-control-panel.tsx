@@ -106,7 +106,7 @@ export function MiniControlPanel({
     return (
         <div
             ref={panelRef}
-            className="fixed z-50 bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 transition-opacity duration-200"
+            className="fixed z-50 bg-primary/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 transition-opacity duration-200"
             style={{
                 left: `${position.x}px`,
                 top: `${position.y}px`,
@@ -118,7 +118,7 @@ export function MiniControlPanel({
                 className="flex items-center justify-between px-3 py-2 border-b border-gray-700 cursor-move"
                 onMouseDown={handleDragStart}
             >
-                <div className="flex items-center gap-2 text-gray-400">
+                <div className="flex items-center gap-2 text-muted-foreground">
                     <GripVertical className="h-4 w-4" />
                     <span className="text-xs font-medium">빠른 명령</span>
                 </div>
@@ -126,7 +126,7 @@ export function MiniControlPanel({
                     onClick={onClose}
                     className="p-1 hover:bg-gray-700 rounded transition-colors"
                 >
-                    <X className="h-3 w-3 text-gray-400" />
+                    <X className="h-3 w-3 text-muted-foreground" />
                 </button>
             </div>
 
@@ -146,10 +146,10 @@ export function MiniControlPanel({
                         `}
                         title={action.shortcut ? `${action.label} (${action.shortcut})` : action.label}
                     >
-                        <action.icon className="h-4 w-4 text-gray-300" />
+                        <action.icon className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm text-white flex-1">{action.label}</span>
                         {action.shortcut && (
-                            <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded">
+                            <span className="text-xs text-muted-foreground bg-gray-700 px-1.5 py-0.5 rounded">
                                 {action.shortcut}
                             </span>
                         )}
@@ -159,7 +159,7 @@ export function MiniControlPanel({
 
             {/* 하단 힌트 */}
             <div className="px-3 py-2 border-t border-gray-700">
-                <p className="text-xs text-gray-500 text-center">
+                <p className="text-xs text-muted-foreground text-center">
                     Ctrl+Shift+K로 토글
                 </p>
             </div>

@@ -82,18 +82,18 @@ export function AiNaturalEdit({
     }
 
     return (
-        <div className="bg-white rounded-xl border shadow-lg p-4 w-full max-w-md animate-in">
+        <div className="bg-card rounded-xl border shadow-lg p-4 w-full max-w-md animate-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
                         <Sparkles className="h-4 w-4 text-white" />
                     </div>
-                    <span className="font-medium text-gray-900">AI 자연어 편집</span>
+                    <span className="font-medium text-foreground">AI 자연어 편집</span>
                 </div>
                 <button
                     onClick={() => setIsOpen(false)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                    className="p-1 text-muted-foreground hover:text-muted-foreground rounded"
                 >
                     <X className="h-4 w-4" />
                 </button>
@@ -110,7 +110,7 @@ export function AiNaturalEdit({
                         onKeyDown={handleKeyDown}
                         placeholder="예: 이 슬라이드 더 간결하게"
                         disabled={isProcessing}
-                        className="w-full px-4 py-2.5 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-50"
+                        className="w-full px-4 py-2.5 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-secondary"
                     />
                     <button
                         type="submit"
@@ -130,13 +130,13 @@ export function AiNaturalEdit({
             <div className="flex items-center gap-2 mb-2">
                 <button
                     onClick={() => { setShowSuggestions(true); setShowHistory(false); }}
-                    className={`text-xs px-2 py-1 rounded ${showSuggestions ? 'bg-purple-100 text-purple-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                    className={`text-xs px-2 py-1 rounded ${showSuggestions ? 'bg-purple-100 text-purple-700' : 'text-muted-foreground hover:bg-secondary'}`}
                 >
                     추천 명령
                 </button>
                 <button
                     onClick={() => { setShowHistory(true); setShowSuggestions(false); }}
-                    className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${showHistory ? 'bg-purple-100 text-purple-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                    className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${showHistory ? 'bg-purple-100 text-purple-700' : 'text-muted-foreground hover:bg-secondary'}`}
                 >
                     <History className="h-3 w-3" />
                     최근 사용
@@ -150,7 +150,7 @@ export function AiNaturalEdit({
                         <button
                             key={command}
                             onClick={() => handleSuggestionClick(command)}
-                            className="text-xs px-2.5 py-1.5 bg-gray-50 hover:bg-purple-50 hover:text-purple-700 rounded-full border border-gray-200 hover:border-purple-300 transition-colors"
+                            className="text-xs px-2.5 py-1.5 bg-secondary hover:bg-purple-50 hover:text-purple-700 rounded-full border border-border hover:border-purple-300 transition-colors"
                         >
                             {command}
                         </button>
@@ -166,13 +166,13 @@ export function AiNaturalEdit({
                             <button
                                 key={index}
                                 onClick={() => handleSuggestionClick(command)}
-                                className="w-full text-left text-sm px-3 py-2 bg-gray-50 hover:bg-purple-50 rounded-lg"
+                                className="w-full text-left text-sm px-3 py-2 bg-secondary hover:bg-purple-50 rounded-lg"
                             >
                                 {command}
                             </button>
                         ))
                     ) : (
-                        <p className="text-xs text-gray-400 text-center py-4">
+                        <p className="text-xs text-muted-foreground text-center py-4">
                             최근 사용한 명령이 없습니다
                         </p>
                     )}
@@ -181,7 +181,7 @@ export function AiNaturalEdit({
 
             {/* Tips */}
             <div className="mt-3 pt-3 border-t">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted-foreground">
                     💡 자연어로 원하는 변경사항을 설명하면 AI가 자동으로 적용합니다
                 </p>
             </div>

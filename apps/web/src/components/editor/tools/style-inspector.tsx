@@ -234,36 +234,36 @@ export function StyleInspector({
     };
 
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-card">
             {/* 헤더 */}
             <div className="px-3 py-2 border-b">
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                         <Wand2 className="h-4 w-4 text-purple-600" />
-                        <span className="text-sm font-medium text-gray-700">스타일 검사</span>
+                        <span className="text-sm font-medium text-foreground">스타일 검사</span>
                     </div>
                     <button
                         onClick={handleScan}
                         disabled={isScanning}
-                        className={`p-1.5 rounded hover:bg-gray-100 ${isScanning ? 'animate-spin' : ''}`}
+                        className={`p-1.5 rounded hover:bg-secondary ${isScanning ? 'animate-spin' : ''}`}
                     >
-                        <RefreshCw className="h-4 w-4 text-gray-500" />
+                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
                     </button>
                 </div>
 
                 {/* 통계 */}
                 <div className="flex gap-2 text-xs">
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${stats.errors > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${stats.errors > 0 ? 'bg-red-100 text-red-700' : 'bg-secondary text-muted-foreground'
                         }`}>
                         <XCircle className="h-3 w-3" />
                         {stats.errors} 오류
                     </div>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${stats.warnings > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${stats.warnings > 0 ? 'bg-amber-100 text-amber-700' : 'bg-secondary text-muted-foreground'
                         }`}>
                         <AlertTriangle className="h-3 w-3" />
                         {stats.warnings} 경고
                     </div>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-secondary text-muted-foreground">
                         <Eye className="h-3 w-3" />
                         {stats.info} 정보
                     </div>
@@ -275,10 +275,10 @@ export function StyleInspector({
                 {stats.total === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center p-4">
                         <CheckCircle className="h-10 w-10 text-green-500 mb-2" />
-                        <span className="text-sm font-medium text-gray-700">
+                        <span className="text-sm font-medium text-foreground">
                             스타일 이슈 없음
                         </span>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                             모든 스타일이 일관성 있습니다
                         </span>
                     </div>
@@ -294,21 +294,21 @@ export function StyleInspector({
                                     {/* 카테고리 헤더 */}
                                     <button
                                         onClick={() => toggleCategory(category)}
-                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50"
+                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-secondary"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <CategoryIcon className="h-4 w-4 text-gray-500" />
-                                            <span className="text-sm font-medium text-gray-700">
+                                            <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-sm font-medium text-foreground">
                                                 {getCategoryName(category)}
                                             </span>
-                                            <span className="text-xs text-gray-400">
+                                            <span className="text-xs text-muted-foreground">
                                                 ({categoryIssues.length})
                                             </span>
                                         </div>
                                         {isExpanded ? (
-                                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                         ) : (
-                                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                         )}
                                     </button>
 
@@ -318,14 +318,14 @@ export function StyleInspector({
                                             {categoryIssues.map(issue => (
                                                 <div
                                                     key={issue.id}
-                                                    className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50"
+                                                    className="flex items-start gap-2 p-2 rounded-lg hover:bg-secondary"
                                                 >
                                                     {getSeverityIcon(issue.severity)}
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="text-xs font-medium text-gray-700">
+                                                        <div className="text-xs font-medium text-foreground">
                                                             {issue.title}
                                                         </div>
-                                                        <div className="text-[10px] text-gray-400">
+                                                        <div className="text-[10px] text-muted-foreground">
                                                             {issue.description}
                                                         </div>
                                                         <div className="flex items-center gap-2 mt-1 text-[10px]">

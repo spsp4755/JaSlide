@@ -24,9 +24,15 @@ export function Providers({ children }: { children: ReactNode }) {
     return (
         <QueryClientProvider client={queryClient}>
             <Theme theme={neutralTheme}>
-                <LinkProvider component={Link}>
-                    <ThemeProvider>{children}</ThemeProvider>
-                </LinkProvider>
+                {/* Astryx's Theme sets its own `color` on the wrapper it renders, which beats
+                    the `text-foreground` on <body> for the whole tree: anything without an
+                    explicit text color came out near-white and vanished in the light theme.
+                    Hand the app's own token back so both themes stay readable. */}
+                <div className="contents text-foreground">
+                    <LinkProvider component={Link}>
+                        <ThemeProvider>{children}</ThemeProvider>
+                    </LinkProvider>
+                </div>
             </Theme>
             <Toaster />
         </QueryClientProvider>

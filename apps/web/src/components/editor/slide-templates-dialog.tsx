@@ -131,13 +131,13 @@ export function SlideTemplatesDialog({
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[600px] max-h-[80vh] flex flex-col shadow-xl">
+            <div className="bg-card rounded-xl w-[600px] max-h-[80vh] flex flex-col shadow-xl">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold">슬라이드 추가</h2>
                     <button
                         onClick={onClose}
-                        className="p-1 hover:bg-gray-100 rounded transition-colors"
+                        className="p-1 hover:bg-secondary rounded transition-colors"
                     >
                         <X className="h-5 w-5" />
                     </button>
@@ -151,14 +151,14 @@ export function SlideTemplatesDialog({
                                 onAiGenerate();
                                 onClose();
                             }}
-                            className="w-full flex items-center gap-3 p-3 bg-white rounded-lg border border-purple-200 hover:border-purple-400 hover:shadow-md transition-all"
+                            className="w-full flex items-center gap-3 p-3 bg-card rounded-lg border border-purple-200 hover:border-purple-400 hover:shadow-md transition-all"
                         >
                             <div className="p-2 bg-purple-100 rounded-lg">
                                 <Sparkles className="h-5 w-5 text-purple-600" />
                             </div>
                             <div className="text-left">
-                                <h3 className="font-medium text-gray-900">AI로 슬라이드 생성</h3>
-                                <p className="text-xs text-gray-500">
+                                <h3 className="font-medium text-foreground">AI로 슬라이드 생성</h3>
+                                <p className="text-xs text-muted-foreground">
                                     내용을 입력하면 AI가 적절한 슬라이드를 만들어줍니다
                                 </p>
                             </div>
@@ -174,7 +174,7 @@ export function SlideTemplatesDialog({
                             onClick={() => setSelectedCategory(cat.id)}
                             className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${selectedCategory === cat.id
                                     ? 'bg-purple-100 text-purple-700 font-medium'
-                                    : 'text-gray-600 hover:bg-gray-100'
+                                    : 'text-muted-foreground hover:bg-secondary'
                                 }`}
                         >
                             {cat.name}
@@ -197,12 +197,12 @@ export function SlideTemplatesDialog({
                                     className="group flex flex-col items-center p-4 border rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-all"
                                 >
                                     <div className="w-full aspect-video bg-gray-100 rounded mb-3 flex items-center justify-center group-hover:bg-white transition-colors">
-                                        <Icon className="h-8 w-8 text-gray-400 group-hover:text-purple-500 transition-colors" />
+                                        <Icon className="h-8 w-8 text-muted-foreground group-hover:text-purple-500 transition-colors" />
                                     </div>
-                                    <h3 className="text-sm font-medium text-gray-900 mb-1">
+                                    <h3 className="text-sm font-medium text-foreground mb-1">
                                         {template.name}
                                     </h3>
-                                    <p className="text-xs text-gray-500 text-center line-clamp-2">
+                                    <p className="text-xs text-muted-foreground text-center line-clamp-2">
                                         {template.description}
                                     </p>
                                 </button>
@@ -212,7 +212,7 @@ export function SlideTemplatesDialog({
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t bg-gray-50 flex justify-end">
+                <div className="px-6 py-4 border-t bg-secondary flex justify-end">
                     <Button variant="outline" onClick={onClose}>
                         취소
                     </Button>

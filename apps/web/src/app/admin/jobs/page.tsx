@@ -82,7 +82,7 @@ export default function AdminJobsPage() {
     };
 
     const statusColors: Record<string, string> = {
-        QUEUED: 'bg-gray-100 text-gray-800',
+        QUEUED: 'bg-secondary text-foreground',
         PROCESSING: 'bg-blue-100 text-blue-800',
         GENERATING_OUTLINE: 'bg-blue-100 text-blue-800',
         GENERATING_CONTENT: 'bg-blue-100 text-blue-800',
@@ -90,17 +90,17 @@ export default function AdminJobsPage() {
         RENDERING: 'bg-yellow-100 text-yellow-800',
         COMPLETED: 'bg-green-100 text-green-800',
         FAILED: 'bg-red-100 text-red-800',
-        CANCELLED: 'bg-gray-100 text-gray-800',
+        CANCELLED: 'bg-secondary text-foreground',
     };
 
     return (
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">작업 모니터링</h1>
-                    <p className="text-sm text-gray-500">총 {total}개 작업</p>
+                    <h1 className="text-2xl font-bold text-foreground">작업 모니터링</h1>
+                    <p className="text-sm text-muted-foreground">총 {total}개 작업</p>
                 </div>
-                <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+                <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg hover:bg-muted">
                     <RefreshCw size={20} />
                     새로고침
                 </button>
@@ -110,21 +110,21 @@ export default function AdminJobsPage() {
             {stats && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {stats.byStatus.map((s) => (
-                        <div key={s.status} className="bg-white rounded-lg p-4 shadow-sm">
-                            <div className="text-sm text-gray-500">{s.status}</div>
-                            <div className="text-2xl font-bold text-gray-900">{s._count}</div>
+                        <div key={s.status} className="bg-card rounded-lg p-4 shadow-sm">
+                            <div className="text-sm text-muted-foreground">{s.status}</div>
+                            <div className="text-2xl font-bold text-foreground">{s._count}</div>
                         </div>
                     ))}
-                    <div className="bg-white rounded-lg p-4 shadow-sm">
-                        <div className="text-sm text-gray-500">최근 24시간</div>
-                        <div className="text-2xl font-bold text-gray-900">{stats.last24Hours}</div>
+                    <div className="bg-card rounded-lg p-4 shadow-sm">
+                        <div className="text-sm text-muted-foreground">최근 24시간</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.last24Hours}</div>
                     </div>
                 </div>
             )}
 
             {/* Filters */}
-            <div className="bg-white rounded-lg p-4 mb-6 shadow-sm flex items-center gap-4">
-                <Filter size={20} className="text-gray-400" />
+            <div className="bg-card rounded-lg p-4 mb-6 shadow-sm flex items-center gap-4">
+                <Filter size={20} className="text-muted-foreground" />
                 <select
                     value={statusFilter}
                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
@@ -140,30 +140,30 @@ export default function AdminJobsPage() {
             </div>
 
             {/* Jobs Table */}
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-card rounded-lg shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-8 text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto" />
                     </div>
                 ) : (
                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
+                        <thead className="bg-secondary border-b">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용자</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">진행률</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">생성일</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">작업</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">사용자</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">상태</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">진행률</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">생성일</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">작업</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-border">
                             {jobs.map((job) => (
-                                <tr key={job.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm font-mono text-gray-500">{job.id.slice(0, 8)}...</td>
+                                <tr key={job.id} className="hover:bg-secondary">
+                                    <td className="px-6 py-4 text-sm font-mono text-muted-foreground">{job.id.slice(0, 8)}...</td>
                                     <td className="px-6 py-4">
-                                        <div className="text-sm font-medium text-gray-900">{job.user.email}</div>
-                                        <div className="text-xs text-gray-500">{job.presentation?.title || '-'}</div>
+                                        <div className="text-sm font-medium text-foreground">{job.user.email}</div>
+                                        <div className="text-xs text-muted-foreground">{job.presentation?.title || '-'}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs rounded-full ${statusColors[job.status] || ''}`}>
@@ -171,12 +171,12 @@ export default function AdminJobsPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                            <div className="h-full bg-gray-900" style={{ width: `${job.progress}%` }} />
+                                        <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                                            <div className="h-full bg-primary" style={{ width: `${job.progress}%` }} />
                                         </div>
-                                        <div className="text-xs text-gray-500 mt-1">{job.progress}%</div>
+                                        <div className="text-xs text-muted-foreground mt-1">{job.progress}%</div>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                    <td className="px-6 py-4 text-sm text-muted-foreground">
                                         {new Date(job.createdAt).toLocaleString('ko-KR')}
                                     </td>
                                     <td className="px-6 py-4 text-right space-x-2">
@@ -208,7 +208,7 @@ export default function AdminJobsPage() {
                 {/* Pagination */}
                 {total > limit && (
                     <div className="px-6 py-4 border-t flex items-center justify-between">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             {(page - 1) * limit + 1} - {Math.min(page * limit, total)} / {total}
                         </p>
                         <div className="flex gap-2">

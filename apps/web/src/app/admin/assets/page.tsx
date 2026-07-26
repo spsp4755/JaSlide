@@ -70,15 +70,15 @@ export default function AdminAssetsPage() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">에셋 라이브러리</h1>
-                    <p className="text-sm text-gray-500">총 {total}개 에셋</p>
+                    <h1 className="text-2xl font-bold text-foreground">에셋 라이브러리</h1>
+                    <p className="text-sm text-muted-foreground">총 {total}개 에셋</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-lg p-4 mb-6 shadow-sm flex items-center gap-4">
+            <div className="bg-card rounded-lg p-4 mb-6 shadow-sm flex items-center gap-4">
                 <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <input type="text" placeholder="에셋 검색..." value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && fetchAssets()}
                         className="w-full pl-10 pr-4 py-2 border rounded-lg" />
@@ -100,21 +100,21 @@ export default function AdminAssetsPage() {
                     {assets.map((asset) => {
                         const Icon = typeIcons[asset.type] || File;
                         return (
-                            <div key={asset.id} className="bg-white rounded-lg shadow-sm overflow-hidden group">
-                                <div className="h-24 bg-gray-100 flex items-center justify-center relative">
+                            <div key={asset.id} className="bg-card rounded-lg shadow-sm overflow-hidden group">
+                                <div className="h-24 bg-secondary flex items-center justify-center relative">
                                     {asset.type === 'IMAGE' ? (
                                         <img src={assetUrl(asset.url)} alt={asset.name} className="h-full w-full object-cover" />
                                     ) : (
-                                        <Icon size={32} className="text-gray-400" />
+                                        <Icon size={32} className="text-muted-foreground" />
                                     )}
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <a href={assetUrl(asset.url)} target="_blank" className="p-2 bg-white rounded-full"><Download size={16} /></a>
-                                        <button onClick={() => deleteAsset(asset.id)} className="p-2 bg-white rounded-full"><Trash2 size={16} className="text-red-500" /></button>
+                                        <a href={assetUrl(asset.url)} target="_blank" className="p-2 bg-card rounded-full"><Download size={16} /></a>
+                                        <button onClick={() => deleteAsset(asset.id)} className="p-2 bg-card rounded-full"><Trash2 size={16} className="text-red-500" /></button>
                                     </div>
                                 </div>
                                 <div className="p-2">
-                                    <p className="text-xs font-medium text-gray-900 truncate" title={asset.name}>{asset.name}</p>
-                                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                    <p className="text-xs font-medium text-foreground truncate" title={asset.name}>{asset.name}</p>
+                                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
                                         <span>{asset.type}</span>
                                         <span>{formatSize(asset.size)}</span>
                                     </div>
@@ -129,7 +129,7 @@ export default function AdminAssetsPage() {
             {total > limit && (
                 <div className="mt-6 flex items-center justify-center gap-2">
                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 border rounded-lg disabled:opacity-50">이전</button>
-                    <span className="text-gray-500">페이지 {page} / {Math.ceil(total / limit)}</span>
+                    <span className="text-muted-foreground">페이지 {page} / {Math.ceil(total / limit)}</span>
                     <button onClick={() => setPage(p => p + 1)} disabled={page * limit >= total} className="px-4 py-2 border rounded-lg disabled:opacity-50">다음</button>
                 </div>
             )}

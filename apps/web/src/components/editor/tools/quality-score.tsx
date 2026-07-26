@@ -179,12 +179,12 @@ export function QualityScore({ slides }: QualityScoreProps) {
     const stars = Math.round(totalScore / 20);
 
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-card">
             {/* 헤더 */}
             <div className="px-3 py-2 border-b">
                 <div className="flex items-center gap-2 mb-2">
                     <Trophy className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-medium text-gray-700">디자인 품질 점수</span>
+                    <span className="text-sm font-medium text-foreground">디자인 품질 점수</span>
                 </div>
 
                 {/* 점수 디스플레이 */}
@@ -193,7 +193,7 @@ export function QualityScore({ slides }: QualityScoreProps) {
                         <div className={`text-4xl font-bold ${grade.color}`}>
                             {totalScore}
                         </div>
-                        <div className="text-xs text-gray-500">/ 100점</div>
+                        <div className="text-xs text-muted-foreground">/ 100점</div>
                     </div>
                     <div className={`w-16 h-16 rounded-full flex items-center justify-center ${grade.bg}`}>
                         <span className={`text-2xl font-bold ${grade.color}`}>
@@ -207,12 +207,12 @@ export function QualityScore({ slides }: QualityScoreProps) {
                                     key={n}
                                     className={`h-4 w-4 ${n <= stars
                                             ? 'text-amber-400 fill-amber-400'
-                                            : 'text-gray-300'
+                                            : 'text-muted-foreground'
                                         }`}
                                 />
                             ))}
                         </div>
-                        <span className="text-xs text-gray-400 mt-1">
+                        <span className="text-xs text-muted-foreground mt-1">
                             {stars}/5 별점
                         </span>
                     </div>
@@ -226,22 +226,22 @@ export function QualityScore({ slides }: QualityScoreProps) {
                     const CategoryIcon = category.icon;
 
                     return (
-                        <div key={category.name} className="bg-gray-50 rounded-lg p-3">
+                        <div key={category.name} className="bg-secondary rounded-lg p-3">
                             {/* 카테고리 헤더 */}
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                    <CategoryIcon className="h-4 w-4 text-gray-600" />
-                                    <span className="text-sm font-medium text-gray-700">
+                                    <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-foreground">
                                         {category.name}
                                     </span>
                                 </div>
-                                <span className="text-sm font-bold text-gray-700">
+                                <span className="text-sm font-bold text-foreground">
                                     {category.score}/{category.maxScore}
                                 </span>
                             </div>
 
                             {/* 프로그레스 바 */}
-                            <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                            <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
                                 <div
                                     className={`h-full rounded-full transition-all ${percentage >= 80
                                             ? 'bg-green-500'
@@ -266,11 +266,11 @@ export function QualityScore({ slides }: QualityScoreProps) {
                                             ) : (
                                                 <AlertTriangle className="h-3 w-3 text-amber-500" />
                                             )}
-                                            <span className={item.passed ? 'text-gray-600' : 'text-amber-700'}>
+                                            <span className={item.passed ? 'text-muted-foreground' : 'text-amber-700'}>
                                                 {item.label}
                                             </span>
                                         </div>
-                                        <span className={item.passed ? 'text-green-600' : 'text-gray-400'}>
+                                        <span className={item.passed ? 'text-green-600' : 'text-muted-foreground'}>
                                             {item.passed ? `+${item.points}` : '0'}
                                         </span>
                                     </div>

@@ -148,7 +148,7 @@ export function TextDiff({ oldText, newText, className = '' }: TextDiffProps) {
                     className={`
                         ${item.type === 'added' ? 'bg-green-100 text-green-800' : ''}
                         ${item.type === 'removed' ? 'bg-red-100 text-red-800 line-through' : ''}
-                        ${item.type === 'same' ? 'text-gray-700' : ''}
+                        ${item.type === 'same' ? 'text-foreground' : ''}
                     `}
                 >
                     {item.word}{' '}

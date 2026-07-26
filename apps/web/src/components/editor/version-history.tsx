@@ -105,7 +105,7 @@ export function VersionHistory({ presentationId, onClose }: VersionHistoryProps)
     };
 
     return (
-        <div className="bg-white border-l shadow-lg w-72 flex flex-col h-full">
+        <div className="bg-card border-l shadow-lg w-72 flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-2">
@@ -115,7 +115,7 @@ export function VersionHistory({ presentationId, onClose }: VersionHistoryProps)
                 <div className="flex items-center gap-1">
                     <button
                         onClick={() => setExpanded(!expanded)}
-                        className="p-1 hover:bg-gray-100 rounded"
+                        className="p-1 hover:bg-secondary rounded"
                     >
                         {expanded ? (
                             <ChevronUp className="h-4 w-4" />
@@ -124,7 +124,7 @@ export function VersionHistory({ presentationId, onClose }: VersionHistoryProps)
                         )}
                     </button>
                     {onClose && (
-                        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+                        <button onClick={onClose} className="p-1 hover:bg-secondary rounded">
                             <X className="h-4 w-4" />
                         </button>
                     )}
@@ -152,7 +152,7 @@ export function VersionHistory({ presentationId, onClose }: VersionHistoryProps)
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
                             </div>
                         ) : versions.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500 text-sm">
+                            <div className="text-center py-8 text-muted-foreground text-sm">
                                 저장된 버전이 없습니다
                             </div>
                         ) : (
@@ -160,14 +160,14 @@ export function VersionHistory({ presentationId, onClose }: VersionHistoryProps)
                                 {versions.map((version) => (
                                     <div
                                         key={version.id}
-                                        className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 group"
+                                        className="p-3 bg-secondary rounded-lg hover:bg-secondary group"
                                     >
                                         <div className="flex items-start justify-between">
                                             <div>
-                                                <p className="text-sm font-medium text-gray-900">
+                                                <p className="text-sm font-medium text-foreground">
                                                     {version.name || `버전 ${version.versionNumber}`}
                                                 </p>
-                                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                                     <Clock className="h-3 w-3" />
                                                     {formatDate(version.createdAt)}
                                                 </div>
@@ -176,14 +176,14 @@ export function VersionHistory({ presentationId, onClose }: VersionHistoryProps)
                                                 <button
                                                     onClick={() => handleRestore(version.id)}
                                                     disabled={restoring === version.id}
-                                                    className="p-1 hover:bg-white rounded text-purple-600"
+                                                    className="p-1 hover:bg-card rounded text-purple-600"
                                                     title="복원"
                                                 >
                                                     <RotateCcw className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(version.id)}
-                                                    className="p-1 hover:bg-white rounded text-red-600"
+                                                    className="p-1 hover:bg-card rounded text-red-600"
                                                     title="삭제"
                                                 >
                                                     <Trash2 className="h-4 w-4" />

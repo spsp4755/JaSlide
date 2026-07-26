@@ -38,7 +38,7 @@ export function RequiredFieldHighlight({
     }, [showAnimation, isRequired, isFilled]);
 
     const borderClass = useMemo(() => {
-        if (!isRequired) return 'border-gray-200';
+        if (!isRequired) return 'border-border';
         if (isFilled) return 'border-green-400 bg-green-50/50';
         return `border-purple-400 ${isAnimating ? 'ring-2 ring-purple-300 ring-opacity-50' : ''}`;
     }, [isRequired, isFilled, isAnimating]);
@@ -47,7 +47,7 @@ export function RequiredFieldHighlight({
         <div className={`relative ${className}`}>
             {label && (
                 <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                    <span className="text-sm font-medium text-foreground">{label}</span>
                     {isRequired && (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full transition-colors ${isFilled
                                 ? 'bg-green-100 text-green-600'

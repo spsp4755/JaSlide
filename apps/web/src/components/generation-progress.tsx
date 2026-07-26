@@ -110,18 +110,18 @@ export function GenerationProgress({
     };
 
     return (
-        <div className="bg-white rounded-xl border shadow-lg p-6 max-w-lg mx-auto">
+        <div className="bg-card rounded-xl border shadow-lg p-6 max-w-lg mx-auto">
             {/* Header */}
             <div className="text-center mb-6">
                 {status === 'generating' && (
                     <>
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-                            <Loader2 className="h-8 w-8 text-gray-900 animate-spin" />
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-secondary rounded-full mb-4">
+                            <Loader2 className="h-8 w-8 text-foreground animate-spin" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-1">
+                        <h2 className="text-xl font-bold text-foreground mb-1">
                             프레젠테이션 생성 중
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             AI가 최적의 슬라이드를 만들고 있습니다
                         </p>
                     </>
@@ -132,10 +132,10 @@ export function GenerationProgress({
                         <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
                             <CheckCircle className="h-8 w-8 text-green-600" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-1">
+                        <h2 className="text-xl font-bold text-foreground mb-1">
                             생성 완료!
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             프레젠테이션이 성공적으로 생성되었습니다
                         </p>
                     </>
@@ -146,10 +146,10 @@ export function GenerationProgress({
                         <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
                             <XCircle className="h-8 w-8 text-red-600" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-1">
+                        <h2 className="text-xl font-bold text-foreground mb-1">
                             생성 실패
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             오류가 발생했습니다. 다시 시도해주세요.
                         </p>
                     </>
@@ -160,15 +160,15 @@ export function GenerationProgress({
             {status === 'generating' && (
                 <div className="mb-6">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">
+                        <span className="text-sm font-medium text-foreground">
                             {progress}% 완료
                         </span>
-                        <div className="flex items-center gap-1 text-sm text-gray-500">
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
                             <Clock className="h-3.5 w-3.5" />
                             <span>{formatTime(elapsedTime)} 경과</span>
                         </div>
                     </div>
-                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-3 bg-secondary rounded-full overflow-hidden">
                         <div
                             className="h-full bg-gradient-to-r from-gray-800 to-gray-600 rounded-full transition-all duration-500 ease-out"
                             style={{ width: `${progress}%` }}
@@ -190,7 +190,7 @@ export function GenerationProgress({
                             key={step.id}
                             className={`
                                 flex items-center gap-3 p-3 rounded-lg transition-all
-                                ${isActive ? 'bg-gray-100 border border-gray-300' : ''}
+                                ${isActive ? 'bg-secondary border border-border' : ''}
                                 ${isCompleted ? 'bg-green-50' : ''}
                                 ${isError ? 'bg-red-50' : ''}
                             `}
@@ -198,16 +198,16 @@ export function GenerationProgress({
                             {/* Step indicator */}
                             <div className={`
                                 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                                ${isActive ? 'bg-gray-800' : ''}
+                                ${isActive ? 'bg-primary' : ''}
                                 ${isCompleted ? 'bg-green-500' : ''}
                                 ${isError ? 'bg-red-500' : ''}
-                                ${step.status === 'pending' ? 'bg-gray-200' : ''}
+                                ${step.status === 'pending' ? 'bg-muted' : ''}
                             `}>
                                 {isActive && <Loader2 className="h-4 w-4 text-white animate-spin" />}
                                 {isCompleted && <CheckCircle className="h-4 w-4 text-white" />}
                                 {isError && <XCircle className="h-4 w-4 text-white" />}
                                 {step.status === 'pending' && (
-                                    <span className="text-xs font-medium text-gray-500">{index + 1}</span>
+                                    <span className="text-xs font-medium text-muted-foreground">{index + 1}</span>
                                 )}
                             </div>
 
@@ -215,15 +215,15 @@ export function GenerationProgress({
                             <div className="flex-1 min-w-0">
                                 <p className={`
                                     text-sm font-medium
-                                    ${isActive ? 'text-gray-700' : ''}
+                                    ${isActive ? 'text-foreground' : ''}
                                     ${isCompleted ? 'text-green-700' : ''}
                                     ${isError ? 'text-red-700' : ''}
-                                    ${step.status === 'pending' ? 'text-gray-400' : ''}
+                                    ${step.status === 'pending' ? 'text-muted-foreground' : ''}
                                 `}>
                                     {step.name}
                                 </p>
                                 {isActive && (
-                                    <p className="text-xs text-gray-500">{step.description}</p>
+                                    <p className="text-xs text-muted-foreground">{step.description}</p>
                                 )}
                             </div>
                         </div>
@@ -238,7 +238,7 @@ export function GenerationProgress({
                         variant="outline"
                         size="sm"
                         onClick={onCancel}
-                        className="text-gray-500"
+                        className="text-muted-foreground"
                     >
                         생성 취소
                     </Button>
@@ -248,7 +248,7 @@ export function GenerationProgress({
             {/* Background info */}
             {status === 'generating' && (
                 <div className="mt-4 pt-4 border-t text-center">
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-muted-foreground">
                         💡 다른 탭에서 작업을 계속할 수 있습니다. 완료되면 알림을 보내드릴게요.
                     </p>
                 </div>

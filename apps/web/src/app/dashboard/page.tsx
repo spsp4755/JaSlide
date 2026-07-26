@@ -448,7 +448,7 @@ function DashboardContent() {
                 {/* Hero */}
                 <div className="text-center mb-8">
                     <h1 className="font-display text-5xl font-black tracking-tight text-foreground mb-3">TaeSlide AI 슬라이드</h1>
-                    <p className="text-gray-500">누구나 전문가처럼 덱을 만들 수 있도록.</p>
+                    <p className="text-muted-foreground">누구나 전문가처럼 덱을 만들 수 있도록.</p>
                 </div>
 
                 {/* Prompt box */}
@@ -460,33 +460,36 @@ function DashboardContent() {
                         onKeyDown={handleKeyDown}
                         placeholder="발표 주제와 요구 사항을 입력하세요..."
                         rows={3}
-                        className="w-full resize-none focus:outline-none text-gray-900 placeholder:text-gray-400"
+                        // No background of its own meant the UA painted this field from
+                        // `color-scheme`, so on a dark OS the deck prompt was dark text on a
+                        // dark box — invisible while typing.
+                        className="w-full resize-none bg-transparent focus:outline-none text-foreground placeholder:text-muted-foreground"
                     />
                     <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={openFilePicker}
                                 title="파일 첨부 (PDF, DOCX, XLSX, PPTX, TXT, MD, CSV)"
-                                className="p-2 rounded-full border text-gray-500 hover:bg-gray-50"
+                                className="p-2 rounded-full border text-muted-foreground hover:bg-secondary"
                             >
                                 <Plus className="h-4 w-4" />
                             </button>
                             <div className="relative">
                                 <button
                                     onClick={() => setShowOptions((v) => !v)}
-                                    className="flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm text-gray-600 hover:bg-gray-50"
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm text-muted-foreground hover:bg-secondary"
                                 >
                                     <Settings2 className="h-4 w-4" />
                                     {slideCount === null ? '자동' : `${slideCount}장`} · {language === 'ko' ? '한국어' : 'English'}
                                 </button>
                                 {showOptions && (
-                                    <div className="absolute left-0 bottom-full mb-2 w-72 bg-white rounded-xl border shadow-lg p-4 space-y-4 z-10">
+                                    <div className="absolute left-0 bottom-full mb-2 w-72 bg-card rounded-xl border shadow-lg p-4 space-y-4 z-10">
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
-                                                <label className="text-sm font-medium text-gray-700">
+                                                <label className="text-sm font-medium text-foreground">
                                                     슬라이드 수{slideCount === null ? ' · 자동' : `: ${slideCount}장`}
                                                 </label>
-                                                <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                                                <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                                     <input
                                                         type="checkbox"
                                                         checked={slideCount === null}
@@ -503,7 +506,7 @@ function DashboardContent() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">언어</label>
+                                            <label className="block text-sm font-medium text-foreground mb-2">언어</label>
                                             <div className="flex gap-2">
                                                 {(['ko', 'en'] as const).map((lang) => (
                                                     <button
@@ -512,7 +515,7 @@ function DashboardContent() {
                                                         className={`px-3 py-1.5 rounded-lg text-sm border ${
                                                             language === lang
                                                                 ? 'bg-foreground text-background border-foreground'
-                                                                : 'bg-white text-gray-600 border-gray-200'
+                                                                : 'bg-card text-muted-foreground border-border'
                                                         }`}
                                                     >
                                                         {lang === 'ko' ? '한국어' : 'English'}
@@ -584,7 +587,7 @@ function DashboardContent() {
                             </span>
                         )}
                         {selectedTemplate && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-secondary text-foreground rounded-full text-sm">
                             템플릿: {selectedTemplate.name}
                             <button onClick={() => setSelectedTemplateId(null)}>
                                 <X className="h-3.5 w-3.5" />
@@ -603,7 +606,7 @@ function DashboardContent() {
 
                 {/* Template gallery */}
                 <section>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">템플릿</h2>
+                    <h2 className="text-xl font-bold text-foreground mb-4">템플릿</h2>
                     {loadingTemplates ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -613,8 +616,8 @@ function DashboardContent() {
                         // does, that generation works without one, and — for an admin —
                         // where to add one.
                         <div className="rounded-xl border border-dashed border-border py-10 text-center">
-                            <p className="text-sm font-medium text-gray-900">아직 등록된 템플릿이 없습니다</p>
-                            <p className="mt-1 text-sm text-gray-500">
+                            <p className="text-sm font-medium text-foreground">아직 등록된 템플릿이 없습니다</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
                                 템플릿은 회사 서식의 표·색·글꼴을 그대로 유지합니다. 템플릿 없이 생성하면 기본 레이아웃을 사용합니다.
                             </p>
                             {isAdminRole(user?.role) && (
@@ -635,7 +638,7 @@ function DashboardContent() {
                                     className={`relative text-left rounded-xl overflow-hidden border-2 transition-all ${
                                         selectedTemplateId === template.id
                                             ? 'border-foreground ring-2 ring-foreground/15'
-                                            : 'border-gray-200 hover:border-gray-300'
+                                            : 'border-border hover:border-border'
                                     }`}
                                 >
                                     <div
@@ -649,8 +652,8 @@ function DashboardContent() {
                                     >
                                         <span style={{ color: template.config?.colors?.primary || '#ffffff' }}>Aa</span>
                                     </div>
-                                    <div className="p-3 bg-white">
-                                        <p className="text-sm font-medium text-gray-900 truncate">{template.name}</p>
+                                    <div className="p-3 bg-card">
+                                        <p className="text-sm font-medium text-foreground truncate">{template.name}</p>
                                     </div>
                                     {selectedTemplateId === template.id && (
                                         <div className="absolute top-2 right-2 w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
