@@ -239,13 +239,27 @@ def test_editable_export_writes_real_shapes_instead_of_a_slide_picture(monkeypat
         '</div>',
     ]})
 
+    slide_html = (
+        '<div class="slide-container" style="width:1920px;height:1080px">'
+        '<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1400px;height:90px;font-size:56px;color:#1A1A1A">잔여 위험 요약</div>'
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:120px;top:300px;width:800px;height:400px;background:#1A1A1A"></div>'
+        '<div data-object="true" data-object-type="textbox" style="position:absolute;left:160px;top:340px;width:720px;height:120px;font-size:32px">ASR 2.4%로 감소</div>'
+        '</div>'
+    )
+
     output = PPTXGenerator(template, editable=True).generate(_presentation(_slide(
-        "CONTENT", "보고", {"html": "<main data-object=\"true\">무시되어야 함</main>", "heading": "주간 보고"},
+        "CONTENT", "보고", {"html": slide_html, "heading": "주간 보고"},
     )))
 
     shapes = Presentation(BytesIO(output)).slides[0].shapes
     assert all(shape.shape_type != 13 for shape in shapes), "no slide-sized picture"
-    assert any(shape.has_text_frame and shape.text_frame.text for shape in shapes), "text must be real text"
+    # The slide's own words must survive, not just the template's empty layout.
+    texts = [shape.text_frame.text for shape in shapes if shape.has_text_frame and shape.text_frame.text]
+    assert "잔여 위험 요약" in texts
+    assert "ASR 2.4%로 감소" in texts
+    # Text on a dark panel must not come out black on black.
+    dark_panel_text = next(shape for shape in shapes if shape.has_text_frame and shape.text_frame.text == "ASR 2.4%로 감소")
+    assert str(dark_panel_text.text_frame.paragraphs[0].runs[0].font.color.rgb) == "FFFFFF"
 
 
 def test_html_template_chooses_layouts_by_slide_type_not_first_n_slides():

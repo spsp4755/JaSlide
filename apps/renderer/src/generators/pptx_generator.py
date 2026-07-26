@@ -391,9 +391,16 @@ class PPTXGenerator:
         # A rendered screenshot matches the HTML exactly but exports one flat picture per
         # slide: nothing is selectable once the file leaves JaSlide. `editable` trades a
         # little fidelity for a deck the recipient can actually revise.
-        if isinstance(content.get("html"), str) and content["html"].strip() and not self.editable:
-            self._add_html_image_slide(content["html"])
-            return
+        if isinstance(content.get("html"), str) and content["html"].strip():
+            if not self.editable:
+                self._add_html_image_slide(content["html"])
+                return
+            # Transcribe this slide's own HTML, so the editable export carries the text
+            # that is actually on the slide rather than the template's empty layout.
+            objects = parse_html_objects(content["html"])
+            if objects:
+                self._add_editable_html_slide(objects)
+                return
         if self.html_slides:
             selected_index = self._template_index(slide_data, template_index, total_slides)
             objects = parse_html_objects(self.html_slides[selected_index])
@@ -421,6 +428,49 @@ class PPTXGenerator:
             self._add_section_header_slide(slide_data)
         else:
             self._add_content_slide(slide_data)
+
+    def _add_editable_html_slide(self, objects: list[dict]) -> None:
+        """Place every HTML object as a real shape or textbox, keeping its own text.
+
+        Back-to-front, so an object that sat on top in the HTML still sits on top.
+
+        ponytail: an HTML <table> arrives as one flattened string, so a table-heavy
+        slide loses its grid here — the default image export still renders it exactly.
+        Carry cells through parse_html_objects and emit add_table if that matters."""
+        slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
+        full_bleed = next((item for item in objects if item["x"] <= 0.05 and item["y"] <= 0.05
+                           and item["w"] >= 13.3 and item["h"] >= 7.4 and item["background"]), None)
+        fill = slide.background.fill
+        fill.solid()
+        fill.fore_color.rgb = self._rgb(full_bleed["background"], self.DEFAULT_COLORS["background"]) if full_bleed else self.tokens["background"]
+
+        for item in objects:
+            if item is full_bleed:
+                continue
+            if item["background"]:
+                shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(item["x"]), Inches(item["y"]), Inches(item["w"]), Inches(item["h"]))
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = self._rgb(item["background"], self.DEFAULT_COLORS["background"])
+                shape.line.fill.background()
+            if not item["text"]:
+                continue
+            box = self._add_layout_textbox(slide, {"x": item["x"] + 0.06, "y": item["y"] + 0.04,
+                                                  "w": max(item["w"] - 0.12, 0.2), "h": max(item["h"] - 0.08, 0.2)})
+            box.text_frame.word_wrap = True
+            paragraph = box.text_frame.paragraphs[0]
+            paragraph.text = item["text"]
+            self._style_paragraph(paragraph, item["fontSize"], item["font"] or self.tokens["body_font"], bold=item["bold"])
+            # A caption usually has no background of its own — what decides its colour is
+            # the panel behind it. Reading only its own background put black on black.
+            behind = next((other for other in reversed(objects[:objects.index(item)])
+                           if other["background"]
+                           and other["x"] <= item["x"] and other["y"] <= item["y"]
+                           and other["x"] + other["w"] >= item["x"] + item["w"]
+                           and other["y"] + other["h"] >= item["y"] + item["h"]), full_bleed)
+            backdrop = item["background"] or (behind["background"] if behind else "")
+            for run in paragraph.runs:
+                run.font.color.rgb = self._rgb(item["color"] or ("#FFFFFF" if self._is_dark(backdrop) else "#1A1A1A"), self.DEFAULT_COLORS["text"])
+            self._apply_alignment(paragraph, item["align"])
 
     def _add_html_image_slide(self, html: str) -> None:
         slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
