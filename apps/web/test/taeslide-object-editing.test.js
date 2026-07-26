@@ -59,7 +59,8 @@ test('TaeSlide editor persists generic HTML object styles', () => {
     assert.match(editor, /function ShapePickerGlyph/);
     assert.match(editor, /shapeSvgMarkup\(kind, width, height\)/);
     assert.match(editor, /box-shadow:0 0 0 2px/);
-    assert.match(editor, /overflow-visible border-b bg-white/);
+    // Chrome follows the theme (bg-card); only the slide surface stays literally white.
+    assert.match(editor, /overflow-visible border-b bg-card/);
     assert.match(editor, /w-\[1100px\] min-w-\[960px\]/);
 assert.match(editor, /isFocusMode/);
 assert.match(editor, /집중 보기/);
