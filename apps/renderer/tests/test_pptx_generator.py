@@ -634,6 +634,27 @@ def test_an_inserted_shape_keeps_the_text_typed_into_it_on_the_canvas():
     assert shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE and shape.text_frame.text == "핵심 지표"
 
 
+def test_a_table_can_be_inserted_into_a_pptx_slide_and_filled():
+    # The toolbar's 표 button only rewrote content.html, so on a PPTX-backed slide —
+    # the whole point of a report template — inserting a table was impossible.
+    source = Presentation(); source.slides.add_slide(source.slide_layouts[6])
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{
+            "slide": 0, "objectId": "new-table", "addTable": {"rows": 2, "columns": 3},
+            "left": 200, "top": 300, "width": 900, "height": 300,
+            "cells": [["항목", "실적", "계획"], ["NL2SQL", "테스트 완료", "배포"]],
+        }],
+    })))
+
+    shape = Presentation(BytesIO(output)).slides[0].shapes[0]
+    assert shape.has_table
+    assert len(shape.table.rows) == 2 and len(shape.table.columns) == 3
+    assert [cell.text for cell in shape.table.rows[1].cells] == ["NL2SQL", "테스트 완료", "배포"]
+
+
 def test_duplicating_an_object_copies_its_look_and_places_the_copy():
     source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
     shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))

@@ -273,6 +273,12 @@ class PPTXGenerator:
                     properties.set("id", str(max((item.shape_id for item in slide.shapes), default=1) + 1))
                 slide.shapes._spTree.append(clone)
                 shape = next((item for item in slide.shapes if item._element is clone), None)
+        elif isinstance(edit.get("addTable"), dict):
+            # Inserting a table was impossible on a PPTX slide: the toolbar button only
+            # rewrote `content.html`, which a PPTX-backed slide does not have.
+            rows = max(1, min(int(edit["addTable"].get("rows", 3) or 3), 30))
+            columns = max(1, min(int(edit["addTable"].get("columns", 3) or 3), 20))
+            shape = slide.shapes.add_table(rows, columns, left, top, width, height)
         elif isinstance(edit.get("addShape"), str):
             shape = slide.shapes.add_shape(self._preset_shape(edit["addShape"]), left, top, width, height)
         elif isinstance(edit.get("addLine"), str):

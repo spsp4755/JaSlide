@@ -389,6 +389,8 @@ export default function EditorPage() {
     const [showShapePicker, setShowShapePicker] = useState(false);
     const [shapePickerGroup, setShapePickerGroup] = useState(0);
     const [showLinePicker, setShowLinePicker] = useState(false);
+    const [tableGrid, setTableGrid] = useState<{ rows: number; columns: number } | null>(null);
+    const [showTablePicker, setShowTablePicker] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(false);
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
@@ -498,6 +500,18 @@ export default function EditorPage() {
         setSelectedNativeObjectId(objectId);
         setRibbonTab('home');
     };
+    const insertNativeTable = (rows: number, columns: number) => {
+        if (!selectedSlide) return;
+        const objectId = `new-table-${crypto.randomUUID()}`;
+        updateNativeObject(objectId, {
+            kind: 'table',
+            addTable: { rows, columns },
+            left: 240, top: 300, width: 1440, height: Math.min(700, 90 * rows),
+            cells: Array.from({ length: rows }, () => Array.from({ length: columns }, () => '')),
+        });
+        setSelectedNativeObjectId(objectId);
+    };
+
     const insertNativeShape = (kind: string, line = false) => {
         if (!selectedSlide) return;
         const objectId = `new-${line ? 'line' : 'shape'}-${crypto.randomUUID()}`;
@@ -508,8 +522,8 @@ export default function EditorPage() {
     // Dropdowns only closed by clicking their own button again, which left the shape
     // sheet covering the canvas. Close on an outside click or Escape, as menus do.
     useEffect(() => {
-        if (!showShapePicker && !showLinePicker) return;
-        const close = () => { setShowShapePicker(false); setShowLinePicker(false); };
+        if (!showShapePicker && !showLinePicker && !showTablePicker) return;
+        const close = () => { setShowShapePicker(false); setShowLinePicker(false); setShowTablePicker(false); };
         const onPointerDown = (event: PointerEvent) => {
             if (!(event.target as HTMLElement)?.closest?.('[data-insert-picker]')) close();
         };
@@ -520,7 +534,7 @@ export default function EditorPage() {
             window.removeEventListener('pointerdown', onPointerDown);
             window.removeEventListener('keydown', onKeyDown);
         };
-    }, [showShapePicker, showLinePicker]);
+    }, [showShapePicker, showLinePicker, showTablePicker]);
 
     // Bump only the slides that actually changed, so untouched previews stay cached.
     const invalidatePreviews = useCallback((slideIds: string[]) => {
@@ -1173,7 +1187,35 @@ export default function EditorPage() {
                         <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showLinePicker} onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-white p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(({ kind, label }) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind, true) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-gray-100"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, false))}><List className="mr-1 h-4 w-4" />글머리</Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, true))}><ListOrdered className="mr-1 h-4 w-4" />번호 목록</Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject(addHtmlTable)}><Table2 className="mr-1 h-4 w-4" />표</Button>
+                        <div className="relative" data-insert-picker>
+                            <Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showTablePicker} onClick={() => { setShowTablePicker((open) => !open); setShowShapePicker(false); setShowLinePicker(false); }}><Table2 className="mr-1 h-4 w-4" />표</Button>
+                            {showTablePicker && <div className="absolute left-0 top-10 z-50 rounded border bg-white p-2 shadow-lg">
+                                {/* Pick the size before inserting, the way Google Slides does — a
+                                    fixed 3x3 cannot grow afterwards. */}
+                                <div className="grid grid-cols-8 gap-0.5" onPointerLeave={() => setTableGrid(null)}>
+                                    {Array.from({ length: 6 * 8 }, (_, index) => {
+                                        const rows = Math.floor(index / 8) + 1;
+                                        const columns = (index % 8) + 1;
+                                        const active = !!tableGrid && rows <= tableGrid.rows && columns <= tableGrid.columns;
+                                        return <button
+                                            key={index}
+                                            type="button"
+                                            aria-label={`${rows}행 ${columns}열 표`}
+                                            className={`h-4 w-4 rounded-sm border ${active ? 'border-purple-600 bg-purple-200' : 'border-gray-300 bg-white'}`}
+                                            onPointerEnter={() => setTableGrid({ rows, columns })}
+                                            onFocus={() => setTableGrid({ rows, columns })}
+                                            onClick={() => {
+                                                if (presentation?.template?.config?.source?.kind === 'pptx') insertNativeTable(rows, columns);
+                                                else insertHtmlObject(addHtmlTable);
+                                                setShowTablePicker(false);
+                                                setTableGrid(null);
+                                            }}
+                                        />;
+                                    })}
+                                </div>
+                                <p className="mt-1.5 text-center text-xs text-gray-600">{tableGrid ? `${tableGrid.rows} × ${tableGrid.columns}` : '크기를 고르세요'}</p>
+                            </div>}
+                        </div>
                         <Button type="button" size="sm" variant="outline" onClick={() => imageInputRef.current?.click()}><ImageIcon className="mr-1 h-4 w-4" />그림</Button>
                         <input ref={imageInputRef} aria-label="그림 파일 선택" type="file" accept="image/*" className="hidden" onChange={(event) => { handleImageInsert(event.target.files?.[0]); event.currentTarget.value = ''; }} />
                     </>}

@@ -96,6 +96,19 @@ test('the slide panel shows each slide, not the same grey icon', () => {
     assert.match(editor, /await loadPreview\(index, presentation\.slides\[index\]\.id\)/);
 });
 
+test('a table can be inserted on a PPTX slide, at a chosen size', () => {
+    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // The 표 button only rewrote content.html, so on a PPTX-backed slide it just
+    // showed "HTML 템플릿 슬라이드가 필요합니다" — with a table-based report template,
+    // which is the whole point, inserting a table was impossible.
+    assert.match(editor, /const insertNativeTable = \(rows: number, columns: number\)/);
+    assert.match(editor, /addTable: \{ rows, columns \}/);
+    assert.match(editor, /source\?\.kind === 'pptx'\) insertNativeTable\(rows, columns\)/);
+    // Size chosen before inserting: a fixed 3x3 cannot grow afterwards.
+    assert.match(editor, /aria-label=\{`\$\{rows\}행 \$\{columns\}열 표`\}/);
+});
+
 test('the insert dropdowns dismiss and switch groups without a mouse', () => {
     const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
 
