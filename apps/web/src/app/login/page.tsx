@@ -1,10 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+
+// Reasons the API bounces a browser back here from an SSO round trip.
+const SSO_ERRORS: Record<string, string> = {
+    sso_unavailable: '사내 SSO가 설정되지 않았습니다. 이메일로 로그인해 주세요.',
+    sso_expired: 'SSO 로그인 시간이 만료되었습니다. 다시 시도해 주세요.',
+    sso_failed: 'SSO 로그인에 실패했습니다. 다시 시도해 주세요.',
+};
 
 export default function LoginPage() {
     const router = useRouter();
@@ -13,6 +20,11 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const reason = SSO_ERRORS[new URLSearchParams(window.location.search).get('error') ?? ''];
+        if (reason) setError(reason);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

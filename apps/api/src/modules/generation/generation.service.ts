@@ -428,6 +428,16 @@ export class GenerationService implements OnModuleInit {
         return { success: true, slide: slides[0], slides };
     }
 
+    /** Generation already refuses an LLM rewrite that drops the deck's data-object
+     * markup or table cells; the per-slide AI edit did not, so one edit could leave a
+     * slide whose objects the editor can no longer select and whose text an editable
+     * export silently omits. Keep the previous HTML in that case. */
+    private keepStructure(previous: string, edited: string, slideId: string): string {
+        if (typeof edited === 'string' && preservesTemplateStructure(previous, edited)) return edited;
+        this.logger.warn(`AI edit dropped slide structure for ${slideId}; retaining the previous HTML`);
+        return previous;
+    }
+
     private async editOneSlide(userId: string, slideId: string, instruction: string, signal?: AbortSignal) {
         const slide = await this.prisma.slide.findUnique({
             where: { id: slideId },
@@ -443,7 +453,7 @@ export class GenerationService implements OnModuleInit {
         const currentContent = (slide.content ?? {}) as any;
         if (signal?.aborted) throw new GenerationCancelledError();
         const editedContent = typeof currentContent.html === 'string'
-            ? { ...currentContent, html: await this.llmService.editSlideHtml(currentContent.html, instruction, signal) }
+            ? { ...currentContent, html: this.keepStructure(currentContent.html, await this.llmService.editSlideHtml(currentContent.html, instruction, signal), slideId) }
             : await this.llmService.editSlideContent(currentContent, instruction, slide.type, signal);
         if (typeof editedContent.heading === 'string') editedContent.heading = removePromptEcho(editedContent.heading, instruction);
         if (typeof editedContent.body === 'string') editedContent.body = removePromptEcho(editedContent.body, instruction);

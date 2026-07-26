@@ -11,6 +11,7 @@ describe('AuthController', () => {
     const response = {
         cookie: jest.fn(),
         clearCookie: jest.fn(),
+        redirect: jest.fn(),
     };
     const loginResult = {
         user: {
@@ -60,6 +61,24 @@ describe('AuthController', () => {
             path: '/',
         });
         expect(result).not.toHaveProperty('accessToken');
+    });
+
+    // The SSO button is a browser navigation, so a thrown 401 stranded the visitor on a
+    // raw JSON page outside the app. Both unconfigured-SSO paths must come back to /login.
+    it('returns to the login screen when SSO is not configured', async () => {
+        await (controller as any).keycloak(response);
+
+        expect(response.redirect).toHaveBeenCalledWith('http://localhost:3000/login?error=sso_unavailable');
+    });
+
+    it('returns to the login screen when the identity provider has no issuer configured', async () => {
+        const oidc = { createAuthorizationRequest: jest.fn().mockRejectedValue(new Error('Keycloak is not configured')) };
+        const withOidc = new AuthController(authService, oidc as any, { signAsync: jest.fn() } as any);
+
+        await (withOidc as any).keycloak(response);
+
+        expect(response.redirect).toHaveBeenCalledWith('http://localhost:3000/login?error=sso_unavailable');
+        expect(response.cookie).not.toHaveBeenCalled();
     });
 
     it('clears the session cookie on logout', () => {

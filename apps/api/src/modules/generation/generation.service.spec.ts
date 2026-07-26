@@ -191,6 +191,24 @@ describe('GenerationService cancellation', () => {
         expect(preservesTemplateStructure(template, stripped)).toBe(false);
     });
 
+    it('keeps the previous slide HTML when an AI edit drops its structure', () => {
+        const guard: any = service;
+        const warn = jest.spyOn((guard as any).logger, 'warn').mockImplementation(() => undefined);
+        const previous = '<div data-object="true"><table><tr><td>매출</td></tr></table></div>';
+
+        expect(guard.keepStructure(previous, '<p>매출이 늘었습니다</p>', 'slide-1')).toBe(previous);
+        expect(warn).toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it('accepts an AI edit that keeps the slide objects and table cells', () => {
+        const guard: any = service;
+        const previous = '<div data-object="true"><table><tr><td>매출</td></tr></table></div>';
+        const edited = '<div data-object="true"><table><tr><td>매출 120억</td></tr></table></div>';
+
+        expect(guard.keepStructure(previous, edited, 'slide-1')).toBe(edited);
+    });
+
     it('uses PPTX HTML slides as the outline template catalog', async () => {
         prisma.template.findUnique.mockResolvedValue({
             config: { htmlSlides: ['<div class="slide-container"><div>주간 업무 보고</div></div>'] },

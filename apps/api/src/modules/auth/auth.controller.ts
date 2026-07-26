@@ -4,7 +4,6 @@ import {
     Get,
     Body,
     Query,
-    UnauthorizedException,
     UseGuards,
     Req,
     Res,
@@ -60,6 +59,17 @@ export class AuthController {
             || request?.headers?.cookie?.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`))?.[1];
     }
 
+    private get frontendUrl() {
+        return process.env.FRONTEND_URL || 'http://localhost:3000';
+    }
+
+    /** The SSO endpoints are reached by browser navigation, not by fetch: a thrown 401
+     * leaves the visitor stranded on a raw JSON page outside the app with no way back.
+     * Send them to the login screen with a reason instead. */
+    private failLogin(response: Response, reason: string) {
+        response.redirect(`${this.frontendUrl}/login?error=${reason}`);
+    }
+
     @Post('register')
     @ApiOperation({ summary: 'Register a new user' })
     @ApiResponse({ status: 201, description: 'User registered successfully' })
@@ -93,9 +103,16 @@ export class AuthController {
     async keycloak(@Res() response: Response) {
         const oidc = this.oidcService;
         const jwt = this.jwtService;
-        if (!oidc || !jwt) throw new UnauthorizedException('Keycloak is not configured');
+        if (!oidc || !jwt) return this.failLogin(response, 'sso_unavailable');
 
-        const request = await oidc.createAuthorizationRequest();
+        let request: Awaited<ReturnType<typeof oidc.createAuthorizationRequest>>;
+        try {
+            // Throws when no issuer/client is configured — the common case in a dev or
+            // on-prem install that never wired up Keycloak.
+            request = await oidc.createAuthorizationRequest();
+        } catch {
+            return this.failLogin(response, 'sso_unavailable');
+        }
         const transaction = await jwt.signAsync(
             { state: request.state, nonce: request.nonce, verifier: request.verifier },
             { expiresIn: '10m', audience: 'keycloak_login' },
@@ -116,30 +133,36 @@ export class AuthController {
         const jwt = this.jwtService;
         const transaction = this.readCookie(request, 'jaslide_keycloak_login');
         if (!oidc || !jwt || !code || !state || !transaction) {
-            throw new UnauthorizedException('Invalid Keycloak login response');
+            return this.failLogin(response, 'sso_failed');
         }
 
         let login: { state: string; nonce: string; verifier: string };
         try {
             login = await jwt.verifyAsync(transaction, { audience: 'keycloak_login' });
         } catch {
-            throw new UnauthorizedException('Keycloak login has expired');
+            return this.failLogin(response, 'sso_expired');
         }
-        oidc.validateState(login.state, state);
-        const identity = await oidc.completeAuthorizationCode(code, login.verifier, login.nonce);
-        const result = await this.authService.loginWithKeycloak({
-            issuer: identity.iss as string,
-            subject: identity.sub,
-            email: identity.email,
-            name: identity.name,
-            image: identity.picture,
-            roles: identity.roles,
-        });
+        let result: Awaited<ReturnType<typeof this.authService.loginWithKeycloak>>;
+        try {
+            oidc.validateState(login.state, state);
+            const identity = await oidc.completeAuthorizationCode(code, login.verifier, login.nonce);
+            result = await this.authService.loginWithKeycloak({
+                issuer: identity.iss as string,
+                subject: identity.sub,
+                email: identity.email,
+                name: identity.name,
+                image: identity.picture,
+                roles: identity.roles,
+            });
+        } catch {
+            // A mismatched state or an identity provider that rejects the code must not
+            // dead-end the browser either.
+            return this.failLogin(response, 'sso_failed');
+        }
 
         this.setSession(response, result.accessToken);
         response.clearCookie('jaslide_keycloak_login', this.keycloakCookieOptions);
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        response.redirect(`${frontendUrl}/${result.user.role === 'ADMIN' || result.user.role === 'SYSTEM_ADMIN' ? 'admin' : 'dashboard'}`);
+        response.redirect(`${this.frontendUrl}/${result.user.role === 'ADMIN' || result.user.role === 'SYSTEM_ADMIN' ? 'admin' : 'dashboard'}`);
     }
 
     @Get('google')
