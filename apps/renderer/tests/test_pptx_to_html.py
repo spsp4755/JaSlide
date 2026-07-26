@@ -5,6 +5,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import PP_ALIGN
+from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 from apps.renderer.src.services.html_template import parse_html_objects
@@ -190,6 +191,75 @@ def test_extracts_alignment_for_a_text_object():
     text_object = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "text")
 
     assert text_object["align"] == "center"
+
+
+def _bulleted(paragraph, char: str, mar_l: int, indent: int) -> None:
+    """Give `paragraph` the buChar/marL/indent a real deck's list line carries."""
+    properties = paragraph._pPr if paragraph._pPr is not None else paragraph._p.get_or_add_pPr()
+    properties.set("marL", str(mar_l))
+    properties.set("indent", str(indent))
+    bullet = properties.makeelement(qn("a:buChar"), {"char": char})
+    properties.append(bullet)
+
+
+def test_renders_list_paragraphs_with_their_marker_and_indent():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(2))
+    frame = box.text_frame
+    frame.paragraphs[0].text = "IT 운영 및 AI 연구"
+    _bulleted(frame.paragraphs[0], "•", 88900, 0)
+    second = frame.add_paragraph()
+    second.text = "프로젝트 관리 및 지원"
+    second.level = 1
+    _bulleted(second, "-", 481013, -285750)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    html = pptx_to_html(buffer.getvalue())["htmlSlides"][0]
+
+    # The deck states its own bullets and indents; joining paragraphs with <br> threw
+    # all of it away and left a flat block of unmarked lines.
+    assert ">•<" in html and ">-<" in html
+    # 88900 EMU is 14px on this canvas, 481013 is 76px, and the hanging indent is -45px.
+    assert "margin-left:14px;text-indent:0px" in html
+    assert "margin-left:76px;text-indent:-45px" in html
+
+
+def test_keeps_a_hanging_indent_inside_the_shape():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1))
+    box.text_frame.paragraphs[0].text = "주간업무 추진실적"
+    # A deck can hang a bullet further left than the margin it hangs from. CSS pulled
+    # the first line outside the box, where overflow:hidden ate the opening character.
+    _bulleted(box.text_frame.paragraphs[0], "•", 0, -177800)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    html = pptx_to_html(buffer.getvalue())["htmlSlides"][0]
+
+    assert "margin-left:0px;text-indent:0px" in html
+    assert "text-indent:-" not in html
+
+
+def test_draws_no_marker_on_an_empty_list_paragraph():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(2))
+    frame = box.text_frame
+    frame.paragraphs[0].text = "실적"
+    _bulleted(frame.paragraphs[0], "-", 481013, -285750)
+    blank = frame.add_paragraph()
+    _bulleted(blank, "-", 481013, -285750)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    html = pptx_to_html(buffer.getvalue())["htmlSlides"][0]
+
+    # Spacing paragraphs are common at the end of a cell; PowerPoint draws no bullet
+    # on one, and a marker alone on a blank line reads as a mistake.
+    assert html.count(">-<") == 1
 
 
 def test_extracts_a_picture_placeholder_as_an_image_object():

@@ -17,6 +17,44 @@ CANVAS_WIDTH, CANVAS_HEIGHT = 1920, 1080
 EMU_PER_INCH = 914400
 # Used only when a shape states no size anywhere, matching python-pptx's own default.
 DEFAULT_FONT_PT = 18
+# PowerPoint's own per-level defaults, for decks that leave the margins implicit.
+DEFAULT_LEVEL_INDENT_EMU = 457200
+DEFAULT_HANGING_EMU = -228600
+
+
+def _paragraph_layout(paragraph, pt_to_px: float) -> tuple[str | None, float, float]:
+    """The paragraph's bullet character and its margin and hanging indent, in px.
+
+    A deck states these in its `a:pPr` — `buChar`, `marL`, `indent` — and dropping
+    them flattened every list into unindented lines with no markers at all.
+    """
+    properties = paragraph._pPr
+    emu_to_px = pt_to_px * 72 / 914400
+
+    def _emu(name: str, fallback: float) -> float:
+        value = properties.get(name) if properties is not None else None
+        try:
+            return int(value) * emu_to_px
+        except (TypeError, ValueError):
+            return fallback * emu_to_px
+
+    bullet = None
+    if properties is not None and properties.find(qn("a:buNone")) is None:
+        char_bullet = properties.find(qn("a:buChar"))
+        if char_bullet is not None:
+            bullet = char_bullet.get("char")
+        elif properties.find(qn("a:buAutoNum")) is not None:
+            # Which number a line carries depends on its siblings; the marker is the
+            # part that makes it read as a list.
+            bullet = "•"
+    margin = _emu("marL", paragraph.level * DEFAULT_LEVEL_INDENT_EMU)
+    hanging = _emu("indent", DEFAULT_HANGING_EMU if bullet else 0)
+    # A hanging indent is measured from the margin, and a deck can state one deeper
+    # than the margin it hangs from. PowerPoint stops at the shape's own edge; CSS
+    # happily pulls the first line outside it, where overflow:hidden cut the opening
+    # character off every such line. `or 0.0` keeps the clamp from printing "-0px".
+    hanging = max(hanging, -margin)
+    return bullet, margin, hanging or 0.0
 
 
 def _pt_to_canvas_px(presentation) -> float:
@@ -107,8 +145,16 @@ def _text_html(source, pt_to_px: float = 2.0) -> tuple[str, int, str | None]:
             underline = "text-decoration:underline;" if run.font.underline else ""
             family = f'font-family:{escape(font_name, quote=True)};' if font_name else ""
             runs.append(f'<span style="font-size:{round(run_size * pt_to_px)}px;color:{run_color};{family}{weight}{italic}{underline}">{escape(run.text)}</span>')
-        paragraphs.append("".join(runs) or escape(paragraph.text))
-    return "<br>".join(paragraphs), round((size or DEFAULT_FONT_PT) * pt_to_px), color
+        body = "".join(runs) or escape(paragraph.text)
+        bullet, margin, hanging = _paragraph_layout(paragraph, pt_to_px)
+        # A negative first-line indent is how PowerPoint hangs a bullet outside the
+        # paragraph's margin; the marker sits in that overhang and the text lines up.
+        style = f"margin-left:{margin:.0f}px;text-indent:{hanging:.0f}px"
+        # An empty paragraph is spacing, not a list item — PowerPoint draws no marker
+        # on one either, and a lone bullet on a blank line reads as a mistake.
+        marker = f'<span style="margin-right:0.35em">{escape(bullet)}</span>' if bullet and paragraph.text.strip() else ""
+        paragraphs.append(f'<div style="{style}">{marker}{body}</div>')
+    return "".join(paragraphs), round((size or DEFAULT_FONT_PT) * pt_to_px), color
 
 
 def _text_style(shape) -> dict:
