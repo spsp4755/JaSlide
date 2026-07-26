@@ -25,7 +25,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-MAX_PPTX_ENTRIES = 500
+# A 123-slide deck legitimately holds ~590 parts, and rejecting it as an "Invalid PPTX
+# package" over an entry count protected nothing: the real zip-bomb guard is the
+# uncompressed-size ceiling below.
+MAX_PPTX_ENTRIES = 5000
 MAX_PPTX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 REQUIRED_PPTX_ENTRIES = {"[Content_Types].xml", "_rels/.rels", "ppt/presentation.xml"}
 

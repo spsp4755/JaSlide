@@ -43,10 +43,21 @@ export function pptxObjectEdits(objects: any[], slide: number, title: string, li
     const tables = objects.filter((item) => item?.kind === 'table');
     // A table owns its cell text; writing the body into a text box too would
     // duplicate the content on top of the table.
-    return [
+    const edits: Record<string, unknown>[] = [
         ...texts.slice(0, tables.length ? 1 : 2).map((item, index) => ({ objectId: item.id, slide, text: index === 0 ? title : lines.join('\n') })),
         ...tables.map((item) => ({ objectId: item.id, slide, cells: populatePptxTableCells(item.cells, lines) })),
     ];
+    if (edits.length) return edits;
+
+    // Some template slides carry no editable text at all — a full-bleed screenshot, or
+    // a design whose words are baked into images. Those slides used to come back
+    // untouched, silently dropping the generated content. Add a text box instead.
+    return [{
+        objectId: `generated-title-${slide}`, slide, kind: 'text', addText: title,
+        text: [title, ...lines].join('\n'),
+        left: 140, top: 120, width: 1640, height: lines.length ? 560 : 200,
+        fontSize: 34, color: '#1A1A1A',
+    }];
 }
 
 function presentationText(content: { body?: string; bullets?: { text: string; level?: number }[] }, keyPoints: string[]) {

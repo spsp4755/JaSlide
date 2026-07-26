@@ -374,4 +374,18 @@ describe('pptxObjectEdits', () => {
             { objectId: '14', slide: 0, cells: [['추진실적', '추진계획'], ['• A', '• B']] },
         ]);
     });
+
+    // A screenshot-only slide, or a design whose words are baked into images, has
+    // nothing to write into — those slides came back untouched and the generated
+    // content was silently dropped.
+    it('adds a text box when the template slide has nothing editable on it', () => {
+        const imagesOnly = [{ id: '4', kind: 'image' }, { id: '5', kind: 'image' }];
+
+        const edits = pptxObjectEdits(imagesOnly, 2, '다음 주 계획', ['• 배포 지원']);
+
+        expect(edits).toHaveLength(1);
+        expect(edits[0]).toMatchObject({ kind: 'text', addText: '다음 주 계획', slide: 2 });
+        expect(edits[0].text).toBe('다음 주 계획\n• 배포 지원');
+        expect(edits[0].objectId).toBe('generated-title-2');
+    });
 });

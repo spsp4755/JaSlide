@@ -170,3 +170,82 @@ def test_defaults_alignment_to_left_when_unset():
     text_object = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "text")
 
     assert text_object["align"] == "left"
+
+
+def test_a_grouped_diagram_becomes_editable_objects_not_one_opaque_box():
+    # Real decks group things constantly, and a GroupShape has no `line` at all —
+    # reading it unguarded raised AttributeError, which the API reported as
+    # "Invalid PPTX file". Most real decks were rejected outright because of it.
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(3), Inches(1))
+    box.text_frame.paragraphs[0].text = "그룹 안의 글자"
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5), Inches(1), Inches(2), Inches(1))
+    slide.shapes._spTree.remove(box._element)
+    slide.shapes._spTree.remove(shape._element)
+    group = slide.shapes.add_group_shape()
+    group._element.append(box._element)
+    group._element.append(shape._element)
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    objects = result["source"]["slides"][0]["objects"]
+    assert [obj["kind"] for obj in objects] == ["text", "shape"], "the group's members, not the group"
+    assert objects[0]["text"] == "그룹 안의 글자"
+
+
+def test_one_unreadable_shape_does_not_cost_the_whole_upload():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))
+    good = slide.shapes.add_textbox(Inches(4), Inches(1), Inches(3), Inches(1))
+    good.text_frame.paragraphs[0].text = "살아남아야 함"
+    # Strip the first shape's geometry so reading its position raises.
+    slide.shapes[0]._element.spPr.remove(slide.shapes[0]._element.spPr.xfrm)
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    texts = [obj.get("text") for obj in result["source"]["slides"][0]["objects"]]
+    assert "살아남아야 함" in texts
+
+
+def test_a_large_image_is_not_inlined_as_base64():
+    # A photo-heavy deck inlined every blob and produced a 40MB config, which then has
+    # to live in a database row and load in the editor.
+    from apps.renderer.src.services.pptx_to_html import MAX_INLINE_IMAGE_BYTES
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    big = _png_of_at_least(MAX_INLINE_IMAGE_BYTES + 1)
+    slide.shapes.add_picture(BytesIO(big), Inches(1), Inches(1), Inches(4), Inches(3))
+
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    html = result["htmlSlides"][0]
+    assert 'data-object-type="image"' in html, "the image still occupies its place"
+    assert "base64" not in html
+    assert len(html) < len(big) / 4
+
+
+def _png_of_at_least(size: int) -> bytes:
+    """A valid PNG padded past `size` with an ancillary chunk python-pptx accepts."""
+    import struct
+    import zlib
+
+    header = b"\x89PNG\r\n\x1a\n"
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+    idat = chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+    padding = chunk(b"teXt", b"pad\x00" + b"x" * size)
+    return header + ihdr + padding + idat + chunk(b"IEND", b"")
