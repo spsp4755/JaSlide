@@ -25,7 +25,7 @@ interface TutorialStep {
 const TUTORIAL_STEPS: TutorialStep[] = [
     {
         id: 'welcome',
-        title: 'JaSlide에 오신 것을 환영합니다!',
+        title: 'TaeSlide에 오신 것을 환영합니다!',
         description: 'AI를 활용해 프레젠테이션을 자동으로 생성할 수 있습니다. 간단한 튜토리얼을 시작해볼까요?',
         icon: Sparkles,
     },

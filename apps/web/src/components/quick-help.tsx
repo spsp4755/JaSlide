@@ -26,7 +26,7 @@ const HELP_ITEMS: HelpItem[] = [
     {
         id: 'guide',
         title: '사용 가이드',
-        description: 'JaSlide 사용법을 단계별로 알아보세요',
+        description: 'TaeSlide 사용법을 단계별로 알아보세요',
         icon: Book,
         link: '/docs/guide',
     },

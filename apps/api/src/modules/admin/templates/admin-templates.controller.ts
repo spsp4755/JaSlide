@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { MultipartUtf8Interceptor } from '../../../multipart-utf8.interceptor';
 import { AdminTemplatesService } from './admin-templates.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -33,7 +34,7 @@ export class AdminTemplatesController {
         // Browsers and offline clients often send an empty or generic MIME type
         // for .pptx files. The renderer validates the actual OOXML ZIP package.
         fileFilter: (_request, file, callback) => callback(null, file.originalname.toLowerCase().endsWith('.pptx')),
-    }))
+    }), MultipartUtf8Interceptor)
     async importPptx(
         @UploadedFile() file: Express.Multer.File,
         @Body() data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },
@@ -54,7 +55,7 @@ export class AdminTemplatesController {
             file.originalname.toLowerCase().endsWith('.zip') &&
             ['application/zip', 'application/x-zip-compressed'].includes(file.mimetype),
         ),
-    }))
+    }), MultipartUtf8Interceptor)
     async importHtmlZip(
         @UploadedFile() file: Express.Multer.File,
         @Body() data: { name: string; description?: string; category?: string; isPublic?: boolean; organizationId?: string },

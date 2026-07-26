@@ -5,7 +5,6 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { join } from 'path';
 import { AppModule } from './app.module';
-import { MultipartUtf8Interceptor } from './multipart-utf8.interceptor';
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -22,8 +21,6 @@ async function bootstrap() {
         origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
         credentials: true,
     });
-
-    app.useGlobalInterceptors(new MultipartUtf8Interceptor());
 
     // Validation pipe
     app.useGlobalPipes(

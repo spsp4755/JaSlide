@@ -53,7 +53,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 <div className="p-4 border-b border-border flex items-center justify-between">
                     {!collapsed && (
                         <Link href="/admin" className="text-lg font-bold font-display tracking-tight text-foreground">
-                            JaSlide <span className="text-muted-foreground font-sans text-sm font-medium">관리자</span>
+                            TaeSlide <span className="text-muted-foreground font-sans text-sm font-medium">관리자</span>
                         </Link>
                     )}
                     <button

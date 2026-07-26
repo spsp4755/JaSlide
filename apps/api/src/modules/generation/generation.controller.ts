@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Param, UseGuards, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { MultipartUtf8Interceptor } from '../../multipart-utf8.interceptor';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { GenerationService } from './generation.service';
 import { StartGenerationDto, AIEditDto, GenerateOutlineDto } from './dto/generation.dto';
@@ -20,7 +21,7 @@ export class GenerationController {
     @Post('source/extract')
     @ApiOperation({ summary: 'Extract uploaded source content for generation' })
     @ApiConsumes('multipart/form-data')
-    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }), MultipartUtf8Interceptor)
     async extractSource(@UploadedFile() file: Express.Multer.File) {
         return this.sourceExtractionService.extract(file);
     }

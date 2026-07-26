@@ -464,19 +464,26 @@ Return JSON with "layout" field only.`;
             throw new Error('Outline must include a non-empty title and slides');
         }
 
-        const slides = value.slides.slice(0, slideCount).map((slide, index) => {
+        // Repair what is repairable instead of discarding the outline, the same way
+        // validateSlideContent treats a slide: a 7B local model that labelled one
+        // slide "table" or left its keyPoints off used to lose the whole deck.
+        const slides = value.slides.slice(0, slideCount).flatMap((slide, index) => {
             // `order` is renumbered rather than required, and one key point is enough.
-            if (!this.isRecord(slide) || !this.isText(slide.title)
-                || !this.isText(slide.type) || !this.SLIDE_TYPES.has(slide.type)
-                || !Array.isArray(slide.keyPoints) || slide.keyPoints.length < 1
-                || !slide.keyPoints.every((point) => this.isText(point))) {
-                throw new Error(`Invalid outline slide at position ${index + 1}`);
+            if (!this.isRecord(slide) || !this.isText(slide.title)) {
+                this.logger.warn(`Dropping outline slide ${index + 1}: no usable title`);
+                return [];
             }
-            return {
-                order: index + 1, title: slide.title, type: slide.type, keyPoints: slide.keyPoints.slice(0, 8),
+            const type = this.isText(slide.type) && this.SLIDE_TYPES.has(slide.type) ? slide.type : 'CONTENT';
+            const points = (Array.isArray(slide.keyPoints) ? slide.keyPoints : [])
+                .filter((point): point is string => this.isText(point))
+                .slice(0, 8);
+            return [{
+                order: index + 1, title: slide.title, type,
+                // The title is the one thing this slide is certainly about.
+                keyPoints: points.length ? points : [slide.title],
                 ...(Number.isInteger(slide.templateIndex) && (slide.templateIndex as number) >= 0 && (templateCount === 0 || (slide.templateIndex as number) < templateCount) ? { templateIndex: slide.templateIndex as number } : {}),
-            };
-        });
+            }];
+        }).map((slide, index) => ({ ...slide, order: index + 1 }));
         if (!slides.length) {
             throw new Error('Outline must include at least one slide');
         }

@@ -17,12 +17,12 @@ import {
     Download
 } from 'lucide-react';
 
-// Demo slides showcasing JaSlide features
+// Demo slides showcasing TaeSlide features
 const demoSlides = [
     {
         id: 1,
         title: 'AI 프레젠테이션 자동 생성',
-        subtitle: 'JaSlide로 몇 분 만에 전문적인 프레젠테이션을 만들어보세요',
+        subtitle: 'TaeSlide로 몇 분 만에 전문적인 프레젠테이션을 만들어보세요',
         type: 'title',
         background: 'bg-gradient-to-br from-purple-600 to-indigo-700',
     },
@@ -75,7 +75,7 @@ const demoSlides = [
     {
         id: 6,
         title: '지금 바로 시작하세요!',
-        subtitle: '무료 100 크레딧으로 JaSlide의 모든 기능을 체험해보세요',
+        subtitle: '무료 100 크레딧으로 TaeSlide의 모든 기능을 체험해보세요',
         type: 'cta',
         background: 'bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500',
     },
@@ -120,7 +120,7 @@ export default function DemoPage() {
                     </Link>
                     <div className="flex items-center gap-2">
                         <Sparkles className="h-6 w-6 text-purple-400" />
-                        <span className="text-xl font-bold text-white">JaSlide Demo</span>
+                        <span className="text-xl font-bold text-white">TaeSlide Demo</span>
                     </div>
                     <Link href="/register">
                         <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
@@ -262,7 +262,7 @@ export default function DemoPage() {
 
                     {/* Info Text */}
                     <p className="mt-8 text-center text-muted-foreground">
-                        이 데모는 JaSlide로 생성된 프레젠테이션의 예시입니다.
+                        이 데모는 TaeSlide로 생성된 프레젠테이션의 예시입니다.
                         <br />
                         <Link href="/dashboard" className="text-purple-400 hover:text-purple-300">
                             직접 만들어보기 →

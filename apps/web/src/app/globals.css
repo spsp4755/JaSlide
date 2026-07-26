@@ -72,6 +72,13 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* The design-system reset colors bare headings for a dark surface, so a
+     heading with no text class of its own came out near-white and vanished on
+     the light theme. Pages were compensating with text-foreground one at a
+     time; inherit instead so both themes work by default. */
+  h1, h2, h3, h4, h5, h6 {
+    color: inherit;
+  }
 }
 
 /* Custom scrollbar */

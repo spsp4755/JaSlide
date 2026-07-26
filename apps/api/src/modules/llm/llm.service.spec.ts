@@ -139,6 +139,38 @@ describe('LlmService contracts', () => {
             .resolves.toEqual({ title: '주간 보고', slides: [{ order: 1, title: '실적', type: 'CONTENT', keyPoints: ['examweb 고도화'] }] });
     });
 
+    // A local 7B model labels a slide "table" or leaves keyPoints off often enough
+    // that failing the request threw away an otherwise usable deck.
+    it('keeps a slide whose type is not one of ours, as plain content', async () => {
+        await createService([JSON.stringify({
+            title: '분기 보고',
+            slides: [{ title: '추진 실적', type: 'table', keyPoints: ['1분기 완료'] }],
+        })]);
+
+        await expect(service.generateOutline({ content: '분기 보고', slideCount: 1, language: 'ko' }))
+            .resolves.toEqual({ title: '분기 보고', slides: [{ order: 1, title: '추진 실적', type: 'CONTENT', keyPoints: ['1분기 완료'] }] });
+    });
+
+    it('falls back to the slide title when the model sends no key points', async () => {
+        await createService([JSON.stringify({
+            title: '분기 보고',
+            slides: [{ title: '다음 분기 계획', type: 'CONTENT' }],
+        })]);
+
+        await expect(service.generateOutline({ content: '분기 보고', slideCount: 1, language: 'ko' }))
+            .resolves.toEqual({ title: '분기 보고', slides: [{ order: 1, title: '다음 분기 계획', type: 'CONTENT', keyPoints: ['다음 분기 계획'] }] });
+    });
+
+    it('drops only the untitled slide and renumbers the rest', async () => {
+        await createService([JSON.stringify({
+            title: '분기 보고',
+            slides: [{ type: 'CONTENT', keyPoints: ['제목 없음'] }, { title: '계획', type: 'CONTENT', keyPoints: ['4분기'] }],
+        })]);
+
+        await expect(service.generateOutline({ content: '분기 보고', slideCount: 2, language: 'ko' }))
+            .resolves.toEqual({ title: '분기 보고', slides: [{ order: 1, title: '계획', type: 'CONTENT', keyPoints: ['4분기'] }] });
+    });
+
     it('still rejects an outline with no usable slide', async () => {
         await createService(Array(4).fill(JSON.stringify({ title: '주간 보고', slides: [] })));
 

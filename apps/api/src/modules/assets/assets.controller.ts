@@ -11,6 +11,7 @@ import {
     UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { MultipartUtf8Interceptor } from '../../multipart-utf8.interceptor';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { AssetsService } from './assets.service';
 import { ChartService, ChartData, ChartConfig } from './chart.service';
@@ -30,7 +31,7 @@ export class AssetsController {
     @Post('upload')
     @ApiOperation({ summary: 'Upload an asset' })
     @ApiConsumes('multipart/form-data')
-    @UseInterceptors(FileInterceptor('file'))
+    @UseInterceptors(FileInterceptor('file'), MultipartUtf8Interceptor)
     async upload(
         @CurrentUser() user: any,
         @UploadedFile() file: Express.Multer.File,

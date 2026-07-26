@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Post, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { MultipartUtf8Interceptor } from '../../multipart-utf8.interceptor';
 import { ApiConsumes } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -28,7 +29,7 @@ export class SkillsController {
 
     @Post('import-pptx')
     @ApiConsumes('multipart/form-data')
-    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }), MultipartUtf8Interceptor)
     importPptx(
         @CurrentUser() user: { id: string; organizationId?: string },
         @UploadedFile() file: Express.Multer.File,

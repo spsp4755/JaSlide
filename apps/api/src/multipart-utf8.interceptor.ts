@@ -6,8 +6,13 @@ import { Observable } from 'rxjs';
  * latin1 for every multipart text field and filename. A Korean template name
  * or file name therefore reaches the app as mojibake ("박태지" → "á...").
  *
- * Re-read those bytes as UTF-8 at the request boundary, before any controller
- * or DTO sees them. macOS sends decomposed Hangul, so compose it too.
+ * Re-read those bytes as UTF-8 before any controller or DTO sees them. macOS
+ * sends decomposed Hangul, so compose it too.
+ *
+ * Must be listed AFTER FileInterceptor in @UseInterceptors. Nest runs the
+ * outermost interceptor first, so registering this globally put it ahead of
+ * multer — request.file and request.body did not exist yet and it silently did
+ * nothing, which is how a Korean deck name still reached the database mangled.
  */
 const toUtf8 = (value: string): string =>
     /[-ÿ]/.test(value) ? Buffer.from(value, 'latin1').toString('utf8').normalize('NFC') : value;

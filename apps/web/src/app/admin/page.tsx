@@ -101,7 +101,7 @@ export default function AdminDashboard() {
         <div className="p-6">
             <header className="mb-8">
                 <h1 className="text-2xl font-bold text-foreground">관리자 대시보드</h1>
-                <p className="text-sm text-muted-foreground">JaSlide 시스템 현황</p>
+                <p className="text-sm text-muted-foreground">TaeSlide 시스템 현황</p>
             </header>
 
             {/* Stats Grid */}
