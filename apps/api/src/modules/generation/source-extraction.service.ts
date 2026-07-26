@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
 import { DocumentParserService } from './document-parser.service';
+import { postToRenderer } from '../../renderer-client';
 
 export interface SourceChunk {
     locator: string;
@@ -62,13 +62,10 @@ export class SourceExtractionService {
         const form = new FormData();
         form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
-        let data: unknown;
-        try {
-            const response = await axios.post(`${rendererUrl}/api/extract/content`, form, { timeout: 15000 });
-            data = response.data;
-        } catch {
-            throw new BadRequestException('Failed to extract PPTX content');
-        }
+        const data = await postToRenderer<unknown>(rendererUrl, '/api/extract/content', form, {
+            timeout: 15000,
+            rejectedMessage: 'PPTX에서 내용을 추출하지 못했습니다. 파일이 손상되지 않았는지 확인해주세요.',
+        });
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
             throw new BadRequestException('Invalid PPTX extraction result');
         }

@@ -17,17 +17,7 @@ type Skill = {
     recommendedSlideCount: number;
 };
 
-const RECOMMENDED_SKILLS: Skill[] = [
-    { id: 'recommended-strategy', name: '임원 전략 보고', description: '핵심 의사결정과 실행 우선순위를 빠르게 전달합니다.', category: '기업 전략', audience: '경영진', tone: '명확하고 단정하게', purpose: '전략 보고', recommendedSlideCount: 10 },
-    { id: 'recommended-education', name: '교육 과정 안내', description: '학습 목표와 과정 흐름을 이해하기 쉽게 구성합니다.', category: '교육', audience: '학습자', tone: '친절하고 구조적으로', purpose: '교육', recommendedSlideCount: 12 },
-    { id: 'recommended-sales', name: 'B2B 제안서', description: '고객 문제, 해결 방식, 도입 효과를 설득력 있게 연결합니다.', category: 'B2B 영업', audience: '의사결정자', tone: '신뢰감 있게', purpose: '제안', recommendedSlideCount: 11 },
-    { id: 'recommended-data', name: '데이터 & KPI 리뷰', description: '지표 변화와 다음 액션을 한눈에 읽히도록 정리합니다.', category: '데이터 & KPI', audience: '운영 리더', tone: '간결하고 근거 중심으로', purpose: '성과 리뷰', recommendedSlideCount: 9 },
-];
-
-const CATEGORIES = ['전체', '추천', '기업 전략', '교육', 'B2B 영업', '데이터 & KPI', '마케팅', '공공 정책'];
-
 export function SkillsGallery({ preview = false }: { preview?: boolean }) {
-    const [selectedCategory, setSelectedCategory] = useState('전체');
     const [skills, setSkills] = useState<Skill[]>([]);
     const [loading, setLoading] = useState(!preview);
     const [showCreator, setShowCreator] = useState(false);
@@ -50,13 +40,10 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
             .finally(() => setLoading(false));
     }, [preview]);
 
-    // preview (logged-out demo) shows static examples; authenticated view uses only real, usable Skills
     const displayedSkills = useMemo(() => {
-        const all = preview ? [...skills, ...RECOMMENDED_SKILLS] : skills;
-        const categorized = selectedCategory === '전체' || selectedCategory === '추천' ? all : all.filter((skill) => skill.category === selectedCategory);
         const needle = query.trim().toLowerCase();
-        return needle ? categorized.filter((skill) => `${skill.name} ${skill.description || ''} ${skill.category} ${skill.purpose}`.toLowerCase().includes(needle)) : categorized;
-    }, [selectedCategory, skills, preview, query]);
+        return needle ? skills.filter((skill) => `${skill.name} ${skill.description || ''} ${skill.category} ${skill.purpose}`.toLowerCase().includes(needle)) : skills;
+    }, [skills, query]);
 
     const deleteSelected = async () => {
         if (!selectedIds.length || !window.confirm(`선택한 ${selectedIds.length}개 Skill을 삭제할까요?`)) return;
@@ -132,10 +119,6 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                     {preview && <span className="rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground">공개 미리보기 · 저장은 로그인 후 가능</span>}
                 </div>
 
-                <div className="mb-7 flex gap-2 overflow-x-auto pb-1">
-                    {CATEGORIES.map((category) => <button key={category} type="button" onClick={() => setSelectedCategory(category)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition ${selectedCategory === category ? 'border-foreground bg-foreground text-background' : 'border-border bg-card text-muted-foreground hover:border-foreground/40'}`}>{category}</button>)}
-                </div>
-
                 {!preview && <div className="mb-7 flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
                     <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Skill 검색" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground sm:max-w-sm" />
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={displayedSkills.length > 0 && displayedSkills.every((skill) => selectedIds.includes(skill.id))} onChange={(event) => setSelectedIds(event.target.checked ? displayedSkills.map((skill) => skill.id) : [])} /> 현재 목록 전체 선택</label>
@@ -155,8 +138,8 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                     </div>
                 </section>
 
-                <section aria-labelledby="recommended-skills">
-                    <div className="mb-4 flex items-center gap-2"><BookOpen className="h-5 w-5" /><h2 id="recommended-skills" className="font-display text-xl font-bold">추천 Skill</h2></div>
+                <section aria-labelledby="my-skills">
+                    <div className="mb-4 flex items-center gap-2"><BookOpen className="h-5 w-5" /><h2 id="my-skills" className="font-display text-xl font-bold">내 Skill</h2></div>
                     {loading ? <p className="py-10 text-sm text-muted-foreground">Skills를 불러오는 중입니다.</p> : (
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             {displayedSkills.map((skill) => <article key={skill.id} className="relative overflow-hidden rounded-2xl border border-border bg-card">

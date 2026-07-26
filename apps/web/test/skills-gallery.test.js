@@ -11,7 +11,7 @@ test('skills gallery provides the approved offline entry points', () => {
     assert.match(gallery, /PPTX에서 만들기/);
     assert.match(gallery, /직접 만들기/);
     assert.match(gallery, /템플릿 갤러리에서 선택/);
-    assert.match(gallery, /추천 Skill/);
+    assert.match(gallery, /내 Skill/);
     assert.doesNotMatch(gallery, /\.zip Skill/);
     assert.match(gallery, /skillsApi\.importPptx/);
     assert.match(gallery, /accept="\.pptx"/);

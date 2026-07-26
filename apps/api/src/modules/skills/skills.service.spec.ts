@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import axios from 'axios';
 import { SkillsService } from './skills.service';
 
@@ -99,5 +99,32 @@ describe('SkillsService', () => {
                 organizationId: 'org-1',
             }),
         });
+    });
+
+    const pptxUpload = {
+        originalname: 'executive-report.pptx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        size: 1024,
+        buffer: Buffer.from('pptx'),
+    } as Express.Multer.File;
+
+    // An unreachable renderer is an outage, not a bad upload. Reporting it as a 400
+    // told the user to fix a file that was never the problem, and the bare catch
+    // threw away the only clue about what actually broke.
+    it('reports an unreachable renderer as a service outage, not a rejected file', async () => {
+        (axios.post as jest.Mock).mockRejectedValue(Object.assign(new Error('getaddrinfo ENOTFOUND renderer'), { isAxiosError: true }));
+        (axios.isAxiosError as unknown as jest.Mock) = jest.fn().mockReturnValue(true);
+
+        await expect(service.importPptx(user, pptxUpload)).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+
+    it('surfaces the renderer\'s own reason when it rejects the file', async () => {
+        (axios.post as jest.Mock).mockRejectedValue(Object.assign(new Error('Request failed with status code 400'), {
+            isAxiosError: true,
+            response: { status: 400, data: { detail: 'Unsupported PPTX layout' } },
+        }));
+        (axios.isAxiosError as unknown as jest.Mock) = jest.fn().mockReturnValue(true);
+
+        await expect(service.importPptx(user, pptxUpload)).rejects.toThrow('Unsupported PPTX layout');
     });
 });

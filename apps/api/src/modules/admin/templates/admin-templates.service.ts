@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaginationDto } from '../dto';
 import { TemplateCategory } from '@prisma/client';
 import { StorageService } from '../../assets/storage.service';
+import { postToRenderer } from '../../../renderer-client';
 
 @Injectable()
 export class AdminTemplatesService {
@@ -26,21 +26,18 @@ export class AdminTemplatesService {
         const pptxMime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
         form.append('file', new Blob([new Uint8Array(file.buffer)], { type: pptxMime }), file.originalname);
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
-        let response: { data?: { config?: unknown } };
-        try {
-            response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 60000 });
-        } catch (error) {
-            const detail = axios.isAxiosError(error) ? error.response?.data?.detail : null;
-            throw new BadRequestException(typeof detail === 'string' ? detail : 'Failed to extract PPTX template');
-        }
-        if (!this.isTemplateConfig(response.data?.config)) {
+        const result = await postToRenderer<{ config?: unknown }>(rendererUrl, '/api/extract/style', form, {
+            timeout: 60000,
+            rejectedMessage: 'PPTX 템플릿을 읽지 못했습니다. 파일이 손상되지 않았는지 확인해주세요.',
+        });
+        if (!this.isTemplateConfig(result?.config)) {
             throw new BadRequestException('Invalid renderer template config');
         }
         const uploaded = await this.storage.upload({ ...file, mimetype: pptxMime } as Express.Multer.File, 'templates');
         return this.create({
             ...data,
             category: data.category || 'CUSTOM',
-            config: { ...(response.data.config as Record<string, any>), pptxTemplate: { storageKey: uploaded.key, originalname: file.originalname }, source: { ...(response.data.config as any).source, storageKey: uploaded.key } },
+            config: { ...(result.config as Record<string, any>), pptxTemplate: { storageKey: uploaded.key, originalname: file.originalname }, source: { ...(result.config as any).source, storageKey: uploaded.key } },
         });
     }
 
@@ -53,9 +50,12 @@ export class AdminTemplatesService {
         const source = await this.storage.getBuffer(storageKey);
         form.append('file', new Blob([new Uint8Array(source)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), config?.pptxTemplate?.originalname || 'template.pptx');
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
-        const response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 60000 });
-        if (!this.isTemplateConfig(response.data?.config)) throw new BadRequestException('PPTX extraction produced an invalid template');
-        return this.prisma.template.update({ where: { id }, data: { config: { ...(response.data.config as any), pptxTemplate: config.pptxTemplate, source: { ...(response.data.config as any).source, storageKey } } } });
+        const result = await postToRenderer<{ config?: unknown }>(rendererUrl, '/api/extract/style', form, {
+            timeout: 60000,
+            rejectedMessage: 'PPTX를 다시 읽지 못했습니다. 원본 파일이 손상되지 않았는지 확인해주세요.',
+        });
+        if (!this.isTemplateConfig(result?.config)) throw new BadRequestException('PPTX extraction produced an invalid template');
+        return this.prisma.template.update({ where: { id }, data: { config: { ...(result.config as any), pptxTemplate: config.pptxTemplate, source: { ...(result.config as any).source, storageKey } } } });
     }
 
     async importHtmlZip(
@@ -67,18 +67,16 @@ export class AdminTemplatesService {
         const form = new FormData();
         form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
-        let response: { data?: { config?: unknown } };
-        try {
-            response = await axios.post(`${rendererUrl}/api/extract/html-template`, form, { timeout: 15000 });
-        } catch {
-            throw new BadRequestException('Failed to validate HTML template ZIP');
-        }
-        if (!this.isHtmlZipTemplateConfig(response.data?.config)) {
+        const result = await postToRenderer<{ config?: unknown }>(rendererUrl, '/api/extract/html-template', form, {
+            timeout: 15000,
+            rejectedMessage: 'HTML 템플릿 ZIP을 읽지 못했습니다. deck 매니페스트가 포함된 ZIP인지 확인해주세요.',
+        });
+        if (!this.isHtmlZipTemplateConfig(result?.config)) {
             throw new BadRequestException('Invalid HTML template ZIP config');
         }
 
         const uploaded = await this.storage.upload(file, 'templates');
-        const config = response.data!.config as { htmlTemplate: string; htmlSlides?: string[]; archive: Record<string, unknown> };
+        const config = result.config as { htmlTemplate: string; htmlSlides?: string[]; archive: Record<string, unknown> };
         return this.create({
             ...data,
             category: data.category || 'CUSTOM',

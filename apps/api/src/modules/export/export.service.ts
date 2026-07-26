@@ -18,6 +18,13 @@ export class ExportService {
     private rendererUrl: string;
     private readonly logger = new Logger(ExportService.name);
 
+    // An HTML-template slide is rendered by Chromium at 1920x1080 (~1.5s each,
+    // measured), so a whole deck takes proportionally longer. The former 5s cap
+    // made the API abandon renders the renderer went on to finish successfully,
+    // surfacing as "renderer is unavailable" on a deck of only four slides.
+    private static readonly DECK_RENDER_TIMEOUT_MS = 180_000;
+    private static readonly SLIDE_RENDER_TIMEOUT_MS = 30_000;
+
     constructor(
         private prisma: PrismaService,
         private configService: ConfigService,
@@ -45,7 +52,7 @@ export class ExportService {
                 },
                 {
                     responseType: 'arraybuffer',
-                    timeout: 5000,
+                    timeout: ExportService.DECK_RENDER_TIMEOUT_MS,
                 },
             );
 
@@ -169,7 +176,7 @@ export class ExportService {
                 },
                 {
                     responseType: 'arraybuffer',
-                    timeout: 5000,
+                    timeout: ExportService.DECK_RENDER_TIMEOUT_MS,
                 },
             );
 
@@ -355,7 +362,7 @@ export class ExportService {
                 },
                 {
                     responseType: 'arraybuffer',
-                    timeout: 5000,
+                    timeout: ExportService.SLIDE_RENDER_TIMEOUT_MS,
                 },
             );
 

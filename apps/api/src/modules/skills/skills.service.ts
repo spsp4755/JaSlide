@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSkillDto } from './dto/skill.dto';
 import { StorageService } from '../assets/storage.service';
+import { postToRenderer } from '../../renderer-client';
 
 interface SkillUser {
     id: string;
@@ -64,13 +64,11 @@ export class SkillsService {
         const form = new FormData();
         form.append('file', new Blob([new Uint8Array(file.buffer)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), file.originalname);
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
-        let config: unknown;
-        try {
-            const response = await axios.post(`${rendererUrl}/api/extract/style`, form, { timeout: 60000 });
-            config = response.data?.config;
-        } catch {
-            throw new BadRequestException('Failed to extract PPTX style');
-        }
+        const result = await postToRenderer<{ config?: unknown }>(rendererUrl, '/api/extract/style', form, {
+            timeout: 60000,
+            rejectedMessage: 'PPTX에서 스타일을 추출하지 못했습니다. 파일이 손상되지 않았는지 확인해주세요.',
+        });
+        const config = result?.config;
         if (!this.isTemplateConfig(config)) throw new BadRequestException('Invalid PPTX style tokens');
 
         const skillName = name?.trim() || file.originalname.replace(/\.pptx$/i, '');

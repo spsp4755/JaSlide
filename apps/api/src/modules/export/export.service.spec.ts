@@ -13,6 +13,7 @@ describe('ExportService', () => {
     let prisma: { presentation: { findFirst: jest.Mock } };
 
     beforeEach(() => {
+        jest.clearAllMocks();
         presentation.template = null;
         prisma = { presentation: { findFirst: jest.fn().mockResolvedValue(presentation) } };
         service = new ExportService(
@@ -34,6 +35,30 @@ describe('ExportService', () => {
         expect(axios.post).toHaveBeenCalledWith('http://renderer.internal/api/render/pptx', expect.objectContaining({
             presentation: expect.objectContaining({ template: expect.objectContaining({ config: expect.objectContaining({ sourcePptx: source.toString('base64') }) }) }),
         }), expect.any(Object));
+    });
+
+    // Chromium renders each HTML-template slide at 1920x1080 (~1.5s each), so a
+    // whole deck needs far more than a handful of seconds. A 5s cap made the API
+    // abandon renders the renderer completed, reported as "renderer unavailable".
+    it.each([
+        ['PPTX', 'exportToPptx', '/api/render/pptx'],
+        ['PDF', 'exportToPdf', '/api/render/pdf'],
+    ] as const)('allows a whole-deck %s render far longer than a single slide', async (_format, method, path) => {
+        jest.spyOn(axios, 'post').mockResolvedValueOnce({ data: Buffer.from('export') } as any);
+
+        await service[method]('presentation-1', 'user-1');
+
+        const [url, , options] = (axios.post as jest.Mock).mock.calls[0];
+        expect(url).toBe(`http://renderer.internal${path}`);
+        expect(options.timeout).toBeGreaterThanOrEqual(120_000);
+    });
+
+    it('allows a single-slide preview render more than a few seconds', async () => {
+        jest.spyOn(axios, 'post').mockResolvedValueOnce({ data: Buffer.from('png') } as any);
+
+        await service.getExportPreview('presentation-1', 'user-1', 0);
+
+        expect((axios.post as jest.Mock).mock.calls[0][2].timeout).toBeGreaterThanOrEqual(15_000);
     });
 
     it.each([
