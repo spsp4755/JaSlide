@@ -634,6 +634,52 @@ def test_an_inserted_shape_keeps_the_text_typed_into_it_on_the_canvas():
     assert shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE and shape.text_frame.text == "핵심 지표"
 
 
+def test_duplicating_an_object_copies_its_look_and_places_the_copy():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))
+    shape.text = "원본"
+    shape.fill.solid(); shape.fill.fore_color.rgb = RGBColor(0x11, 0x22, 0x33)
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{
+            "slide": 0, "objectId": "new-copy", "duplicate": str(shape.shape_id),
+            "left": 400, "top": 300,
+        }],
+    })))
+
+    shapes = Presentation(BytesIO(output)).slides[0].shapes
+    assert len(shapes) == 2
+    copied = shapes[1]
+    # Same look and text as the original, but its own id and position.
+    assert copied.text_frame.text == "원본"
+    assert str(copied.fill.fore_color.rgb) == "112233"
+    assert copied.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE
+    assert copied.shape_id != shape.shape_id
+    assert copied.left == Presentation(BytesIO(output)).slide_width * 400 // 1920
+
+
+def test_an_object_can_be_rotated():
+    # 145 insertable shapes include every arrow direction; without rotation an
+    # inserted arrow only ever points the way its preset does.
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    shape = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(1), Inches(1), Inches(2), Inches(1))
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [
+            {"slide": 0, "objectId": str(shape.shape_id), "rotation": 135},
+            {"slide": 0, "objectId": "new-turned", "addShape": "leftArrow", "rotation": 420},
+        ],
+    })))
+
+    generated = Presentation(BytesIO(output)).slides[0].shapes
+    assert generated[0].rotation == 135
+    assert generated[1].rotation == 60, "a rotation beyond one turn wraps"
+
+
 def test_an_object_can_be_pulled_in_front_of_or_behind_the_others():
     # Overlapping objects are normal on a slide; without this an object could be
     # moved but never pulled out from under the one covering it.

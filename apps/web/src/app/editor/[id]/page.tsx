@@ -433,7 +433,7 @@ export default function EditorPage() {
         ? [
             ...(presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || []),
             ...(selectedSlide.content?.objectEdits || [])
-                .filter((item: any) => item.kind && (item.imageData || item.addText || item.addShape || item.addLine) && !item.delete)
+                .filter((item: any) => item.kind && (item.imageData || item.addText || item.addShape || item.addLine || item.duplicate) && !item.delete)
                 .map((item: any) => ({ ...item, id: item.objectId })),
         ]
         : [];
@@ -471,6 +471,21 @@ export default function EditorPage() {
         updateSlide(selectedSlide.id, { content });
         handleSaveSlideDelayed(selectedSlide.id, { content });
     };
+    // Ctrl+D. The copy carries its own id so it can be moved and restyled straight
+    // away, and lands offset so it is visibly a second object.
+    const duplicateNativeObject = () => {
+        if (!selectedNativeObject) return;
+        const edit = (selectedSlide?.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObjectId) || {};
+        const copyId = `copy-${crypto.randomUUID()}`;
+        updateNativeObject(copyId, {
+            kind: selectedNativeObject.kind,
+            duplicate: selectedNativeObjectId,
+            left: (edit.left ?? selectedNativeObject.left ?? 0) + 40,
+            top: (edit.top ?? selectedNativeObject.top ?? 0) + 40,
+        });
+        setSelectedNativeObjectId(copyId);
+    };
+
     const deleteNativeObject = () => {
         if (!selectedNativeObjectId) return;
         updateNativeObject(selectedNativeObjectId, { delete: true });
@@ -570,7 +585,11 @@ export default function EditorPage() {
                 handleSave();
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
                 e.preventDefault();
+                // With an object selected, Ctrl+D means duplicate that object. It used
+                // to fall through and duplicate the entire slide, which is not undoable
+                // in one step and is never what the shortcut means elsewhere.
                 if (selectedHtmlTextIndex !== null) duplicateSelectedHtmlObject();
+                else if (selectedNativeObjectId) duplicateNativeObject();
                 else if (selectedSlideId) handleDuplicateSlide();
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
@@ -1313,7 +1332,20 @@ export default function EditorPage() {
                                         <Button type="button" variant="outline" size="sm" onClick={() => updateNativeObject(selectedNativeObject.id, { order: 'front' })}><BringToFront className="mr-1 h-4 w-4" /> 맨 앞으로</Button>
                                         <Button type="button" variant="outline" size="sm" onClick={() => updateNativeObject(selectedNativeObject.id, { order: 'back' })}><SendToBack className="mr-1 h-4 w-4" /> 맨 뒤로</Button>
                                     </div>
+                                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={duplicateNativeObject}><Copy className="mr-1 h-4 w-4" /> 복제 <span className="ml-1 text-xs opacity-70">Ctrl+D</span></Button>
                                     <Button type="button" variant="destructive" size="sm" className="w-full" onClick={deleteNativeObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제 <span className="ml-1 text-xs opacity-70">Delete</span></Button>
+                                    <label className="block text-xs text-gray-600">회전
+                                        <span className="mt-1 flex items-center gap-2">
+                                            <input
+                                                type="range" min="0" max="359" step="1"
+                                                value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.rotation ?? 0}
+                                                onChange={(event) => updateNativeObject(selectedNativeObject.id, { rotation: Number(event.target.value) })}
+                                                className="flex-1"
+                                                aria-label="회전 각도"
+                                            />
+                                            <span className="w-10 text-right tabular-nums">{(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.rotation ?? 0}°</span>
+                                        </span>
+                                    </label>
                                     <p className="text-xs text-gray-500">방향키로 1px, Shift+방향키로 10px 이동합니다.</p>
                                     <div className="grid grid-cols-2 gap-2">
                                         {(['left', 'top', 'width', 'height'] as const).map((property) => <label key={property} className="text-xs text-gray-600">{{ left: 'X', top: 'Y', width: 'W', height: 'H' }[property]}<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.[property] ?? selectedNativeObject[property] ?? 0} onChange={(event) => updateNativeObject(selectedNativeObject.id, { [property]: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>)}

@@ -173,6 +173,13 @@ test('manual editing has the handles, keys and stacking Google Slides users expe
     // Z-order: reaching the object underneath an overlapping one.
     assert.match(editor, /order: 'front'/);
     assert.match(editor, /order: 'back'/);
+
+    // Ctrl+D used to duplicate the whole slide when an object was selected.
+    assert.match(editor, /else if \(selectedNativeObjectId\) duplicateNativeObject\(\)/);
+    assert.match(editor, /duplicate: selectedNativeObjectId/);
+    // A rotation control, so an inserted arrow can point somewhere other than its preset.
+    assert.match(editor, /aria-label="회전 각도"/);
+    assert.match(editor, /rotation: Number\(event\.target\.value\)/);
 });
 
 test('shapes accept in-slide text editing, like Google Slides', () => {

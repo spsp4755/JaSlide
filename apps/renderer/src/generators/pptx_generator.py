@@ -263,7 +263,17 @@ class PPTXGenerator:
         top = int((edit.get("top", 180)) * self.prs.slide_height / 1080)
         width = int((edit.get("width", 640)) * self.prs.slide_width / 1920)
         height = int((edit.get("height", 100)) * self.prs.slide_height / 1080)
-        if isinstance(edit.get("addShape"), str):
+        if isinstance(edit.get("duplicate"), str):
+            # Ctrl+D on a template object. Copy the element wholesale so the clone keeps
+            # its geometry, fill and text, then let the rest of this edit reposition it.
+            original = next((item for item in slide.shapes if str(item.shape_id) == edit["duplicate"]), None)
+            if original is not None:
+                clone = copy.deepcopy(original._element)
+                for properties in clone.iter(qn("p:cNvPr")):
+                    properties.set("id", str(max((item.shape_id for item in slide.shapes), default=1) + 1))
+                slide.shapes._spTree.append(clone)
+                shape = next((item for item in slide.shapes if item._element is clone), None)
+        elif isinstance(edit.get("addShape"), str):
             shape = slide.shapes.add_shape(self._preset_shape(edit["addShape"]), left, top, width, height)
         elif isinstance(edit.get("addLine"), str):
             kind = edit["addLine"]
@@ -325,6 +335,13 @@ class PPTXGenerator:
             shape.line.color.rgb = RGBColor.from_string(edit["lineColor"].lstrip("#").upper())
         if isinstance(edit.get("lineWidth"), (int, float)):
             shape.line.width = int(max(0, edit["lineWidth"]) * 12700)
+        # An inserted arrow that cannot be turned only ever points right.
+        if isinstance(edit.get("rotation"), (int, float)):
+            try:
+                shape.rotation = float(edit["rotation"]) % 360
+            except (AttributeError, ValueError):
+                pass
+
         # Z-order is the shape's position in the slide's shape tree. Without this an
         # object could be moved but never pulled out from under an overlapping one.
         if edit.get("order") in ("front", "back"):
