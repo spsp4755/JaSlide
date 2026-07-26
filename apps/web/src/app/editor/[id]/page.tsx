@@ -195,8 +195,35 @@ function addHtmlText(html: string): string {
 }
 
 const EDITOR_COLORS = ['#111827', '#374151', '#6B7280', '#FFFFFF', '#DC2626', '#EA580C', '#D97706', '#16A34A', '#2563EB', '#4F46E5', '#9333EA', '#DB2777'];
+/** The object's own type, sized against the canvas rather than the viewport.
+ *
+ * Editing used to happen at a flat 14px whatever the object was, so you typed
+ * into a 22pt title in small text and it snapped to its real size once the server
+ * preview caught up — the part that did not feel like PowerPoint.
+ *
+ * The extractor reports fontSize in points while the object's geometry is in the
+ * 1920x1080 canvas, and that canvas covers a 13.333in slide — 144px per inch, so
+ * one point is two canvas px. The wrapper is a size container, so 1080 canvas px
+ * is 100cqh and `size` points is `size * 2 / 10.8` cqh. */
+function nativeTextStyle(object: any, edit: any): CSSProperties {
+    const size = edit?.fontSize ?? object?.fontSize;
+    return {
+        fontSize: typeof size === 'number' && size > 0 ? `${size / 5.4}cqh` : undefined,
+        fontFamily: edit?.fontFamily ?? object?.fontFamily ?? undefined,
+        color: edit?.color ?? object?.color ?? undefined,
+        fontWeight: (edit?.bold ?? object?.bold) ? 700 : undefined,
+        fontStyle: (edit?.italic ?? object?.italic) ? 'italic' : undefined,
+    };
+}
+
 function ShapePickerGlyph({ kind }: { kind: string }) {
-    return <svg aria-hidden="true" viewBox="0 0 100 100" className="h-5 w-5 overflow-visible"><path d={glyphPath(kind)} fill={isStrokeOnly(kind) ? 'none' : '#FFFFFF'} stroke="#202124" strokeWidth={6} vectorEffect="non-scaling-stroke" /></svg>;
+    // The icon has to read against the panel, not against a slide: a fixed
+    // #202124 outline disappeared into the dark theme and a #FFFFFF body turned
+    // every filled shape into a white blob. currentColor follows the theme, and a
+    // faint tint of it still separates a filled shape from a line. The shape that
+    // actually lands on the slide keeps its own colors — see shapeSvgMarkup.
+    const stroked = isStrokeOnly(kind);
+    return <svg aria-hidden="true" viewBox="0 0 100 100" className="h-5 w-5 overflow-visible text-foreground"><path d={glyphPath(kind)} fill={stroked ? 'none' : 'currentColor'} fillOpacity={stroked ? undefined : 0.18} stroke="currentColor" strokeWidth={6} vectorEffect="non-scaling-stroke" /></svg>;
 }
 
 function addHtmlShape(html: string, kind = 'rect'): string {
@@ -555,8 +582,15 @@ export default function EditorPage() {
         const pending = previewPendingRef.current.get(key);
         if (pending) return pending;
         const request = exportApi.preview(presentationId, slideIndex)
-            .then((response) => {
+            .then(async (response) => {
                 const url = URL.createObjectURL(response.data);
+                // Publish the URL only once the bitmap can be painted. Handing a fresh
+                // blob straight to <img src> blanks the element for a frame or two while
+                // it decodes, and after every edit that reads as a flicker on the slide
+                // you are working on.
+                const image = new Image();
+                image.src = url;
+                await (image.decode ? image.decode().catch(() => undefined) : Promise.resolve());
                 previewCacheRef.current.set(key, url);
                 setThumbnails((current) => ({ ...current, [slideId]: url }));
                 return url;
@@ -1962,8 +1996,10 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
     };
 
     if (previewUrl && (!content.html || nativeObjects.length)) {
+        // A size container, so on-slide text can be sized in cqh and track the canvas
+        // the way the objects' own percentage geometry already does.
         return (
-            <div className="relative h-full w-full touch-pan-y" data-html-canvas onPointerDown={startSlideSwipe}>
+            <div className="relative h-full w-full touch-pan-y [container-type:size]" data-html-canvas onPointerDown={startSlideSwipe}>
                 <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
                 {/* Guides only exist mid-drag, so they never obscure the slide at rest. */}
                 {snapGuides?.vertical.map((x) => (
@@ -1994,8 +2030,8 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
                             bug. While the image lags an edit, cover that region opaquely with the
                             new text so the change shows up now instead of a round trip later. */}
                         {previewStale && editingNativeTextId !== object.id && typeof edit.text === 'string' && <div
-                            className="pointer-events-none absolute inset-0 overflow-hidden bg-white p-1 text-sm leading-tight"
-                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any }}
+                            className="pointer-events-none absolute inset-0 overflow-hidden bg-white p-1 leading-tight"
+                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any, ...nativeTextStyle(object, edit) }}
                         >{edit.text}</div>}
                         {editingNativeTextId === object.id && <textarea
                             autoFocus
@@ -2005,8 +2041,8 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
                             onChange={(event) => updateNativeObjectContent(object.id, { text: event.target.value })}
                             onBlur={() => setEditingNativeTextId(null)}
                             onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeTextId(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
-                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any }}
-                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white p-1 text-sm leading-tight outline-none"
+                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any, ...nativeTextStyle(object, edit) }}
+                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white p-1 leading-tight outline-none"
                         />}
                         {object.kind === 'table' && (() => {
                             const cells: string[][] = edit.cells || object.cells || [];

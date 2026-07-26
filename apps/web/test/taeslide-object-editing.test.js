@@ -57,6 +57,21 @@ test('TaeSlide editor persists generic HTML object styles', () => {
     // shape-glyphs.test.js owns the assertions about the catalogue itself.
     assert.match(editor, /SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup/);
     assert.match(editor, /function ShapePickerGlyph/);
+    // The picker icon reads against the panel, so it tracks the theme. The shape
+    // that lands on the slide keeps its own fixed colors via shapeSvgMarkup.
+    const glyphMarkup = editor
+        .slice(editor.indexOf('function ShapePickerGlyph'), editor.indexOf('function addHtmlShape'))
+        .split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+    assert.match(glyphMarkup, /stroke="currentColor"/);
+    assert.doesNotMatch(glyphMarkup, /#202124|#FFFFFF/);
+    // On-slide editing happens at the object's real size: points against a
+    // 1920x1080 canvas over a 13.333in slide is two canvas px per point, and the
+    // canvas wrapper is a size container so cqh tracks it.
+    assert.match(editor, /function nativeTextStyle/);
+    assert.match(editor, /size \/ 5\.4\}cqh/);
+    assert.match(editor, /\[container-type:size\]/);
+    // A fresh blob handed straight to <img src> blanks for a frame; decode first.
+    assert.match(editor, /image\.decode/);
     assert.match(editor, /shapeSvgMarkup\(kind, width, height\)/);
     assert.match(editor, /box-shadow:0 0 0 2px/);
     // Chrome follows the theme (bg-card); only the slide surface stays literally white.
