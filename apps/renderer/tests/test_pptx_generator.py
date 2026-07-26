@@ -12,7 +12,7 @@ from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
-from apps.renderer.src.generators.pptx_generator import PPTXGenerator
+from apps.renderer.src.generators.pptx_generator import PPTXGenerator, fit_font_scale
 
 
 def _presentation(*slides):
@@ -482,6 +482,55 @@ def test_pptx_template_keeps_native_text_and_table_objects_editable():
     assert run.font.size == Pt(28) and str(run.font.color.rgb) == "112233" and run.font.bold and run.font.italic
     assert generated.slides[0].shapes[1].has_table
     assert generated.slides[0].shapes[1].table.cell(0, 0).text == "Updated cell"
+
+
+def test_fit_font_scale_shrinks_only_when_the_text_no_longer_fits():
+    # One short line in a roomy box: leave it alone.
+    assert fit_font_scale(["짧은 제목"], width_pt=400, height_pt=60, font_pt=24) == 1.0
+    # The same box, a title long enough to wrap several times: shrink it.
+    long_title = "2026년 3분기 AI 엔지니어링 업무보고 (2026.07.20 ~ 2026.07.24) 추진 실적과 다음 분기 계획"
+    assert fit_font_scale([long_title], width_pt=400, height_pt=60, font_pt=24) < 1.0
+    # Degenerate boxes must not divide by zero or loop.
+    assert fit_font_scale([], 400, 60, 24) == 1.0
+    assert fit_font_scale(["글"], 0, 0, 24) == 1.0
+
+
+def test_pptx_template_shrinks_generated_text_that_outgrew_its_box():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    title = slide.shapes.add_textbox(Inches(4), Inches(1), Inches(3), Inches(0.5))
+    title.text = "Short"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+    overflowing = "2026년 3분기 AI 엔지니어링 업무보고 (2026.07.20 ~ 2026.07.24) 추진 실적과 다음 분기 계획"
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": str(title.shape_id), "text": overflowing, "fontSize": 28}],
+    })))
+
+    shape = Presentation(BytesIO(output)).slides[0].shapes[0]
+    autofit = shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    # PowerPoint reads fontScale; LibreOffice, which renders the editor preview,
+    # only needs the element to be present.
+    assert autofit is not None
+    assert 0 < int(autofit.get("fontScale")) < 100000
+    assert shape.text_frame.word_wrap is True
+
+
+def test_pptx_template_leaves_text_that_still_fits_at_full_size():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    title = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(2))
+    title.text = "Short"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {
+        "objectEdits": [{"slide": 0, "objectId": str(title.shape_id), "text": "짧은 제목", "fontSize": 18}],
+    })))
+
+    autofit = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert autofit is not None and autofit.get("fontScale") is None
 
 
 def test_pptx_template_applies_native_shape_colors():

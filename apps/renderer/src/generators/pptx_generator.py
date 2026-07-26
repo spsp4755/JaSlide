@@ -14,9 +14,40 @@ from pptx.enum.chart import XL_CHART_TYPE
 from io import BytesIO
 import base64
 import copy
+import logging
+import math
 from typing import Optional, Any
 from ..services.html_template import extract_html_template_style, parse_html_layout, parse_html_objects
 from ..services.html_renderer import render_slide_png
+
+logger = logging.getLogger(__name__)
+
+# A Hangul or CJK glyph occupies about a full em; Latin about half of one. Enough
+# to tell "this obviously no longer fits" from "this still fits" without dragging
+# in font metrics for every typeface a deck might use.
+_WIDE_RANGES = ((0x1100, 0x11FF), (0x2E80, 0xA4CF), (0xAC00, 0xD7A3), (0xF900, 0xFAFF), (0xFF00, 0xFF60))
+
+
+def _em_width(text: str) -> float:
+    """Width of `text` in ems, counting East Asian glyphs as full width."""
+    return sum(1.0 if any(low <= ord(ch) <= high for low, high in _WIDE_RANGES) else 0.5 for ch in text)
+
+
+def fit_font_scale(lines: list[str], width_pt: float, height_pt: float, font_pt: float) -> float:
+    """How much to shrink `font_pt` so `lines` still fit inside the box.
+
+    Generated text is routinely longer than the text a template was built around,
+    and PowerPoint's own answer to that is normAutofit — shrink rather than spill
+    over whatever sits below. Returns a scale in (0, 1].
+    """
+    if not lines or width_pt <= 0 or height_pt <= 0 or font_pt <= 0:
+        return 1.0
+    for scale in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25):
+        size = font_pt * scale
+        wrapped = sum(max(1, math.ceil(_em_width(line) * size / width_pt)) for line in lines)
+        if wrapped * size * 1.2 <= height_pt:
+            return scale
+    return 0.25
 
 
 class PPTXGenerator:
@@ -98,6 +129,35 @@ class PPTXGenerator:
         return slide.shapes.add_textbox(
             Inches(layout["x"]), Inches(layout["y"]), Inches(layout["w"]), Inches(layout["h"])
         )
+
+    @staticmethod
+    def _shrink_text_to_fit(shape: Any, default_pt: float = 18.0) -> None:
+        """Ask PowerPoint to shrink this shape's text, and pre-compute the scale.
+
+        Generated text is often longer than what the template was drawn around, so
+        a title would run past its own box and over the table beneath it. A bare
+        <a:normAutofit/> is enough for LibreOffice (which renders our previews) but
+        PowerPoint keeps showing full size until the box is next edited, so write
+        the fontScale it would have calculated too."""
+        frame = getattr(shape, "text_frame", None)
+        if frame is None or not shape.text.strip():
+            return
+        frame.word_wrap = True
+        sizes = [run.font.size.pt for paragraph in frame.paragraphs for run in paragraph.runs if run.font.size]
+        font_pt = max(sizes) if sizes else default_pt
+        # Inset margins are part of the box the text has to live in.
+        width_pt = max(1.0, (shape.width - frame.margin_left - frame.margin_right) / 12700)
+        height_pt = max(1.0, (shape.height - frame.margin_top - frame.margin_bottom) / 12700)
+        lines = [paragraph.text for paragraph in frame.paragraphs if paragraph.text]
+        scale = fit_font_scale(lines, width_pt, height_pt, font_pt)
+        body = frame._txBody.bodyPr
+        for existing in body.findall(qn("a:normAutofit")) + body.findall(qn("a:spAutoFit")) + body.findall(qn("a:noAutofit")):
+            body.remove(existing)
+        autofit = OxmlElement("a:normAutofit")
+        if scale < 1.0:
+            autofit.set("fontScale", str(int(round(scale * 100000))))
+            autofit.set("lnSpcReduction", "10000")
+        body.append(autofit)
 
     def _style_paragraph(
         self, paragraph: Any, size: int, font: str, bold: bool = False, italic: bool = False
@@ -299,7 +359,10 @@ class PPTXGenerator:
                 height = int((edit.get("height", 360)) * self.prs.slide_height / 1080)
                 slide.shapes.add_picture(BytesIO(image), left, top, width, height)
             except Exception:
-                pass
+                # Losing one pasted image should not fail the whole deck, but a
+                # silent drop left no way to tell an unsupported file apart from
+                # an image that never arrived.
+                logger.warning("Skipped an image edit that could not be decoded", exc_info=True)
             return
         if not shape:
             return
@@ -384,6 +447,10 @@ class PPTXGenerator:
                                 run.font.italic = source_run["italic"]
                                 if source_run["color"]:
                                     run.font.color.rgb = source_run["color"]
+        # Last, so it measures the text that actually ended up in the shape, at
+        # whatever size and box this edit left behind.
+        if getattr(shape, "has_text_frame", False):
+            self._shrink_text_to_fit(shape)
 
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""
