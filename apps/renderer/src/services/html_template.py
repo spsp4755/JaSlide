@@ -7,6 +7,12 @@ import re
 
 SLIDE_WIDTH = 13.333
 SLIDE_HEIGHT = 7.5
+CANVAS_HEIGHT = 1080
+# Lengths in this markup are px on a 1920x1080 canvas covering a 7.5in-tall slide, so
+# the canvas holds 144px per inch and a point is two px. python-pptx wants points.
+# This was 0.54, which is close enough to look right and wrong enough that a deck did
+# not survive the round trip out of pptx_to_html and back at its own size.
+PX_TO_PT = SLIDE_HEIGHT * 72 / CANVAS_HEIGHT
 SLOTS = {"title", "subtitle", "body", "bullets"}
 ALIGNMENTS = {"left", "center", "right"}
 
@@ -157,7 +163,7 @@ def parse_html_objects(template: str) -> list[dict]:
             "x": left / 1920 * SLIDE_WIDTH, "y": top / 1080 * SLIDE_HEIGHT,
             "w": width / 1920 * SLIDE_WIDTH, "h": height / 1080 * SLIDE_HEIGHT,
             "background": _color(style.get("background", "")), "color": _color(style.get("color", "")),
-            "font": _font_name(style.get("font-family", "")), "fontSize": max(8, min(round(_pixels(style.get("font-size")) * 0.54), 72)),
+            "font": _font_name(style.get("font-family", "")), "fontSize": max(8, min(round(_pixels(style.get("font-size")) * PX_TO_PT), 72)),
             "bold": style.get("font-weight", "") in {"500", "600", "700", "bold"},
             "align": style.get("text-align") if style.get("text-align") in ALIGNMENTS else "left",
         })
@@ -257,4 +263,4 @@ def _textbox_layout(style: dict[str, str]) -> dict | None:
     x, y, w, h = left / 1920 * SLIDE_WIDTH, top / 1080 * SLIDE_HEIGHT, width / 1920 * SLIDE_WIDTH, height / 1080 * SLIDE_HEIGHT
     if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > SLIDE_WIDTH or y + h > SLIDE_HEIGHT:
         return None
-    return {"x": x, "y": y, "w": w, "h": h, "fontSize": max(8, min(round(_pixels(style.get("font-size")) * 0.54), 72))}
+    return {"x": x, "y": y, "w": w, "h": h, "fontSize": max(8, min(round(_pixels(style.get("font-size")) * PX_TO_PT), 72))}

@@ -7,6 +7,7 @@ from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
+from apps.renderer.src.services.html_template import parse_html_objects
 from apps.renderer.src.services.pptx_to_html import pptx_to_html
 
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL1nQAAAABJRU5ErkJggg==")
@@ -49,6 +50,62 @@ def test_preserves_pptx_font_family_in_html():
     result = pptx_to_html(buffer.getvalue())
 
     assert "font-family:NanumGothic" in result["htmlSlides"][0]
+
+
+def test_emits_font_sizes_in_canvas_px_not_points():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1))
+    run = box.text_frame.paragraphs[0].add_run()
+    run.text = "제목"
+    run.font.size = Pt(22)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    # The canvas is 1080px over a 7.5in slide — 144px per inch, so a point is two px.
+    # Emitting "22px" for 22pt drew every extracted deck's text at half size.
+    assert "font-size:44px" in result["htmlSlides"][0]
+    assert "font-size:22px" not in result["htmlSlides"][0]
+    # The object map stays in points, which is what python-pptx and the editor read.
+    assert result["source"]["slides"][0]["objects"][0]["fontSize"] == 22
+
+
+def test_round_trips_a_font_size_through_html_back_to_its_own_points():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1))
+    run = box.text_frame.paragraphs[0].add_run()
+    run.text = "제목"
+    run.font.size = Pt(22)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    extracted = pptx_to_html(buffer.getvalue())
+    objects = parse_html_objects(extracted["htmlSlides"][0])
+
+    # 22pt out, 22pt back. The two conversions used to disagree (px==pt one way,
+    # px*0.54 the other), so a deck came back at 54% of the size it left at.
+    assert [item["fontSize"] for item in objects] == [22]
+
+
+def test_round_trips_a_size_below_the_old_eighteen_point_floor():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(0.4))
+    run = box.text_frame.paragraphs[0].add_run()
+    run.text = "AI엔지니어링 파트"
+    run.font.size = Pt(13)
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    extracted = pptx_to_html(buffer.getvalue())
+
+    # The container size seeded at 18 acted as a floor, so a 13pt caption came back
+    # from the round trip two sizes larger than it went in.
+    assert [item["fontSize"] for item in parse_html_objects(extracted["htmlSlides"][0])] == [13]
+    assert "font-size:26px" in extracted["htmlSlides"][0]
 
 
 def test_converts_tables_without_assuming_a_shape_fill():

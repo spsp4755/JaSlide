@@ -14,6 +14,21 @@ from .style_extractor import extract_template_tokens
 
 
 CANVAS_WIDTH, CANVAS_HEIGHT = 1920, 1080
+EMU_PER_INCH = 914400
+# Used only when a shape states no size anywhere, matching python-pptx's own default.
+DEFAULT_FONT_PT = 18
+
+
+def _pt_to_canvas_px(presentation) -> float:
+    """CSS px per point on the 1920x1080 canvas.
+
+    Geometry is scaled from EMU into that canvas, but a font size arrives in
+    points, and the two are not interchangeable: the canvas covers a 7.5in-tall
+    slide, so it holds 144 px per inch and one point is two px. Emitting the point
+    value as px — which this used to do — drew every deck's text at half size.
+    """
+    inches = (presentation.slide_height or 0) / EMU_PER_INCH
+    return CANVAS_HEIGHT / inches / 72 if inches > 0 else 2.0
 # A photo-heavy deck inlined every image as base64 and produced a 40MB config, which
 # then has to live in a database row and load in the editor. For a PPTX template the
 # blobs buy nothing — the preview is rendered from the original file and the editor
@@ -71,33 +86,39 @@ def _line_style(shape) -> str:
         return ""
 
 
-def _text_html(source) -> tuple[str, int, str | None]:
+def _text_html(source, pt_to_px: float = 2.0) -> tuple[str, int, str | None]:
+    """Markup, container font size in canvas px, and color for one text shape."""
     paragraphs = []
-    size = 18
+    # The container size is read back when this HTML is turned into a deck again, and
+    # seeding it at 18 made it a floor: a 13pt caption came back as 18pt. Only fall
+    # back to 18 when no run states a size at all.
+    size = None
     color = None
     for paragraph in source.text_frame.paragraphs:
         runs = []
         for run in paragraph.runs:
-            run_size = round(run.font.size.pt) if run.font.size else size
+            run_size = round(run.font.size.pt) if run.font.size else (size or DEFAULT_FONT_PT)
             run_color = _font_color(run.font.color) or color or "#1A1A1A"
             font_name = _font_name(run)
-            size = max(size, run_size)
+            size = run_size if size is None else max(size, run_size)
             color = color or run_color
             weight = "font-weight:700;" if run.font.bold else ""
             italic = "font-style:italic;" if run.font.italic else ""
             underline = "text-decoration:underline;" if run.font.underline else ""
             family = f'font-family:{escape(font_name, quote=True)};' if font_name else ""
-            runs.append(f'<span style="font-size:{run_size}px;color:{run_color};{family}{weight}{italic}{underline}">{escape(run.text)}</span>')
+            runs.append(f'<span style="font-size:{round(run_size * pt_to_px)}px;color:{run_color};{family}{weight}{italic}{underline}">{escape(run.text)}</span>')
         paragraphs.append("".join(runs) or escape(paragraph.text))
-    return "<br>".join(paragraphs), size, color
+    return "<br>".join(paragraphs), round((size or DEFAULT_FONT_PT) * pt_to_px), color
 
 
 def _text_style(shape) -> dict:
+    """The object map's own formatting. Sizes here stay in points: python-pptx and the
+    editor's on-slide text both want points, unlike the HTML above."""
     run = next((run for paragraph in shape.text_frame.paragraphs for run in paragraph.runs), None)
     if not run:
         return {}
     return {
-        "fontSize": round(run.font.size.pt) if run.font.size else 18,
+        "fontSize": round(run.font.size.pt) if run.font.size else DEFAULT_FONT_PT,
         "color": _font_color(run.font.color) or "#1A1A1A",
         "fontFamily": _font_name(run) or "",
         "bold": bool(run.font.bold),
@@ -111,19 +132,20 @@ def _text_align(shape) -> str:
     return {PP_ALIGN.CENTER: "center", PP_ALIGN.RIGHT: "right"}.get(alignment, "left")
 
 
-def _table_html(shape) -> str:
+def _table_html(shape, pt_to_px: float = 2.0) -> str:
     widths = [column.width for column in shape.table.columns]
     total_width = sum(widths) or 1
     rows = []
     for row in shape.table.rows:
         cells = []
         for index, cell in enumerate(row.cells):
-            text, size, color = _text_html(cell)
+            text, size, color = _text_html(cell, pt_to_px)
             fill = _color(cell.fill)
             width = round(widths[index] / total_width * 100, 1)
             surface = f"background:{fill};" if fill else ""
+            # EMU / 12700 is points, not canvas px — scale it like every other length.
             cells.append(
-                f'<td style="width:{width}%;height:{row.height / 12700:.1f}px;box-sizing:border-box;'
+                f'<td style="width:{width}%;height:{row.height / 12700 * pt_to_px:.1f}px;box-sizing:border-box;'
                 f'border:1px solid #D1D5DB;padding:8px;vertical-align:middle;{surface}'
                 f'font-size:{size}px;color:{color or "#1A1A1A"}">{text}</td>'
             )
@@ -138,6 +160,7 @@ def _px(value, total, canvas) -> int:
 def pptx_to_html(content: bytes) -> dict:
     presentation = Presentation(BytesIO(content))
     tokens = extract_template_tokens(content)
+    pt_to_px = _pt_to_canvas_px(presentation)
     html_slides = []
     source_slides = []
     inlined = 0
@@ -186,9 +209,9 @@ def pptx_to_html(content: bytes) -> dict:
                 "cells": [[cell.text for cell in row.cells] for row in shape.table.rows],
                 "rowHeights": row_heights, "columnWidths": column_widths,
             })
-            objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape)}</div>')
+            objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape, pt_to_px)}</div>')
         elif getattr(shape, "has_text_frame", False) and shape.text.strip():
-            text, font_size, color = _text_html(shape)
+            text, font_size, color = _text_html(shape, pt_to_px)
             source_objects.append({**source_object, "kind": "text", "text": shape.text, "align": _text_align(shape), "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape)})
             fill = _color(getattr(shape, "fill", None))
             surface = f"background:{fill};" if fill else ""
