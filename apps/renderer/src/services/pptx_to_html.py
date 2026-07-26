@@ -138,8 +138,15 @@ def pptx_to_html(content: bytes) -> dict:
             elif getattr(shape, "has_table", False):
                 row_heights = [_px(row.height, presentation.slide_height, CANVAS_HEIGHT) for row in shape.table.rows]
                 column_widths = [_px(column.width, presentation.slide_width, CANVAS_WIDTH) for column in shape.table.columns]
+                # PowerPoint draws a table at the sum of its column widths and row
+                # heights, not at the graphicFrame's stored extent — python-pptx never
+                # recomputes that extent when a column is resized. Using the frame put
+                # the preview and the editor's cell grid out of step with the real deck.
+                width = sum(column_widths) or width
+                height = sum(row_heights) or height
+                position = f"position:absolute;left:{left}px;top:{top}px;width:{width}px;height:{height}px"
                 source_objects.append({
-                    **source_object, "kind": "table",
+                    **source_object, "kind": "table", "width": width, "height": height,
                     "cells": [[cell.text for cell in row.cells] for row in shape.table.rows],
                     "rowHeights": row_heights, "columnWidths": column_widths,
                 })

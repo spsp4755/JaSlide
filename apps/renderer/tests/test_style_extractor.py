@@ -86,13 +86,27 @@ def test_extract_style_upload_returns_only_config_tokens():
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "config": {
-            "colors": {"background": "#112233", "primary": "#445566"},
-            "typography": {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"},
-            "htmlTemplate": '<div data-jaslide-slot="title" data-x="1" data-y="1" data-w="8" data-h="1" data-font-size="32" data-align="center"></div>',
-        }
-    }
+    body = response.json()
+
+    # The endpoint returns one `config` object and nothing else — no file, no envelope.
+    # Its contents grew when a PPTX upload became an editable template: alongside the
+    # style tokens it carries the per-slide HTML and the object map the editor needs,
+    # which is what `source.kind == "pptx"` selects on. This test used to pin the
+    # pre-PPTX shape and had been failing ever since.
+    assert list(body) == ["config"]
+    config = body["config"]
+    assert config["colors"] == {"background": "#112233", "primary": "#445566"}
+    assert config["typography"] == {"titleFont": "Noto Sans KR", "bodyFont": "Noto Sans KR"}
+    assert config["source"]["kind"] == "pptx"
+    assert len(config["htmlSlides"]) == 1
+    assert config["archive"]["canvas"] == {"width": 1920, "height": 1080}
+    # The text box and both rectangles must be addressable, or the editor has nothing
+    # to select on this slide.
+    kinds = [obj["kind"] for obj in config["source"]["slides"][0]["objects"]]
+    assert kinds.count("text") == 1 and kinds.count("shape") == 2
+    assert KOREAN_TEXT in config["htmlSlides"][0], "the slide's own words must survive for editing"
+    # The style tokens themselves stay free of deck content.
+    assert KOREAN_TEXT not in str(config["colors"]) + str(config["typography"])
 
 
 def test_extract_content_returns_text_by_slide_without_style_tokens():

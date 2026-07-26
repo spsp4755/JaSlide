@@ -1,9 +1,10 @@
-// ponytail: this suite still fails to load — the service reaches the OpenAI SDK,
-// which needs a Web Fetch runtime jest's node environment withholds, and its
-// `openai/shims/node` fix is itself a file jest cannot parse. Needs a
-// transformIgnorePatterns entry for openai; left alone because changing the global
-// transform broke all fifteen suites when tried.
 import { AdminModelsService } from './admin-models.service';
+
+// The service imports LlmService, which loads the OpenAI SDK, which refuses to
+// initialise without a Web Fetch runtime jest's node environment withholds — so this
+// whole suite failed to load and its tests never ran. It injects an LlmService double
+// anyway, so mock the module out rather than dragging the SDK in.
+jest.mock('../../llm/llm.service', () => ({ LlmService: class {} }));
 
 describe('AdminModelsService cache invalidation', () => {
     const prisma = {

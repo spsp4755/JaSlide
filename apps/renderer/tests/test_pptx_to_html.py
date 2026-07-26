@@ -87,7 +87,14 @@ def test_preserves_table_cell_dimensions_and_formatting():
 
     result = pptx_to_html(buffer.getvalue())
 
-    assert "width:75.0%" in result["htmlSlides"][0]
+    # Widening column 0 to 3in makes the table 5in wide; python-pptx leaves the
+    # graphicFrame's stored extent at the original 4in. PowerPoint draws the table at
+    # its own 5in, so the column is 3/5 of it — measuring against the stale frame
+    # (3/4 = 75%) put the preview and the editor's cell grid out of step with the deck.
+    assert "width:60.0%" in result["htmlSlides"][0]
+    table = next(obj for obj in result["source"]["slides"][0]["objects"] if obj["kind"] == "table")
+    assert table["width"] == sum(table["columnWidths"])
+    assert table["height"] == sum(table["rowHeights"])
     assert "background:#112233" in result["htmlSlides"][0]
     assert "font-family:NanumGothic" in result["htmlSlides"][0]
 
