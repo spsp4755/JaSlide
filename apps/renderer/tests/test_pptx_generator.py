@@ -262,6 +262,49 @@ def test_editable_export_writes_real_shapes_instead_of_a_slide_picture(monkeypat
     assert str(dark_panel_text.text_frame.paragraphs[0].runs[0].font.color.rgb) == "FFFFFF"
 
 
+def test_editable_export_rebuilds_an_html_table_as_a_real_table():
+    # Flattening a grid into one string turned the report's ASR table into a run-on
+    # line of headers with every row gone.
+    slide_html = (
+        '<div class="slide-container" style="width:1920px;height:1080px">'
+        '<div data-object="true" data-object-type="table" style="position:absolute;left:120px;top:300px;width:1600px;height:400px">'
+        '<table><thead><tr><th>공격 카테고리</th><th>시도</th><th>ASR</th></tr></thead>'
+        '<tbody><tr><td>프롬프트 주입</td><td>1,200</td><td>2.4%</td></tr>'
+        '<tr><td>탈옥</td><td>900</td><td>1.1%</td></tr></tbody></table></div>'
+        '</div>'
+    )
+
+    output = PPTXGenerator(SimpleNamespace(config={}), editable=True).generate(
+        _presentation(_slide("CONTENT", "ASR", {"html": slide_html})),
+    )
+
+    shape = next(item for item in Presentation(BytesIO(output)).slides[0].shapes if item.has_table)
+    assert len(shape.table.rows) == 3 and len(shape.table.columns) == 3
+    assert [cell.text for cell in shape.table.rows[0].cells] == ["공격 카테고리", "시도", "ASR"]
+    assert [cell.text for cell in shape.table.rows[2].cells] == ["탈옥", "900", "1.1%"]
+    assert shape.table.rows[0].cells[0].text_frame.paragraphs[0].runs[0].font.bold
+
+
+def test_an_object_containing_nested_divs_does_not_end_early():
+    # Arbitrary HTML nests divs everywhere. Closing on the first </div> ended the
+    # object early and dropped everything after it on the slide.
+    slide_html = (
+        '<div class="slide-container" style="width:1920px;height:1080px">'
+        '<div data-object="true" data-object-type="textbox" style="position:absolute;left:100px;top:100px;width:800px;height:200px">'
+        '<div><span>앞</span></div><div>뒤</div></div>'
+        '<div data-object="true" data-object-type="textbox" style="position:absolute;left:100px;top:400px;width:800px;height:200px">두 번째 객체</div>'
+        '</div>'
+    )
+
+    output = PPTXGenerator(SimpleNamespace(config={}), editable=True).generate(
+        _presentation(_slide("CONTENT", "중첩", {"html": slide_html})),
+    )
+
+    texts = [shape.text_frame.text for shape in Presentation(BytesIO(output)).slides[0].shapes if shape.has_text_frame]
+    assert "앞 뒤" in texts, "both children belong to the one object"
+    assert "두 번째 객체" in texts, "the object after it must still be found"
+
+
 def test_html_template_chooses_layouts_by_slide_type_not_first_n_slides():
     def layout(color):
         return f'<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:{color}"></div>'

@@ -73,26 +73,68 @@ class _StyleParser(HTMLParser):
             self.items.append(values)
 
 
+# Tags that close themselves, so they never add a level of nesting.
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+# Tags that render on their own line, so their text must not run into the next one's.
+_BLOCK_TAGS = {"div", "p", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "header", "footer", "figcaption"}
+
+
 class _ObjectParser(HTMLParser):
+    """Collect `data-object` elements, their text, and any table grid inside them."""
+
     def __init__(self):
         super().__init__()
         self.objects: list[dict] = []
         self.current: dict | None = None
+        # An object's own tag can nest inside itself — arbitrary HTML is full of
+        # <div><div></div></div>. Counting depth stops the first inner </div> from
+        # ending the object and swallowing the rest of the slide.
+        self.depth = 0
+        self.cell: list[str] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
-        if values.get("data-object") != "true" or not values.get("style"):
+        if self.current is None:
+            if values.get("data-object") != "true" or not values.get("style"):
+                return
+            self.current = {
+                "tag": tag, "type": values.get("data-object-type"),
+                "style": values["style"], "text": "", "rows": [],
+            }
+            self.depth = 0 if tag in _VOID_TAGS else 1
             return
-        self.current = {"tag": tag, "type": values.get("data-object-type"), "style": values["style"], "text": ""}
+        if tag == self.current["tag"] and tag not in _VOID_TAGS:
+            self.depth += 1
+        if tag == "tr":
+            self.current["rows"].append([])
+        elif tag in ("td", "th"):
+            if not self.current["rows"]:
+                self.current["rows"].append([])
+            self.cell = self.current["rows"][-1]
+            self.cell.append("")
 
     def handle_data(self, data: str) -> None:
-        if self.current:
-            self.current["text"] += data
+        if self.current is None:
+            return
+        self.current["text"] += data
+        if self.cell:
+            self.cell[-1] += data
 
     def handle_endtag(self, tag: str) -> None:
-        if self.current and self.current["tag"] == tag:
+        if self.current is None:
+            return
+        if tag in ("td", "th"):
+            self.cell = None
+        if tag in _BLOCK_TAGS:
+            # "<div>앞</div><div>뒤</div>" reads as two lines, not the word "앞뒤".
+            self.current["text"] += " "
+        if tag != self.current["tag"] or tag in _VOID_TAGS:
+            return
+        self.depth -= 1
+        if self.depth <= 0:
             self.objects.append(self.current)
             self.current = None
+            self.cell = None
 
 
 def parse_html_objects(template: str) -> list[dict]:
@@ -111,6 +153,7 @@ def parse_html_objects(template: str) -> list[dict]:
             continue
         objects.append({
             "type": item["type"], "text": " ".join(item["text"].split()),
+            "cells": [[" ".join(cell.split()) for cell in row] for row in item["rows"] if row],
             "x": left / 1920 * SLIDE_WIDTH, "y": top / 1080 * SLIDE_HEIGHT,
             "w": width / 1920 * SLIDE_WIDTH, "h": height / 1080 * SLIDE_HEIGHT,
             "background": _color(style.get("background", "")), "color": _color(style.get("color", "")),

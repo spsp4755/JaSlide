@@ -447,6 +447,11 @@ class PPTXGenerator:
         for item in objects:
             if item is full_bleed:
                 continue
+            # A grid must come out a grid: flattening it into one string turned an ASR
+            # table into a run-on line of headers with the rows gone.
+            if item.get("cells"):
+                self._add_editable_html_table(slide, item)
+                continue
             if item["background"]:
                 shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(item["x"]), Inches(item["y"]), Inches(item["w"]), Inches(item["h"]))
                 shape.fill.solid()
@@ -471,6 +476,26 @@ class PPTXGenerator:
             for run in paragraph.runs:
                 run.font.color.rgb = self._rgb(item["color"] or ("#FFFFFF" if self._is_dark(backdrop) else "#1A1A1A"), self.DEFAULT_COLORS["text"])
             self._apply_alignment(paragraph, item["align"])
+
+    def _add_editable_html_table(self, slide: Any, item: dict) -> None:
+        """Rebuild an HTML table as a real PPTX table, so its rows survive the export."""
+        rows = [row for row in item["cells"] if any(cell for cell in row)]
+        columns = max((len(row) for row in rows), default=0)
+        if not rows or not columns:
+            return
+        graphic = slide.shapes.add_table(len(rows), columns, Inches(item["x"]), Inches(item["y"]),
+                                        Inches(item["w"]), Inches(item["h"]))
+        table = graphic.table
+        for row_index, row in enumerate(rows):
+            for column_index in range(columns):
+                cell = table.cell(row_index, column_index)
+                cell.text = row[column_index] if column_index < len(row) else ""
+                paragraph = cell.text_frame.paragraphs[0]
+                # The first row of an HTML table is its header often enough to be worth
+                # carrying over; a reader can undo one bold row far more easily than
+                # rebuilding a grid.
+                self._style_paragraph(paragraph, max(9, min(item["fontSize"], 16)),
+                                      item["font"] or self.tokens["body_font"], bold=row_index == 0)
 
     def _add_html_image_slide(self, html: str) -> None:
         slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
