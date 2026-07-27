@@ -99,8 +99,10 @@ test('a selected word can be formatted without formatting the whole object', () 
     assert.match(code, /if \(!selection \|\| selection\.isCollapsed \|\| selection\.rangeCount === 0\) return false;/);
 });
 
-test('a table cell keeps whole-cell formatting; character selection is text-object only', () => {
-    assert.match(source(), /element\.tagName === 'TD' \|\| element\.tagName === 'TH'\) return false;/);
+test('a table cell serializes character formatting through the same run path', () => {
+    const code = source();
+    assert.match(code, /onChangeCells\(objectId, readCells\(owner\)\)/);
+    assert.doesNotMatch(code, /element\.tagName === 'TD' \|\| element\.tagName === 'TH'\) return false;/);
 });
 
 test('character formatting persists across the paragraphs data path, not flat text', () => {

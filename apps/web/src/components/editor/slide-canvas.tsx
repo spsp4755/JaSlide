@@ -4,7 +4,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { RESIZE_HANDLES, resizeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
 import {
     CANVAS_PX_PER_PT, SLIDE_H, SLIDE_W, canvasScale, objectEditAlign, objectEditBoxStyle, objectEditText, objectEditTextStyle,
-    textRunStyle, toSlidePx, type ObjectEdit, type TextParagraph, type TextRun,
+    textRunStyle, toSlidePx, type ObjectEdit, type TableCellContent, type TextParagraph, type TextRun,
 } from '@/lib/slide-canvas';
 
 /** Character-level formatting `formatSelection` can apply — never `align` or
@@ -53,7 +53,7 @@ interface SlideCanvasProps {
     onSelectObject: (id: string | null) => void;
     onSelectionFormat: (format: SlideSelectionFormat | null) => void;
     onChangeParagraphs: (objectId: string, paragraphs: TextParagraph[]) => void;
-    onChangeCells: (objectId: string, cells: string[][]) => void;
+    onChangeCells: (objectId: string, cells: (string | TableCellContent)[][]) => void;
     onTransform: (objectId: string, box: Partial<Record<'left' | 'top' | 'width' | 'height', number>>) => void;
 }
 
@@ -217,21 +217,23 @@ function writeParagraphs(host: HTMLElement, paragraphs: TextParagraph[]): void {
 }
 
 /** Fill a table object's cells, left to right, top to bottom. */
-function writeCells(element: HTMLElement, cells: string[][]): void {
+function writeCells(element: HTMLElement, cells: (string | TableCellContent)[][]): void {
     const rows = element.querySelectorAll('tr');
     cells.forEach((row, rowIndex) => {
         const cellNodes = rows[rowIndex]?.querySelectorAll<HTMLElement>('td, th');
         row.forEach((value, columnIndex) => {
             const cell = cellNodes?.[columnIndex];
-            if (cell) writeText(cell, value);
+            if (!cell) return;
+            if (typeof value === 'string') writeText(cell, value);
+            else if (value?.paragraphs) writeParagraphs(cell, value.paragraphs);
         });
     });
 }
 
 /** Read a table object back out of the DOM after a cell was edited in place. */
-function readCells(element: HTMLElement): string[][] {
+function readCells(element: HTMLElement): TableCellContent[][] {
     return Array.from(element.querySelectorAll('tr')).map((row) =>
-        Array.from(row.querySelectorAll<HTMLElement>('td, th')).map((cell) => cell.innerText.replace(/\n+$/, '')));
+        Array.from(row.querySelectorAll<HTMLElement>('td, th')).map((cell) => ({ paragraphs: readParagraphs(cell) })));
 }
 
 /**
@@ -378,7 +380,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
     // is flat text, not paragraphs, so formatting stays whole-cell there.
     const formatSelection = useCallback((updates: RunFormatUpdate): boolean => {
         const element = editingRef.current;
-        if (!element || element.tagName === 'TD' || element.tagName === 'TH') return false;
+        if (!element) return false;
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
         const range = selection.getRangeAt(0);
@@ -404,9 +406,12 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
 
         const owner = element.closest<HTMLElement>('[data-object-id], [data-object="true"]') ?? element;
         const objectId = owner.dataset.objectId;
-        if (objectId) onChangeParagraphs(objectId, readParagraphs(owner));
+        if (objectId) {
+            if (element.tagName === 'TD' || element.tagName === 'TH') onChangeCells(objectId, readCells(owner));
+            else onChangeParagraphs(objectId, readParagraphs(owner));
+        }
         return true;
-    }, [onChangeParagraphs]);
+    }, [onChangeCells, onChangeParagraphs]);
 
     useImperativeHandle(ref, () => ({ formatSelection }), [formatSelection]);
 

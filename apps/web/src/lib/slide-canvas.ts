@@ -46,6 +46,11 @@ export interface TextParagraph {
     runs: TextRun[];
 }
 
+/** A table cell uses the same paragraph/run model as a text box. */
+export interface TableCellContent {
+    paragraphs: TextParagraph[];
+}
+
 export interface ObjectEdit {
     objectId: string;
     text?: string;
@@ -56,7 +61,8 @@ export interface ObjectEdit {
      * simpler path for content nobody has hand-formatted yet.
      */
     paragraphs?: TextParagraph[];
-    cells?: string[][];
+    /** Legacy string cells remain valid; edited cells gain character-level runs. */
+    cells?: (string | TableCellContent)[][];
     left?: number;
     top?: number;
     width?: number;

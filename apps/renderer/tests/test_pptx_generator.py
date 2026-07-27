@@ -641,6 +641,24 @@ def test_native_edit_writes_mixed_run_formatting_within_one_paragraph():
     assert paragraph.alignment == PP_ALIGN.CENTER
 
 
+def test_native_table_cell_writes_mixed_run_formatting():
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(1))
+    table.table.cell(0, 0).text = "Old"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{
+        "slide": 0, "objectId": str(table.shape_id), "cells": [[{"paragraphs": [{
+            "text": "Plain bold", "runs": [{"text": "Plain "}, {"text": "bold", "bold": True, "color": "#FF0000", "fontSize": 20}],
+        }]}]],
+    }]})))
+
+    paragraph = Presentation(BytesIO(output)).slides[0].shapes[0].table.cell(0, 0).text_frame.paragraphs[0]
+    assert [run.text for run in paragraph.runs] == ["Plain ", "bold"]
+    assert not paragraph.runs[0].font.bold and paragraph.runs[1].font.bold
+    assert str(paragraph.runs[1].font.color.rgb) == "FF0000" and paragraph.runs[1].font.size == Pt(20)
+
+
 def test_native_edit_paragraphs_without_runs_still_write_flat_text():
     # Back-compat: the AI-generation path writes {text, level} with no runs.
     source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])

@@ -315,6 +315,30 @@ class PPTXGenerator:
         except AttributeError:
             return None
 
+    def _write_paragraphs(self, frame: Any, paragraphs: list) -> None:
+        frame.clear()
+        for index, item in enumerate(paragraphs):
+            if not isinstance(item, dict):
+                continue
+            paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+            if isinstance(item.get("level"), int): paragraph.level = max(0, item["level"])
+            if isinstance(item.get("align"), str):
+                alignment = _PARAGRAPH_ALIGNMENTS.get(item["align"])
+                if alignment is not None: paragraph.alignment = alignment
+            runs = item.get("runs")
+            if isinstance(runs, list) and runs:
+                for run_item in runs:
+                    if not isinstance(run_item, dict): continue
+                    run = paragraph.add_run(); run.text = str(run_item.get("text", ""))
+                    if isinstance(run_item.get("bold"), bool): run.font.bold = run_item["bold"]
+                    if isinstance(run_item.get("italic"), bool): run.font.italic = run_item["italic"]
+                    if isinstance(run_item.get("underline"), bool): run.font.underline = run_item["underline"]
+                    if isinstance(run_item.get("color"), str) and len(run_item["color"].lstrip("#")) == 6: run.font.color.rgb = RGBColor.from_string(run_item["color"].lstrip("#").upper())
+                    if isinstance(run_item.get("fontSize"), (int, float)): run.font.size = Pt(run_item["fontSize"])
+                    if isinstance(run_item.get("fontFamily"), str): run.font.name = run_item["fontFamily"]
+            else:
+                paragraph.text = str(item.get("text", ""))
+
     def _apply_native_edit(self, edit: dict, slide: Any) -> None:
         if not isinstance(edit, dict):
             return
@@ -486,6 +510,8 @@ class PPTXGenerator:
                                 run.font.italic = source_run["italic"]
                                 if source_run["color"]:
                                     run.font.color.rgb = source_run["color"]
+                    elif column_index < len(shape.table.columns) and isinstance(value, dict) and isinstance(value.get("paragraphs"), list):
+                        self._write_paragraphs(shape.table.cell(row_index, column_index).text_frame, value["paragraphs"])
         # Last, so it measures the text that actually ended up in the shape, at
         # whatever size and box this edit left behind.
         if getattr(shape, "has_text_frame", False):
