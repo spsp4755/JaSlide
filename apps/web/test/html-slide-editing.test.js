@@ -31,3 +31,21 @@ test('the editing surface is the slide itself, not a picture of it', () => {
     assert.doesNotMatch(source, /previewStale/);
     assert.doesNotMatch(source, /cqh/);
 });
+
+test('one formatting bar serves both deck kinds', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // The bar used to read selectedHtmlObject, which only a ZIP deck has. A
+    // PPTX deck therefore showed "객체를 선택하면…" no matter what was selected,
+    // and its font and size lived in a side panel behind 수동 편집.
+    assert.match(source, /ribbonTab === 'home' \? \(activeFormat \?/);
+    assert.match(source, /const activeFormat = canvasFormat \?\?/);
+    assert.match(source, /const applyFormat = /);
+    assert.doesNotMatch(source, /ribbonTab === 'home' \? \(selectedHtmlObject \?/);
+
+    // Font family and size have to be on the bar, not behind a mode.
+    assert.match(source, /aria-label="글꼴"[\s\S]{0,200}fontChoicesWith\(activeFormat\.fontFamily\)/);
+    assert.match(source, /aria-label="글자 크기"/);
+    assert.match(source, /aria-label="글자 크게"/);
+    assert.match(source, /aria-label="글자 작게"/);
+});

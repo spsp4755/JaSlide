@@ -16,7 +16,7 @@ import { CommentsPanel } from '@/components/editor/comments-panel';
 import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
-import { SlideCanvas } from '@/components/editor/slide-canvas';
+import { SlideCanvas, type SlideSelectionFormat } from '@/components/editor/slide-canvas';
 import { DECK_FONTS } from '@/lib/deck-fonts';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
@@ -444,6 +444,8 @@ export default function EditorPage() {
     // by slide id and cached: it never changes for a given slide, and a PPTX
     // template's inlined images make it expensive to refetch.
     const [slideHtml, setSlideHtml] = useState<Record<string, string>>({});
+    // What the canvas has selected, and how it is formatted. Drives the toolbar.
+    const [canvasFormat, setCanvasFormat] = useState<SlideSelectionFormat | null>(null);
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
 
@@ -479,6 +481,50 @@ export default function EditorPage() {
         handleSaveSlideDelayed(selectedSlide.id, { content });
     };
     const formatSelectedHtmlText = (updates: Record<string, string>) => setHtmlTextFormatCommand((current) => ({ id: (current?.id || 0) + 1, updates }));
+
+    // One formatting bar for both deck kinds.
+    //
+    // The bar used to read `selectedHtmlObject`, which only exists for a ZIP
+    // deck's generated markup. A PPTX deck has no `content.html`, so selecting
+    // one of its objects left the bar showing "객체를 선택하면…" forever and the
+    // only way to change a font was a side panel behind 수동 편집. The canvas
+    // reports what it has selected; both kinds now drive the same controls.
+    const activeFormat = canvasFormat ?? (selectedHtmlObject ? {
+        objectType: selectedHtmlObject.objectType,
+        fontFamily: activeHtmlTextStyle?.fontFamily || '',
+        fontSize: Math.round(parseFloat(activeHtmlTextStyle?.fontSize || '') || 24),
+        bold: activeHtmlTextStyle?.fontWeight === '700' || activeHtmlTextStyle?.fontWeight === 'bold',
+        italic: activeHtmlTextStyle?.fontStyle === 'italic',
+        underline: selectedHtmlObject.textDecoration.includes('underline'),
+        color: activeHtmlTextStyle?.color || selectedHtmlObject.color,
+        align: selectedHtmlObject.textAlign,
+        fillColor: selectedHtmlObject.backgroundColor,
+    } : null);
+
+    /** Apply a formatting change to whichever object is selected. */
+    const applyFormat = (updates: {
+        fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean;
+        underline?: boolean; color?: string; align?: string; fillColor?: string;
+    }) => {
+        if (canvasFormat) {
+            updateNativeObject(canvasFormat.objectId, updates);
+            return;
+        }
+        // The HTML path speaks CSS; translate rather than teach it a second dialect.
+        const css: Record<string, string> = {};
+        if (updates.fontFamily !== undefined) css.fontFamily = updates.fontFamily;
+        if (updates.fontSize !== undefined) css.fontSize = String(updates.fontSize);
+        if (updates.bold !== undefined) css.fontWeight = updates.bold ? '700' : '400';
+        if (updates.italic !== undefined) css.fontStyle = updates.italic ? 'italic' : 'normal';
+        if (updates.underline !== undefined) css.textDecoration = updates.underline ? 'underline' : 'none';
+        if (updates.color !== undefined) css.color = updates.color;
+        if (updates.align !== undefined) { updateSelectedHtmlObject({ textAlign: updates.align }); return; }
+        if (updates.fillColor !== undefined) { updateSelectedHtmlObject({ backgroundColor: updates.fillColor }); return; }
+        formatSelectedHtmlText(css);
+    };
+
+    const deleteSelectedObject = () => (canvasFormat ? deleteNativeObject() : deleteSelectedHtmlObject());
+    const duplicateSelectedObject = () => (canvasFormat ? duplicateNativeObject() : duplicateSelectedHtmlObject());
     // Fetch the selected slide's own markup once. A slide with none — an old deck,
     // a deleted template — simply keeps the server-rendered PNG, so a failure here
     // costs fidelity, never the slide itself.
@@ -1224,24 +1270,25 @@ export default function EditorPage() {
                         <button type="button" onClick={() => setRibbonTab('home')} className={`h-full px-2 font-medium ${ribbonTab === 'home' ? 'border-b-2 border-purple-600 text-purple-700' : 'text-muted-foreground'}`}>홈</button>
                         <button type="button" onClick={() => setRibbonTab('insert')} className={`h-full px-2 font-medium ${ribbonTab === 'insert' ? 'border-b-2 border-purple-600 text-purple-700' : 'text-muted-foreground'}`}>삽입</button>
                     </div>
-                    {ribbonTab === 'home' ? (selectedHtmlObject ? <>
-                        {selectedHtmlObject.objectType !== 'shape' && selectedHtmlObject.objectType !== 'image' && <>
-                            <select aria-label="글꼴" value={activeHtmlTextStyle?.fontFamily || ''} onChange={(event) => formatSelectedHtmlText({ fontFamily: event.target.value })} className="h-8 rounded border px-2">{FONT_CHOICES.map((name) => <option key={name} value={name}>{name}</option>)}</select>
-                            <input aria-label="글자 크기" type="number" value={parseFloat(activeHtmlTextStyle?.fontSize || '') || 24} onChange={(event) => formatSelectedHtmlText({ fontSize: event.target.value })} className="h-8 w-16 rounded border px-2" />
-                            <Button aria-label="굵게" type="button" size="icon" variant={activeHtmlTextStyle?.fontWeight === '700' || activeHtmlTextStyle?.fontWeight === 'bold' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontWeight: activeHtmlTextStyle?.fontWeight === '700' || activeHtmlTextStyle?.fontWeight === 'bold' ? '400' : '700' })}><Bold className="h-4 w-4" /></Button>
-                            <Button aria-label="기울임" type="button" size="icon" variant={activeHtmlTextStyle?.fontStyle === 'italic' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontStyle: activeHtmlTextStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4" /></Button>
-                            <Button aria-label="밑줄" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('underline') ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ textDecoration: selectedHtmlObject.textDecoration.includes('underline') ? 'none' : 'underline' })}><Underline className="h-4 w-4" /></Button>
-                            <Button aria-label="취소선" type="button" size="icon" variant={selectedHtmlObject.textDecoration.includes('line-through') ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ textDecoration: selectedHtmlObject.textDecoration.includes('line-through') ? 'none' : 'line-through' })}><Strikethrough className="h-4 w-4" /></Button>
-                            {selectedHtmlObject.objectType === 'textbox' && <><Button aria-label="글머리 목록" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ listStyleType: 'disc' })}><List className="h-4 w-4" /></Button><Button aria-label="번호 목록" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ listStyleType: 'decimal' })}><ListOrdered className="h-4 w-4" /></Button><Button aria-label="들여쓰기 증가" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ indent: 'increase' })}><IndentIncrease className="h-4 w-4" /></Button><Button aria-label="들여쓰기 감소" type="button" size="icon" variant="ghost" onClick={() => formatSelectedHtmlText({ indent: 'decrease' })}><IndentDecrease className="h-4 w-4" /></Button></>}
-                            <Button aria-label="왼쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'left' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'left' })}><AlignLeft className="h-4 w-4" /></Button>
-                            <Button aria-label="가운데 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'center' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'center' })}><AlignCenter className="h-4 w-4" /></Button>
-                            <Button aria-label="오른쪽 정렬" type="button" size="icon" variant={selectedHtmlObject.textAlign === 'right' ? 'secondary' : 'ghost'} onClick={() => updateSelectedHtmlObject({ textAlign: 'right' })}><AlignRight className="h-4 w-4" /></Button>
+                    {ribbonTab === 'home' ? (activeFormat ? <>
+                        {activeFormat.objectType !== 'shape' && activeFormat.objectType !== 'image' && <>
+                            <select aria-label="글꼴" value={activeFormat.fontFamily} onChange={(event) => applyFormat({ fontFamily: event.target.value })} className="h-8 rounded border px-2">{fontChoicesWith(activeFormat.fontFamily).map((name) => <option key={name} value={name}>{name}</option>)}</select>
+                            <div className="flex items-center">
+                                <Button aria-label="글자 작게" type="button" size="icon" variant="ghost" onClick={() => applyFormat({ fontSize: Math.max(1, activeFormat.fontSize - 1) })}>−</Button>
+                                <input aria-label="글자 크기" type="number" min="1" value={activeFormat.fontSize} onChange={(event) => applyFormat({ fontSize: Math.max(1, Number(event.target.value) || 1) })} className="h-8 w-14 rounded border px-2 text-center" />
+                                <Button aria-label="글자 크게" type="button" size="icon" variant="ghost" onClick={() => applyFormat({ fontSize: activeFormat.fontSize + 1 })}>+</Button>
+                            </div>
+                            <Button aria-label="굵게" type="button" size="icon" variant={activeFormat.bold ? 'secondary' : 'ghost'} onClick={() => applyFormat({ bold: !activeFormat.bold })}><Bold className="h-4 w-4" /></Button>
+                            <Button aria-label="기울임" type="button" size="icon" variant={activeFormat.italic ? 'secondary' : 'ghost'} onClick={() => applyFormat({ italic: !activeFormat.italic })}><Italic className="h-4 w-4" /></Button>
+                            <Button aria-label="밑줄" type="button" size="icon" variant={activeFormat.underline ? 'secondary' : 'ghost'} onClick={() => applyFormat({ underline: !activeFormat.underline })}><Underline className="h-4 w-4" /></Button>
+                            <Button aria-label="왼쪽 정렬" type="button" size="icon" variant={activeFormat.align === 'left' ? 'secondary' : 'ghost'} onClick={() => applyFormat({ align: 'left' })}><AlignLeft className="h-4 w-4" /></Button>
+                            <Button aria-label="가운데 정렬" type="button" size="icon" variant={activeFormat.align === 'center' ? 'secondary' : 'ghost'} onClick={() => applyFormat({ align: 'center' })}><AlignCenter className="h-4 w-4" /></Button>
+                            <Button aria-label="오른쪽 정렬" type="button" size="icon" variant={activeFormat.align === 'right' ? 'secondary' : 'ghost'} onClick={() => applyFormat({ align: 'right' })}><AlignRight className="h-4 w-4" /></Button>
+                            <ColorSwatches label="글자색" value={activeFormat.color} onChange={(color) => applyFormat({ color })} />
                         </>}
-                        <ColorSwatches label="글자색" value={activeHtmlTextStyle?.color || selectedHtmlObject.color} onChange={(color) => formatSelectedHtmlText({ color })} />
-                        <ColorSwatches label="채우기" value={selectedHtmlObject.backgroundColor} onChange={(backgroundColor) => updateSelectedHtmlObject({ backgroundColor })} />
-                        <ColorSwatches label="윤곽선" value={selectedHtmlObject.borderColor} onChange={(borderColor) => updateSelectedHtmlObject({ borderColor })} />
-                        <Button aria-label="선택한 객체 복제" type="button" size="sm" variant="ghost" onClick={duplicateSelectedHtmlObject}><Copy className="mr-1 h-4 w-4" />복제</Button>
-                        <Button aria-label="선택한 객체 삭제" type="button" size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={deleteSelectedHtmlObject}><Trash2 className="mr-1 h-4 w-4" />삭제</Button>
+                        <ColorSwatches label="채우기" value={activeFormat.fillColor} onChange={(fillColor) => applyFormat({ fillColor })} />
+                        <Button aria-label="선택한 객체 복제" type="button" size="sm" variant="ghost" onClick={duplicateSelectedObject}><Copy className="mr-1 h-4 w-4" />복제</Button>
+                        <Button aria-label="선택한 객체 삭제" type="button" size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={deleteSelectedObject}><Trash2 className="mr-1 h-4 w-4" />삭제</Button>
                     </> : <span className="text-xs text-muted-foreground">객체를 선택하면 글꼴, 목록, 정렬, 색상 서식을 적용할 수 있습니다.</span>) : <>
                         <Button type="button" size="sm" variant="outline" onClick={() => presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeText() : insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
                         <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showShapePicker} onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-card shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} onClick={() => setShapePickerGroup(index)} aria-current={shapePickerGroup === index} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-secondary text-foreground' : 'text-foreground hover:bg-secondary'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-secondary"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
@@ -1341,6 +1388,7 @@ export default function EditorPage() {
                                         nativeObjects={nativeObjects}
                                         selectedNativeObjectId={selectedNativeObjectId}
                                         onSelectNativeObject={setSelectedNativeObjectId}
+                                        onSelectionFormat={setCanvasFormat}
                                         onNavigate={navigateSlide}
                                         onUpdate={(updates) => {
                                             updateSlide(selectedSlide.id, updates);
@@ -1710,13 +1758,14 @@ interface EditableSlidePreviewProps {
     nativeObjects: any[];
     selectedNativeObjectId: string | null;
     onSelectNativeObject: (id: string | null) => void;
+    onSelectionFormat: (format: SlideSelectionFormat | null) => void;
     onNavigate: (direction: -1 | 1) => void;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
     htmlTextFormatCommand: { id: number; updates: Record<string, string> } | null;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onSelectionFormat, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1935,6 +1984,7 @@ function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedH
                     objectEdits={content.objectEdits || []}
                     selectedObjectId={selectedNativeObjectId}
                     onSelectObject={onSelectNativeObject}
+                    onSelectionFormat={onSelectionFormat}
                     onChangeText={(objectId, text) => updateNativeObjectContent(objectId, { text })}
                     onChangeCells={(objectId, cells) => updateNativeObjectContent(objectId, { cells })}
                     onTransform={(objectId, box) => updateNativeObjectContent(objectId, box)}

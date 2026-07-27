@@ -395,6 +395,16 @@ class PPTXGenerator:
                         run.font.bold = edit["bold"]
                     if isinstance(edit.get("italic"), bool):
                         run.font.italic = edit["italic"]
+                    if isinstance(edit.get("underline"), bool):
+                        run.font.underline = edit["underline"]
+            # Alignment is a paragraph property, not a run one — setting it per run
+            # silently did nothing, so the toolbar's align buttons never took.
+            if isinstance(edit.get("align"), str):
+                alignment = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER,
+                             "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY}.get(edit["align"])
+                if alignment is not None:
+                    for paragraph in shape.text_frame.paragraphs:
+                        paragraph.alignment = alignment
         for key, size in (("left", self.prs.slide_width), ("width", self.prs.slide_width), ("top", self.prs.slide_height), ("height", self.prs.slide_height)):
             if isinstance(edit.get(key), (int, float)):
                 setattr(shape, key, int(edit[key] * size / (1920 if key in ("left", "width") else 1080)))

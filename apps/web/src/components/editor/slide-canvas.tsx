@@ -3,8 +3,23 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RESIZE_HANDLES, resizeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
 import {
-    SLIDE_H, SLIDE_W, canvasScale, objectEditStyle, objectEditText, toSlidePx, type ObjectEdit,
+    CANVAS_PX_PER_PT, SLIDE_H, SLIDE_W, canvasScale, objectEditAlign, objectEditBoxStyle, objectEditText, objectEditTextStyle, toSlidePx, type ObjectEdit,
 } from '@/lib/slide-canvas';
+
+/** What the toolbar shows for whatever is selected on the slide. */
+export interface SlideSelectionFormat {
+    objectId: string;
+    objectType: string;
+    fontFamily: string;
+    /** Points, the unit a deck states and the object map stores. */
+    fontSize: number;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    color: string;
+    align: string;
+    fillColor: string;
+}
 
 interface SlideCanvasProps {
     /** The slide's own markup, at 1920x1080. */
@@ -12,9 +27,44 @@ interface SlideCanvasProps {
     objectEdits: ObjectEdit[];
     selectedObjectId: string | null;
     onSelectObject: (id: string | null) => void;
+    onSelectionFormat: (format: SlideSelectionFormat | null) => void;
     onChangeText: (objectId: string, text: string) => void;
     onChangeCells: (objectId: string, cells: string[][]) => void;
     onTransform: (objectId: string, box: Partial<Record<'left' | 'top' | 'width' | 'height', number>>) => void;
+}
+
+/** A computed colour as `#RRGGBB`, so it can seed a colour input. */
+function toHex(value: string): string {
+    const parts = value.match(/\d+/g);
+    if (!parts || parts.length < 3) return '#000000';
+    return '#' + parts.slice(0, 3).map((part) => Number(part).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+/**
+ * How the selected object is currently formatted.
+ *
+ * Read off the rendered element rather than the edit list: an object the user
+ * has not touched yet has no edit, and the toolbar still has to show the
+ * deck's own font and size rather than a made-up default.
+ */
+function readFormat(element: HTMLElement): SlideSelectionFormat {
+    const run = element.querySelector('span') ?? element;
+    const runStyle = getComputedStyle(run);
+    const boxStyle = getComputedStyle(element);
+    return {
+        objectId: element.dataset.objectId ?? '',
+        objectType: element.dataset.objectType ?? 'textbox',
+        fontFamily: runStyle.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
+        // The extractor writes points at CANVAS_PX_PER_PT each; the object map and
+        // python-pptx both want the point value back.
+        fontSize: Math.max(1, Math.round(parseFloat(runStyle.fontSize) / CANVAS_PX_PER_PT)),
+        bold: Number(runStyle.fontWeight) >= 600,
+        italic: runStyle.fontStyle === 'italic',
+        underline: runStyle.textDecorationLine.includes('underline'),
+        color: toHex(runStyle.color),
+        align: boxStyle.textAlign === 'start' ? 'left' : boxStyle.textAlign,
+        fillColor: toHex(boxStyle.backgroundColor),
+    };
 }
 
 interface Box { left: number; top: number; width: number; height: number }
@@ -92,7 +142,7 @@ function readCells(element: HTMLElement): string[][] {
  */
 export function SlideCanvas({
     baseHtml, objectEdits, selectedObjectId,
-    onSelectObject, onChangeText, onChangeCells, onTransform,
+    onSelectObject, onSelectionFormat, onChangeText, onChangeCells, onTransform,
 }: SlideCanvasProps) {
     const frameRef = useRef<HTMLDivElement>(null);
     const stageRef = useRef<HTMLDivElement>(null);
@@ -131,10 +181,23 @@ export function SlideCanvas({
             const element = findObject(stage, edit.objectId, index);
             if (!element) return;
             if (edit.delete) { element.style.display = 'none'; return; }
-            Object.assign(element.style, objectEditStyle(edit));
+            Object.assign(element.style, objectEditBoxStyle(edit));
             if (edit.cells) writeCells(element, edit.cells);
             const text = objectEditText(edit);
             if (text !== null && !edit.cells) writeText(element, text);
+
+            // After the text is written, so a rewritten run keeps the edit's
+            // formatting rather than the template run's it was cloned from.
+            const textStyle = objectEditTextStyle(edit);
+            if (Object.keys(textStyle).length) {
+                const runs = element.querySelectorAll<HTMLElement>('span');
+                (runs.length ? Array.from(runs) : [element]).forEach((run) => Object.assign(run.style, textStyle));
+            }
+            const align = objectEditAlign(edit);
+            if (align) {
+                element.style.textAlign = align;
+                element.querySelectorAll<HTMLElement>('div, p, td, th').forEach((block) => { block.style.textAlign = align; });
+            }
         });
     }, [baseHtml, objectEdits]);
 
@@ -142,19 +205,25 @@ export function SlideCanvas({
     // sit on the element itself rather than on a parallel copy of its geometry.
     useEffect(() => {
         const stage = stageRef.current;
-        if (!stage || !selectedObjectId) { setSelectedBox(null); return; }
+        if (!stage || !selectedObjectId) { setSelectedBox(null); onSelectionFormat(null); return; }
         const index = objectEdits.findIndex((edit) => edit.objectId === selectedObjectId);
         const element = findObject(stage, selectedObjectId, index);
         setSelectedBox(element
             ? { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight }
             : null);
-    }, [selectedObjectId, objectEdits, baseHtml, scale]);
+        onSelectionFormat(element ? readFormat(element) : null);
+    }, [selectedObjectId, objectEdits, baseHtml, scale, onSelectionFormat]);
 
     const stopEditing = useCallback(() => {
         const element = editingRef.current;
         if (!element) return;
         element.removeAttribute('contentEditable');
+        element.blur();
         editingRef.current = null;
+        // Dropping contentEditable does not drop the highlight. Leaving it meant a
+        // drag-selection stayed lit across the slide until the next keystroke
+        // happened to replace it.
+        window.getSelection()?.removeAllRanges();
     }, []);
 
     const beginEditing = useCallback((element: HTMLElement, objectId: string) => {
@@ -232,13 +301,30 @@ export function SlideCanvas({
 
     const onStagePointerDown = (event: React.PointerEvent) => {
         const target = event.target as HTMLElement;
+        // A caret is in this element: let the pointer select text rather than
+        // dragging the object out from under it.
         if (editingRef.current?.contains(target)) return;
+        // Anywhere else ends editing, without waiting for a blur that a
+        // pointerdown on another element does not always deliver.
+        stopEditing();
         const object = target.closest<HTMLElement>('[data-object-id], [data-object="true"]');
         if (!object) { onSelectObject(null); return; }
         const id = object.dataset.objectId;
         onSelectObject(id ?? null);
         if (id === selectedObjectId) startDrag(event, null);
     };
+
+    // Escape steps back out: first out of the text, then out of the selection —
+    // the way it does in a slide editor.
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (editingRef.current) { stopEditing(); return; }
+            if (selectedObjectId) onSelectObject(null);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onSelectObject, selectedObjectId, stopEditing]);
 
     const onStageDoubleClick = (event: React.MouseEvent) => {
         const target = event.target as HTMLElement;

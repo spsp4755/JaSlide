@@ -55,3 +55,32 @@ test('typing does not blow away the caret', () => {
 test('a table cell is edited where it sits', () => {
     assert.match(source(), /td|cells/);
 });
+
+test('a drag-selection is released when the caret leaves', () => {
+    // Dropping contentEditable does not drop the highlight, so a selection
+    // stayed lit across the slide until the next keystroke replaced it.
+    const code = source();
+
+    assert.match(code, /getSelection\(\)\?\.removeAllRanges\(\)/);
+    // Blur is not delivered reliably when the pointer goes down elsewhere, so
+    // the stage ends editing itself rather than waiting for it.
+    assert.match(code, /stopEditing\(\);\s*\n\s*const object = target\.closest/);
+});
+
+test('Escape steps out of the text, then out of the selection', () => {
+    const code = source();
+
+    assert.match(code, /event\.key !== 'Escape'/);
+    assert.match(code, /if \(editingRef\.current\) \{ stopEditing\(\); return; \}/);
+    assert.match(code, /if \(selectedObjectId\) onSelectObject\(null\)/);
+});
+
+test('the canvas reports how the selection is formatted, for the toolbar', () => {
+    const code = source();
+
+    assert.match(code, /function readFormat/);
+    assert.match(code, /onSelectionFormat\(element \? readFormat\(element\) : null\)/);
+    // Points, the unit the deck states and python-pptx wants back. CSS pt is
+    // 1.333px, not the canvas 2px-per-point, so the conversion is explicit.
+    assert.match(code, /parseFloat\(runStyle\.fontSize\) \/ CANVAS_PX_PER_PT/);
+});

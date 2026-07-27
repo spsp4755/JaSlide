@@ -38,9 +38,11 @@ test('the font picker offers what is installed, not a hand-kept list', () => {
     const editor = fs.readFileSync(path.join(web, 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
 
     assert.match(editor, /import \{ DECK_FONTS \} from '@\/lib\/deck-fonts'/);
-    assert.match(editor, /FONT_CHOICES\.map/);
-    // The PPTX panel used to make you spell the family into a free-text box.
+    assert.match(editor, /const FONT_CHOICES = \[\.\.\.DECK_FONTS/);
+    // Both the toolbar and the object panel offer the installed families.
+    assert.match(editor, /fontChoicesWith\(activeFormat\.fontFamily\)/);
     assert.match(editor, /fontChoicesWith\(selectedNativeObject\.fontFamily\)/);
+    // Neither makes you spell a family into a free-text box any more.
     assert.doesNotMatch(editor, /글꼴<input/);
     // A deck can name a font nobody installed; dropping it from the list would
     // silently retype the object the moment the panel opened.
