@@ -418,8 +418,9 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
     const startDrag = useCallback((event: React.PointerEvent, handle: ResizeHandle | null) => {
         const stage = stageRef.current;
         if (!stage || !selectedObjectId) return;
-        event.preventDefault();
         event.stopPropagation();
+        // Let a second click become a native dblclick before a real drag starts.
+        if (handle) event.preventDefault();
         const index = objectEdits.findIndex((edit) => edit.objectId === selectedObjectId);
         const element = findObject(stage, selectedObjectId, index);
         if (!element) return;
@@ -433,10 +434,16 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
             .map((item) => ({ left: item.offsetLeft, top: item.offsetTop, width: item.offsetWidth, height: item.offsetHeight }));
         const startX = event.clientX;
         const startY = event.clientY;
+        let dragging = Boolean(handle);
 
         const move = (moveEvent: PointerEvent) => {
             const dx = toSlidePx(moveEvent.clientX - startX, scaleRef.current);
             const dy = toSlidePx(moveEvent.clientY - startY, scaleRef.current);
+            if (!dragging && Math.hypot(dx, dy) < 4) return;
+            if (!dragging) {
+                dragging = true;
+                window.getSelection()?.removeAllRanges();
+            }
             if (handle) {
                 setSnapGuides(null);
                 const box = resizeBox(initial, handle, dx, dy);

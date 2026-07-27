@@ -61,3 +61,9 @@ test('the toolbar formats a live text selection before it formats the whole obje
     assert.match(source, /onChangeParagraphs=\{\(objectId, paragraphs\) => updateNativeObjectContent\(objectId, \{ paragraphs, text: undefined \}\)\}/);
     assert.doesNotMatch(source, /onChangeText=\{/);
 });
+
+test('a native slide gesture does not also arm horizontal slide navigation', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    assert.match(source, /closest\('\[data-editable-object\], \[data-object-id\], \[data-object="true"\]'\)/);
+});

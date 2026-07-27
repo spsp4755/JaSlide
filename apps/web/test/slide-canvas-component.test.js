@@ -56,6 +56,17 @@ test('a table cell is edited where it sits', () => {
     assert.match(source(), /td|cells/);
 });
 
+test('a second click can enter text editing without arming an immediate object drag', () => {
+    const code = source();
+
+    // The old pointer-down handler called preventDefault before the browser had
+    // a chance to dispatch dblclick. Its leftover window pointermove listener
+    // then moved the table while the user was selecting a word.
+    assert.match(code, /let dragging = Boolean\(handle\)/);
+    assert.match(code, /if \(!dragging && Math\.hypot\(dx, dy\) < 4\) return;/);
+    assert.match(code, /if \(handle\) event\.preventDefault\(\);/);
+});
+
 test('a drag-selection is released when the caret leaves', () => {
     // Dropping contentEditable does not drop the highlight, so a selection
     // stayed lit across the slide until the next keystroke replaced it.

@@ -1814,7 +1814,7 @@ function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedH
     }, [content.html]);
 
     const startSlideSwipe = (event: any) => {
-        if ((event.target as HTMLElement).closest('[data-editable-object]')) return;
+        if ((event.target as HTMLElement).closest('[data-editable-object], [data-object-id], [data-object="true"]')) return;
         const startX = event.clientX;
         const startY = event.clientY;
         const stop = (endEvent: PointerEvent) => {
@@ -2241,4 +2241,3 @@ function SlidePreview({ slide }: { slide: any }) {
             );
     }
 }
-
