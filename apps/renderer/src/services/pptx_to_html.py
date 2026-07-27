@@ -11,6 +11,7 @@ from pptx.shapes.group import GroupShape
 from pptx.shapes.picture import Picture
 
 from .style_extractor import extract_template_tokens
+from .theme_colors import solid_fill_color, theme_palette
 
 
 CANVAS_WIDTH, CANVAS_HEIGHT = 1920, 1080
@@ -80,20 +81,32 @@ MAX_OBJECTS_PER_SLIDE = 400
 MAX_INLINE_IMAGE_TOTAL_BYTES = 6 * 1024 * 1024
 
 
-def _color(fill) -> str | None:
+def _color(fill, palette: dict[str, str] | None = None) -> str | None:
+    """A fill's colour, resolving a theme slot when it is not stated as RGB.
+
+    Most real decks name a theme colour and adjust it — a table header is
+    "background at 85% luminance", not "#D9D9D9". python-pptx raises on `.rgb`
+    for one of those, so this used to return None and the fill was dropped.
+    """
     try:
         value = fill.fore_color.rgb
-        return f"#{value}" if value else None
+        if value:
+            return f"#{value}"
     except (AttributeError, TypeError):
-        return None
+        pass
+    return solid_fill_color(getattr(fill, "_xPr", None), palette or {})
 
 
-def _font_color(color) -> str | None:
+def _font_color(color, palette: dict[str, str] | None = None, run=None) -> str | None:
     try:
         value = color.rgb
-        return f"#{value}" if value else None
+        if value:
+            return f"#{value}"
     except (AttributeError, TypeError):
-        return None
+        pass
+    # `getattr` chain, not `x and y`: truth-testing an lxml element is deprecated
+    # and an empty rPr is falsy while still being the node we need.
+    return solid_fill_color(getattr(getattr(run, "_r", None), "rPr", None), palette or {})
 
 
 def _font_name(run) -> str | None:
@@ -113,18 +126,33 @@ def _line_width(shape) -> int:
         return 1
 
 
-def _line_style(shape) -> str:
+def _line_color(shape, palette: dict[str, str] | None = None) -> str | None:
+    """An outline's colour. A LineFormat keeps its fill on `_ln`, not `_xPr`, so
+    the generic fill path never found it and every outline fell back to #202124."""
+    line = getattr(shape, "line", None)
+    if line is None:
+        return None
+    try:
+        value = line.color.rgb
+        if value:
+            return f"#{value}"
+    except (AttributeError, TypeError):
+        pass
+    return solid_fill_color(getattr(line, "_ln", None), palette or {})
+
+
+def _line_style(shape, palette: dict[str, str] | None = None) -> str:
     try:
         if not shape.line.width:
             return ""
-        color = _color(shape.line) or "#202124"
+        color = _line_color(shape, palette) or "#202124"
         width = max(1, round(shape.line.width / 12700))
         return f"border:{width}px solid {color}"
     except (AttributeError, TypeError):
         return ""
 
 
-def _text_html(source, pt_to_px: float = 2.0) -> tuple[str, int, str | None]:
+def _text_html(source, pt_to_px: float = 2.0, palette: dict[str, str] | None = None) -> tuple[str, int, str | None]:
     """Markup, container font size in canvas px, and color for one text shape."""
     paragraphs = []
     # The container size is read back when this HTML is turned into a deck again, and
@@ -136,7 +164,7 @@ def _text_html(source, pt_to_px: float = 2.0) -> tuple[str, int, str | None]:
         runs = []
         for run in paragraph.runs:
             run_size = round(run.font.size.pt) if run.font.size else (size or DEFAULT_FONT_PT)
-            run_color = _font_color(run.font.color) or color or "#1A1A1A"
+            run_color = _font_color(run.font.color, palette, run) or color or "#1A1A1A"
             font_name = _font_name(run)
             size = run_size if size is None else max(size, run_size)
             color = color or run_color
@@ -157,7 +185,7 @@ def _text_html(source, pt_to_px: float = 2.0) -> tuple[str, int, str | None]:
     return "".join(paragraphs), round((size or DEFAULT_FONT_PT) * pt_to_px), color
 
 
-def _text_style(shape) -> dict:
+def _text_style(shape, palette: dict[str, str] | None = None) -> dict:
     """The object map's own formatting. Sizes here stay in points: python-pptx and the
     editor's on-slide text both want points, unlike the HTML above."""
     run = next((run for paragraph in shape.text_frame.paragraphs for run in paragraph.runs), None)
@@ -165,7 +193,7 @@ def _text_style(shape) -> dict:
         return {}
     return {
         "fontSize": round(run.font.size.pt) if run.font.size else DEFAULT_FONT_PT,
-        "color": _font_color(run.font.color) or "#1A1A1A",
+        "color": _font_color(run.font.color, palette, run) or "#1A1A1A",
         "fontFamily": _font_name(run) or "",
         "bold": bool(run.font.bold),
         "italic": bool(run.font.italic),
@@ -192,15 +220,15 @@ def _cell_anchor(cell) -> str:
     return _ANCHOR_CSS.get(cell.text_frame.vertical_anchor, "top")
 
 
-def _table_html(shape, pt_to_px: float = 2.0) -> str:
+def _table_html(shape, pt_to_px: float = 2.0, palette: dict[str, str] | None = None) -> str:
     widths = [column.width for column in shape.table.columns]
     total_width = sum(widths) or 1
     rows = []
     for row in shape.table.rows:
         cells = []
         for index, cell in enumerate(row.cells):
-            text, size, color = _text_html(cell, pt_to_px)
-            fill = _color(cell.fill)
+            text, size, color = _text_html(cell, pt_to_px, palette)
+            fill = _color(cell.fill, palette)
             width = round(widths[index] / total_width * 100, 1)
             surface = f"background:{fill};" if fill else ""
             # EMU / 12700 is points, not canvas px — scale it like every other length.
@@ -221,6 +249,8 @@ def pptx_to_html(content: bytes) -> dict:
     presentation = Presentation(BytesIO(content))
     tokens = extract_template_tokens(content)
     pt_to_px = _pt_to_canvas_px(presentation)
+    # Read once per deck: a theme colour is only meaningful against this palette.
+    palette = theme_palette(presentation)
     html_slides = []
     source_slides = []
     inlined = 0
@@ -274,23 +304,23 @@ def pptx_to_html(content: bytes) -> dict:
                 "cells": [[cell.text for cell in row.cells] for row in shape.table.rows],
                 "rowHeights": row_heights, "columnWidths": column_widths,
             })
-            objects.append(f'<div {object_attrs} data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape, pt_to_px)}</div>')
+            objects.append(f'<div {object_attrs} data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape, pt_to_px, palette)}</div>')
         elif getattr(shape, "has_text_frame", False) and shape.text.strip():
-            text, font_size, color = _text_html(shape, pt_to_px)
-            source_objects.append({**source_object, "kind": "text", "text": shape.text, "align": _text_align(shape), "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape)})
-            fill = _color(getattr(shape, "fill", None))
+            text, font_size, color = _text_html(shape, pt_to_px, palette)
+            source_objects.append({**source_object, "kind": "text", "text": shape.text, "align": _text_align(shape), "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape, palette)})
+            fill = _color(getattr(shape, "fill", None), palette)
             surface = f"background:{fill};" if fill else ""
-            objects.append(f'<div {object_attrs} data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
+            objects.append(f'<div {object_attrs} data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape, palette)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
         else:
-            fill = _color(getattr(shape, "fill", None))
+            fill = _color(getattr(shape, "fill", None), palette)
             source_objects.append({**source_object, "kind": "shape", "fillColor": fill or "#FFFFFF",
-                                   "lineColor": _color(getattr(shape, "line", None)) or "#202124",
+                                   "lineColor": _line_color(shape, palette) or "#202124",
                                    "lineWidth": _line_width(shape)})
             surface = f"background:{fill};" if fill else "background:transparent;"
-            objects.append(f'<div {object_attrs} data-object-type="shape" style="{position};box-sizing:border-box;{surface}{_line_style(shape)}"></div>')
+            objects.append(f'<div {object_attrs} data-object-type="shape" style="{position};box-sizing:border-box;{surface}{_line_style(shape, palette)}"></div>')
 
     for slide in presentation.slides:
-        background = _color(slide.background.fill) or "#FFFFFF"
+        background = _color(slide.background.fill, palette) or "#FFFFFF"
         objects = []
         source_objects = []
         for shape in slide.shapes:

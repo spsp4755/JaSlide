@@ -17,6 +17,7 @@ import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
 import { SlideCanvas } from '@/components/editor/slide-canvas';
+import { DECK_FONTS } from '@/lib/deck-fonts';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
 import { nudgeBox } from '@/lib/object-transform';
@@ -196,6 +197,18 @@ function addHtmlText(html: string): string {
 }
 
 const EDITOR_COLORS = ['#111827', '#374151', '#6B7280', '#FFFFFF', '#DC2626', '#EA580C', '#D97706', '#16A34A', '#2563EB', '#4F46E5', '#9333EA', '#DB2777'];
+// Families the browser can actually draw: everything installed from fonts/ by
+// scripts/install-fonts.mjs, plus the web-safe ones. Editing this list by hand
+// is what let the picker drift from what was really installed.
+const FONT_CHOICES = [...DECK_FONTS, 'Arial', 'Times New Roman'];
+
+/** The picker, plus whatever family the object already uses. A deck can name a
+ *  font nobody installed, and dropping it from the list would silently retype
+ *  the object the moment the panel opened. */
+function fontChoicesWith(current?: string): string[] {
+    return current && !FONT_CHOICES.includes(current) ? [current, ...FONT_CHOICES] : FONT_CHOICES;
+}
+
 function ShapePickerGlyph({ kind }: { kind: string }) {
     // The icon has to read against the panel, not against a slide: a fixed
     // #202124 outline disappeared into the dark theme and a #FFFFFF body turned
@@ -1213,7 +1226,7 @@ export default function EditorPage() {
                     </div>
                     {ribbonTab === 'home' ? (selectedHtmlObject ? <>
                         {selectedHtmlObject.objectType !== 'shape' && selectedHtmlObject.objectType !== 'image' && <>
-                            <select aria-label="글꼴" value={activeHtmlTextStyle?.fontFamily || ''} onChange={(event) => formatSelectedHtmlText({ fontFamily: event.target.value })} className="h-8 rounded border px-2"><option value="Noto Sans KR">Noto Sans KR</option><option value="NanumGothic">나눔고딕</option><option value="나눔고딕">나눔고딕 (PPTX)</option><option value="HY헤드라인M">HY헤드라인M</option><option value="Arial">Arial</option><option value="Pretendard">Pretendard</option></select>
+                            <select aria-label="글꼴" value={activeHtmlTextStyle?.fontFamily || ''} onChange={(event) => formatSelectedHtmlText({ fontFamily: event.target.value })} className="h-8 rounded border px-2">{FONT_CHOICES.map((name) => <option key={name} value={name}>{name}</option>)}</select>
                             <input aria-label="글자 크기" type="number" value={parseFloat(activeHtmlTextStyle?.fontSize || '') || 24} onChange={(event) => formatSelectedHtmlText({ fontSize: event.target.value })} className="h-8 w-16 rounded border px-2" />
                             <Button aria-label="굵게" type="button" size="icon" variant={activeHtmlTextStyle?.fontWeight === '700' || activeHtmlTextStyle?.fontWeight === 'bold' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontWeight: activeHtmlTextStyle?.fontWeight === '700' || activeHtmlTextStyle?.fontWeight === 'bold' ? '400' : '700' })}><Bold className="h-4 w-4" /></Button>
                             <Button aria-label="기울임" type="button" size="icon" variant={activeHtmlTextStyle?.fontStyle === 'italic' ? 'secondary' : 'ghost'} onClick={() => formatSelectedHtmlText({ fontStyle: activeHtmlTextStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4" /></Button>
@@ -1406,7 +1419,7 @@ export default function EditorPage() {
                                 {selectedNativeObject ? <div className="space-y-3">
                                     {(selectedNativeObject.kind === 'text' || selectedNativeObject.kind === 'table') && <p className="text-xs text-muted-foreground">슬라이드에서 더블클릭하면 직접 편집할 수 있습니다.</p>}
                                     {selectedNativeObject.kind === 'text' && <div className="grid grid-cols-2 gap-2">
-                                        <label className="text-xs text-muted-foreground">글꼴<input value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontFamily ?? selectedNativeObject.fontFamily ?? ''} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontFamily: event.target.value })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
+                                        <label className="text-xs text-muted-foreground">글꼴<select value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontFamily ?? selectedNativeObject.fontFamily ?? ''} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontFamily: event.target.value })} className="mt-1 w-full rounded border px-2 py-1 text-sm">{fontChoicesWith(selectedNativeObject.fontFamily).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
                                         <label className="text-xs text-muted-foreground">크기<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontSize ?? selectedNativeObject.fontSize ?? 18} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontSize: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
                                         <label className="text-xs text-muted-foreground">색상<input type="color" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.color ?? selectedNativeObject.color ?? '#1A1A1A'} onChange={(event) => updateNativeObject(selectedNativeObject.id, { color: event.target.value })} className="mt-1 h-8 w-full rounded border p-1" /></label>
                                         <div className="flex items-end gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => updateNativeObject(selectedNativeObject.id, { bold: !((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.bold ?? selectedNativeObject.bold) })}><Bold className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => updateNativeObject(selectedNativeObject.id, { italic: !((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.italic ?? selectedNativeObject.italic) })}><Italic className="h-4 w-4" /></Button></div>

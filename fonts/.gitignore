@@ -1,0 +1,7 @@
+# Font binaries stay out of the repo: internal or licence-restricted faces must
+# not reach a remote. Copy them in on the machine that needs them and run
+# `node scripts/install-fonts.mjs`. See README.md to make an exception for a
+# freely redistributable font.
+*
+!.gitignore
+!README.md

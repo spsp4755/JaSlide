@@ -60,8 +60,36 @@ export function selectTemplateIndex(requested: number, order: number, capable: n
     return capable.includes(requested) ? requested : capable[order % capable.length];
 }
 
+// A date range in any of the separators a Korean report actually uses.
+const DATE_RANGE = /\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*[~\-–—]\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}/g;
+
+/** Every date range in a text, in the order it appears. */
+export function dateRangesIn(text: string): string[] {
+    return [...(text || '').matchAll(DATE_RANGE)].map((match) => match[0].replace(/\s+/g, ''));
+}
+
+/**
+ * Point a table's period labels at the period being reported on.
+ *
+ * A label cell is copied from the template so headings like "추진실적" survive,
+ * but a weekly report writes the week into that same cell — and the template's
+ * week is whenever its author last saved it. Swap in the ranges the model read
+ * out of the source, in order, and leave the label's wording alone. A label
+ * with no date, or a deck the model found no dates in, is untouched.
+ */
+export function retargetTableDates(cells: string[][], ranges: string[]): string[][] {
+    if (!ranges.length) return cells;
+    let next = 0;
+    return cells.map((row) => row.map((text) => {
+        if (!isTableLabel(text) || !DATE_RANGE.test(text)) return text;
+        DATE_RANGE.lastIndex = 0;
+        const replacement = ranges[next++];
+        return replacement ? text.replace(DATE_RANGE, replacement) : text;
+    }));
+}
+
 /** Map a PPTX template slide's native objects onto the generated content. */
-export function pptxObjectEdits(objects: any[], slide: number, title: string, lines: string[]) {
+export function pptxObjectEdits(objects: any[], slide: number, title: string, lines: string[], periods: string[] = []) {
     // Biggest type is the slide's real heading; source order puts small corner
     // labels (a team name, a page marker) first.
     const texts = objects.filter((item) => item?.kind === 'text').sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0));
@@ -70,7 +98,10 @@ export function pptxObjectEdits(objects: any[], slide: number, title: string, li
     // duplicate the content on top of the table.
     const edits: Record<string, unknown>[] = [
         ...texts.slice(0, tables.length ? 1 : 2).map((item, index) => ({ objectId: item.id, slide, text: index === 0 ? title : lines.join('\n') })),
-        ...tables.map((item) => ({ objectId: item.id, slide, cells: populatePptxTableCells(item.cells, lines) })),
+        ...tables.map((item) => ({
+            objectId: item.id, slide,
+            cells: retargetTableDates(populatePptxTableCells(item.cells, lines), periods),
+        })),
     ];
     if (edits.length) return edits;
 
@@ -330,6 +361,13 @@ export class GenerationService implements OnModuleInit {
                 : null;
             const pptxSource = templateConfig?.source?.kind === 'pptx' ? templateConfig.source : null;
             const capableTemplates = contentCapableTemplateIndexes(pptxSource?.slides, htmlTemplates.length);
+            // The periods this deck reports on, as the model read them out of the
+            // source. A template's own period labels are whenever its author last
+            // saved it, so a weekly report has to point them at this week.
+            const periods = dateRangesIn([
+                outline.slides.map((item) => `${item.title}\n${(item.keyPoints || []).join('\n')}`).join('\n'),
+                input.content,
+            ].join('\n'));
 
             // Generate content for each slide
             const slides = [];
@@ -350,7 +388,7 @@ export class GenerationService implements OnModuleInit {
                 const objects = pptxSource?.slides?.[templateIndex]?.objects || [];
                 const richText = presentationText(content, slideOutline.keyPoints);
                 const objectEdits = pptxSource
-                    ? pptxObjectEdits(objects, templateIndex, slideOutline.title, richText.split('\n'))
+                    ? pptxObjectEdits(objects, templateIndex, slideOutline.title, richText.split('\n'), periods)
                     : [];
                 if (html && !pptxSource) {
                     try {

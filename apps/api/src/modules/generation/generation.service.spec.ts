@@ -4,7 +4,7 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class LlmService {} }));
 jest.mock('../queue/queue.service', () => ({ QueueService: class QueueService {} }));
 
 import { GenerationService } from './generation.service';
-import { contentCapableTemplateIndexes, defaultLayoutForSlideType, populatePptxTableCells, pptxObjectEdits, preservesTemplateStructure, selectTemplateIndex } from './generation.service';
+import { contentCapableTemplateIndexes, dateRangesIn, defaultLayoutForSlideType, populatePptxTableCells, pptxObjectEdits, preservesTemplateStructure, retargetTableDates, selectTemplateIndex } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
@@ -408,6 +408,48 @@ describe('selectTemplateIndex', () => {
 
     it('reports no template when there is none', () => {
         expect(selectTemplateIndex(0, 0, [])).toBe(-1);
+    });
+});
+
+// The reported defect: a weekly report kept the template author's week in its
+// 추진실적 / 추진계획 headers, because a short cell is preserved as a label.
+describe('retargetTableDates', () => {
+    const header = [['추진실적 (2026.07.20 ~ 2026.07.24)', '추진계획 (2026.07.27 ~ 2026.07.31)'], ['• 완료', '• 예정']];
+
+    it('points each period label at the week being reported on', () => {
+        expect(retargetTableDates(header, ['2026.08.03~2026.08.07', '2026.08.10~2026.08.14'])).toEqual([
+            ['추진실적 (2026.08.03~2026.08.07)', '추진계획 (2026.08.10~2026.08.14)'],
+            ['• 완료', '• 예정'],
+        ]);
+    });
+
+    it('leaves the label wording alone, only its dates', () => {
+        expect(retargetTableDates([['추진실적 (2026.07.20 ~ 2026.07.24)']], ['2026.08.03~2026.08.07'])[0][0])
+            .toMatch(/^추진실적 \(/);
+    });
+
+    it('keeps the template dates when the model found none', () => {
+        expect(retargetTableDates(header, [])).toEqual(header);
+    });
+
+    it('leaves a label with no date untouched, and never rewrites body cells', () => {
+        expect(retargetTableDates([['구분', '2026.01.01 ~ 2026.01.05'], ['본문 2026.01.01 ~ 2026.01.05\n둘째 줄', '']], ['2026.09.01~2026.09.05']))
+            .toEqual([['구분', '2026.09.01~2026.09.05'], ['본문 2026.01.01 ~ 2026.01.05\n둘째 줄', '']]);
+    });
+
+    it('runs out of ranges gracefully rather than blanking a label', () => {
+        expect(retargetTableDates(header, ['2026.08.03~2026.08.07'])[0][1]).toBe('추진계획 (2026.07.27 ~ 2026.07.31)');
+    });
+});
+
+describe('dateRangesIn', () => {
+    it('reads the ranges the model wrote, in order, whatever the separator', () => {
+        expect(dateRangesIn('현재 추진실적 (2026.07.20 ~ 2026.07.24)\n향후 계획 2026-07-27 – 2026-07-31'))
+            .toEqual(['2026.07.20~2026.07.24', '2026-07-27–2026-07-31']);
+    });
+
+    it('finds none in text that has none', () => {
+        expect(dateRangesIn('이번 주 실적과 차주 계획')).toEqual([]);
     });
 });
 

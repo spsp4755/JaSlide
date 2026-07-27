@@ -1,0 +1,4 @@
+# Populated by scripts/install-fonts.mjs. The directory itself is tracked so the
+# renderer image's COPY step works on a clean checkout; the fonts are not.
+*
+!.gitignore
