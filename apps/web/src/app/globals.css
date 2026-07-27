@@ -6,6 +6,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The editor renders slides as live DOM, so the browser has to draw the same
+   glyphs the renderer does. A PPTX names its runs by family, and the renderer
+   resolves Korean ones to these exact files; without them the browser
+   substitutes Malgun Gothic and the canvas stops matching the exported deck.
+   Both spellings are declared because a deck can name either. Self-hosted:
+   the network is closed, and these ship under OFL-1.1 with LICENSE-nanum.txt.
+   font-display:block so slide text never paints in a fallback face first. */
+@font-face { font-family: 'NanumGothic'; src: url('/fonts/NanumGothic.ttf') format('truetype'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'NanumGothic'; src: url('/fonts/NanumGothicBold.ttf') format('truetype'); font-weight: 700; font-display: block; }
+@font-face { font-family: '나눔고딕'; src: url('/fonts/NanumGothic.ttf') format('truetype'); font-weight: 400; font-display: block; }
+@font-face { font-family: '나눔고딕'; src: url('/fonts/NanumGothicBold.ttf') format('truetype'); font-weight: 700; font-display: block; }
+
 @layer base {
   :root {
     /* Genspark-inspired: warm paper + ink monochrome */
