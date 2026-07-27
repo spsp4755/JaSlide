@@ -7,6 +7,7 @@ const { compileModule } = require('./compile-module');
 // top. Compile the module and check the numbers.
 const {
     objectEditBoxStyle, objectEditTextStyle, objectEditAlign, objectEditText,
+    textRunStyle, paragraphPlainText,
     canvasScale, toSlidePx, SLIDE_W, SLIDE_H,
 } = compileModule('src/lib/slide-canvas.ts');
 
@@ -83,6 +84,20 @@ test('a zero line width is a hidden border, not a missing property', () => {
     assert.deepEqual(objectEditBoxStyle({ objectId: '9', lineWidth: 0 }), {
         borderWidth: '0px', borderStyle: 'solid',
     });
+});
+
+test('a run\'s style converts through the same point-to-pixel scale as the object', () => {
+    // Same conversion, run grain instead of object grain — this is what lets
+    // "select a word, bold it" land on that word alone.
+    assert.deepEqual(textRunStyle({ text: 'bold', bold: true, fontSize: 20, color: '#FF0000' }), {
+        fontWeight: '700', fontSize: '40px', color: '#FF0000',
+    });
+    assert.deepEqual(textRunStyle({ text: 'plain' }), {});
+});
+
+test('a paragraph\'s plain text is its runs joined in order', () => {
+    assert.equal(paragraphPlainText({ text: '', runs: [{ text: 'Plain ' }, { text: 'bold', bold: true }] }), 'Plain bold');
+    assert.equal(paragraphPlainText({ text: '', runs: [] }), '');
 });
 
 test('text is reported only when the edit carries it', () => {

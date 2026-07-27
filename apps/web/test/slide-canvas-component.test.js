@@ -84,3 +84,46 @@ test('the canvas reports how the selection is formatted, for the toolbar', () =>
     // 1.333px, not the canvas 2px-per-point, so the conversion is explicit.
     assert.match(code, /parseFloat\(runStyle\.fontSize\) \/ CANVAS_PX_PER_PT/);
 });
+
+test('a selected word can be formatted without formatting the whole object', () => {
+    const code = source();
+
+    // Same technique the ZIP HTML editor already uses for the same reason.
+    assert.match(code, /range\.surroundContents\(span\)/);
+    assert.match(code, /range\.extractContents\(\)/);
+    assert.match(code, /function formatSelection|const formatSelection/);
+    // Exposed imperatively so the toolbar (outside this component) can drive it.
+    assert.match(code, /useImperativeHandle\(ref, \(\) => \(\{ formatSelection \}\)/);
+    // Falls back to whole-object formatting when there is no live selection —
+    // this is the caller's job, so formatSelection must report which happened.
+    assert.match(code, /if \(!selection \|\| selection\.isCollapsed \|\| selection\.rangeCount === 0\) return false;/);
+});
+
+test('a table cell keeps whole-cell formatting; character selection is text-object only', () => {
+    assert.match(source(), /element\.tagName === 'TD' \|\| element\.tagName === 'TH'\) return false;/);
+});
+
+test('character formatting persists across the paragraphs data path, not flat text', () => {
+    const code = source();
+
+    assert.match(code, /function readParagraphs/);
+    assert.match(code, /function writeParagraphs/);
+    // Paragraphs win over flat text in the merge effect — see ObjectEdit.paragraphs.
+    assert.match(code, /\} else if \(edit\.paragraphs\) \{/);
+    // Every keystroke re-serializes the whole object, so a run bolded earlier
+    // survives continued typing instead of being flattened to one run per line.
+    assert.match(code, /onChangeParagraphs\(objectId, readParagraphs\(owner\)\)/);
+});
+
+test('reading runs back walks actual text nodes, not just direct span children', () => {
+    // range.surroundContents nests the new span INSIDE the run it split, e.g.
+    // <span run><span bold>AI</span> 엔지니어링…</span> — not a sibling. Reading
+    // only the block's direct span children would see the outer run and miss
+    // the nested one, silently discarding the formatting just applied.
+    const code = source();
+
+    assert.match(code, /function textNodesIn/);
+    assert.match(code, /createTreeWalker\(block, NodeFilter\.SHOW_TEXT\)/);
+    assert.match(code, /textNodesIn\(block\)\.map\(readRun\)/);
+    assert.doesNotMatch(code, /Array\.from\(block\.childNodes\)\.map\(readRun\)/);
+});

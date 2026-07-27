@@ -609,6 +609,51 @@ def test_pptx_template_preserves_unedited_table_and_shape():
     assert generated.shapes[0].table.cell(0, 0).text == "Updated" and str(generated.shapes[1].fill.fore_color.rgb) == "112233"
 
 
+def test_native_edit_writes_mixed_run_formatting_within_one_paragraph():
+    # A user selecting half a sentence and hitting bold must not flatten the
+    # rest of it. python-pptx's `shape.text = ...` does exactly that, which is
+    # why character-level formatting needs its own path: multiple runs per
+    # paragraph, each keeping its own bold/italic/underline/color/size/font.
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)); text.text = "Old"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {
+        "slide": 0, "objectId": str(text.shape_id),
+        "paragraphs": [{
+            "text": "Plain bold", "align": "center",
+            "runs": [
+                {"text": "Plain "},
+                {"text": "bold", "bold": True, "color": "#FF0000", "fontSize": 20, "fontFamily": "Newsreader"},
+            ],
+        }],
+    }
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    paragraph = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[0]
+    assert [run.text for run in paragraph.runs] == ["Plain ", "bold"]
+    assert not paragraph.runs[0].font.bold
+    assert paragraph.runs[1].font.bold
+    assert str(paragraph.runs[1].font.color.rgb) == "FF0000"
+    assert paragraph.runs[1].font.size == Pt(20)
+    assert paragraph.runs[1].font.name == "Newsreader"
+    assert paragraph.alignment == PP_ALIGN.CENTER
+
+
+def test_native_edit_paragraphs_without_runs_still_write_flat_text():
+    # Back-compat: the AI-generation path writes {text, level} with no runs.
+    source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)); text.text = "Old"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {"slide": 0, "objectId": str(text.shape_id), "paragraphs": [{"text": "New title", "level": 0}]}
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    assert Presentation(BytesIO(output)).slides[0].shapes[0].text == "New title"
+
+
 def test_pptx_template_preserves_paragraph_indent_when_text_changes():
     source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
     text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2)); text.text = "First"; text.text_frame.add_paragraph().text = "Nested"; text.text_frame.paragraphs[1].level = 1

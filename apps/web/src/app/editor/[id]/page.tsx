@@ -16,7 +16,7 @@ import { CommentsPanel } from '@/components/editor/comments-panel';
 import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
-import { SlideCanvas, type SlideSelectionFormat } from '@/components/editor/slide-canvas';
+import { SlideCanvas, type SlideCanvasHandle, type SlideSelectionFormat } from '@/components/editor/slide-canvas';
 import { DECK_FONTS } from '@/lib/deck-fonts';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
@@ -446,6 +446,7 @@ export default function EditorPage() {
     const [slideHtml, setSlideHtml] = useState<Record<string, string>>({});
     // What the canvas has selected, and how it is formatted. Drives the toolbar.
     const [canvasFormat, setCanvasFormat] = useState<SlideSelectionFormat | null>(null);
+    const slideCanvasRef = useRef<SlideCanvasHandle>(null);
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
 
@@ -507,6 +508,12 @@ export default function EditorPage() {
         underline?: boolean; color?: string; align?: string; fillColor?: string;
     }) => {
         if (canvasFormat) {
+            // Alignment and fill are paragraph/box properties, never per-character
+            // — always whole-object, the same as a real slide editor. Everything
+            // else formats the live text selection when there is one, falling back
+            // to the whole object when there is only a caret (or none).
+            const perCharacter = updates.align === undefined && updates.fillColor === undefined;
+            if (perCharacter && slideCanvasRef.current?.formatSelection(updates)) return;
             updateNativeObject(canvasFormat.objectId, updates);
             return;
         }
@@ -1389,6 +1396,7 @@ export default function EditorPage() {
                                         selectedNativeObjectId={selectedNativeObjectId}
                                         onSelectNativeObject={setSelectedNativeObjectId}
                                         onSelectionFormat={setCanvasFormat}
+                                        slideCanvasRef={slideCanvasRef}
                                         onNavigate={navigateSlide}
                                         onUpdate={(updates) => {
                                             updateSlide(selectedSlide.id, updates);
@@ -1759,13 +1767,16 @@ interface EditableSlidePreviewProps {
     selectedNativeObjectId: string | null;
     onSelectNativeObject: (id: string | null) => void;
     onSelectionFormat: (format: SlideSelectionFormat | null) => void;
+    /** Lets the toolbar (rendered outside this component) drive character-level
+     *  formatting on whatever the canvas currently has selected. */
+    slideCanvasRef: React.RefObject<SlideCanvasHandle | null>;
     onNavigate: (direction: -1 | 1) => void;
     onUpdate: (updates: Partial<any>) => void;
     onSave: () => void;
     htmlTextFormatCommand: { id: number; updates: Record<string, string> } | null;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onSelectionFormat, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onSelectionFormat, slideCanvasRef, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1980,12 +1991,13 @@ function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedH
         return (
             <div className="relative h-full w-full touch-pan-y" onPointerDown={startSlideSwipe}>
                 <SlideCanvas
+                    ref={slideCanvasRef}
                     baseHtml={baseHtml}
                     objectEdits={content.objectEdits || []}
                     selectedObjectId={selectedNativeObjectId}
                     onSelectObject={onSelectNativeObject}
                     onSelectionFormat={onSelectionFormat}
-                    onChangeText={(objectId, text) => updateNativeObjectContent(objectId, { text })}
+                    onChangeParagraphs={(objectId, paragraphs) => updateNativeObjectContent(objectId, { paragraphs, text: undefined })}
                     onChangeCells={(objectId, cells) => updateNativeObjectContent(objectId, { cells })}
                     onTransform={(objectId, box) => updateNativeObjectContent(objectId, box)}
                 />

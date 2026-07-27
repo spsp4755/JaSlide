@@ -5,6 +5,10 @@ PPTX Generator - Creates PowerPoint presentations using python-pptx
 from pptx import Presentation as PPTXPresentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+
+# One mapping for every place an edit's alignment string reaches PP_ALIGN,
+# so a fourth value (e.g. "justify") only needs adding once.
+_PARAGRAPH_ALIGNMENTS = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY}
 from pptx.dml.color import RGBColor
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.oxml.ns import qn
@@ -120,9 +124,8 @@ class PPTXGenerator:
 
     @staticmethod
     def _apply_alignment(paragraph: Any, value: Optional[str]) -> None:
-        alignments = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}
-        if value in alignments:
-            paragraph.alignment = alignments[value]
+        if value in _PARAGRAPH_ALIGNMENTS:
+            paragraph.alignment = _PARAGRAPH_ALIGNMENTS[value]
 
     @staticmethod
     def _add_layout_textbox(slide: Any, layout: dict) -> Any:
@@ -372,9 +375,36 @@ class PPTXGenerator:
                 if not isinstance(item, dict):
                     continue
                 paragraph = shape.text_frame.paragraphs[0] if index == 0 else shape.text_frame.add_paragraph()
-                paragraph.text = str(item.get("text", ""))
                 if isinstance(item.get("level"), int):
                     paragraph.level = max(0, item["level"])
+                if isinstance(item.get("align"), str):
+                    alignment = _PARAGRAPH_ALIGNMENTS.get(item["align"])
+                    if alignment is not None:
+                        paragraph.alignment = alignment
+                runs = item.get("runs")
+                if isinstance(runs, list) and runs:
+                    # A user selecting part of a sentence and formatting it must not
+                    # flatten the rest — `paragraph.text = ...` would leave one run
+                    # for the whole line, undoing exactly the edit just made.
+                    for run_item in runs:
+                        if not isinstance(run_item, dict):
+                            continue
+                        run = paragraph.add_run()
+                        run.text = str(run_item.get("text", ""))
+                        if isinstance(run_item.get("bold"), bool):
+                            run.font.bold = run_item["bold"]
+                        if isinstance(run_item.get("italic"), bool):
+                            run.font.italic = run_item["italic"]
+                        if isinstance(run_item.get("underline"), bool):
+                            run.font.underline = run_item["underline"]
+                        if isinstance(run_item.get("color"), str) and len(run_item["color"].lstrip("#")) == 6:
+                            run.font.color.rgb = RGBColor.from_string(run_item["color"].lstrip("#").upper())
+                        if isinstance(run_item.get("fontSize"), (int, float)):
+                            run.font.size = Pt(run_item["fontSize"])
+                        if isinstance(run_item.get("fontFamily"), str):
+                            run.font.name = run_item["fontFamily"]
+                else:
+                    paragraph.text = str(item.get("text", ""))
         elif isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             levels = [paragraph.level for paragraph in shape.text_frame.paragraphs]
             alignments = [paragraph.alignment for paragraph in shape.text_frame.paragraphs]
@@ -400,8 +430,7 @@ class PPTXGenerator:
             # Alignment is a paragraph property, not a run one — setting it per run
             # silently did nothing, so the toolbar's align buttons never took.
             if isinstance(edit.get("align"), str):
-                alignment = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER,
-                             "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY}.get(edit["align"])
+                alignment = _PARAGRAPH_ALIGNMENTS.get(edit["align"])
                 if alignment is not None:
                     for paragraph in shape.text_frame.paragraphs:
                         paragraph.alignment = alignment

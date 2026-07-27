@@ -49,3 +49,15 @@ test('one formatting bar serves both deck kinds', () => {
     assert.match(source, /aria-label="글자 크게"/);
     assert.match(source, /aria-label="글자 작게"/);
 });
+
+test('the toolbar formats a live text selection before it formats the whole object', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    // Alignment and fill are paragraph/box properties, never per-character.
+    assert.match(source, /const perCharacter = updates\.align === undefined && updates\.fillColor === undefined;/);
+    assert.match(source, /if \(perCharacter && slideCanvasRef\.current\?\.formatSelection\(updates\)\) return;/);
+    // A PPTX object's text is now paragraphs+runs, not a flat string — the
+    // canvas serializes what it renders, so the object map never drifts from it.
+    assert.match(source, /onChangeParagraphs=\{\(objectId, paragraphs\) => updateNativeObjectContent\(objectId, \{ paragraphs, text: undefined \}\)\}/);
+    assert.doesNotMatch(source, /onChangeText=\{/);
+});
