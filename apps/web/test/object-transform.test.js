@@ -1,18 +1,10 @@
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 const test = require('node:test');
+const { compileModule } = require('./compile-module');
 
 // Real behaviour, not a source-pattern match: eight handles with mirrored sign
 // conventions is exactly where geometry bugs hide. Compile the module and run it.
-const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jaslide-transform-'));
-execFileSync('npx', ['tsc', 'src/lib/object-transform.ts', '--outDir', outDir, '--module', 'commonjs', '--target', 'es2020'], {
-    cwd: path.join(__dirname, '..'),
-    stdio: 'pipe',
-});
-const { resizeBox, nudgeBox, snapBox, RESIZE_HANDLES, MIN_WIDTH, MIN_HEIGHT, SLIDE_WIDTH } = require(path.join(outDir, 'object-transform.js'));
+const { resizeBox, nudgeBox, snapBox, RESIZE_HANDLES, MIN_WIDTH, MIN_HEIGHT, SLIDE_WIDTH } = compileModule('src/lib/object-transform.ts');
 
 const box = { left: 100, top: 100, width: 200, height: 100 };
 

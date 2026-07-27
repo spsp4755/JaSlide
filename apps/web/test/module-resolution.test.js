@@ -198,7 +198,9 @@ test('manual editing has the handles, keys and stacking Google Slides users expe
     assert.match(editor, /snapBox\(\{ \.\.\.initial, left: initial\.left \+ dx, top: initial\.top \+ dy \}, neighbours\)/);
     assert.match(editor, /snapGuides\?\.vertical\.map/);
     // They must not linger once the pointer is released.
-    assert.match(editor, /const stop = \(\) => \{\n\s*setSnapGuides\(null\);/);
+    // \r?\n, not \n: the repo checks out CRLF on Windows and this assertion
+    // failed there for the line ending rather than for anything it tests.
+    assert.match(editor, /const stop = \(\) => \{\r?\n\s*setSnapGuides\(null\);/);
 });
 
 test('shapes accept in-slide text editing, like Google Slides', () => {
