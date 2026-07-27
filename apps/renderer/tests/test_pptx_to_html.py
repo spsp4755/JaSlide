@@ -4,7 +4,7 @@ from io import BytesIO
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
@@ -361,6 +361,62 @@ def test_a_large_image_is_not_inlined_as_base64():
     assert 'data-object-type="image"' in html, "the image still occupies its place"
     assert "base64" not in html
     assert len(html) < len(big) / 4
+
+
+def test_every_html_object_carries_its_native_object_id():
+    # The editor renders this HTML and has to bind an objectEdit to the element it
+    # belongs to. Without an id the only key is array position, which stops being
+    # right the moment either list changes.
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1))
+    box.text_frame.paragraphs[0].text = "제목"
+    slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(3), Inches(2), Inches(1))
+    slide.shapes.add_table(2, 2, Inches(1), Inches(4), Inches(4), Inches(2))
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    html = result["htmlSlides"][0]
+    ids = [obj["id"] for obj in result["source"]["slides"][0]["objects"]]
+    assert len(ids) == 3
+    for object_id in ids:
+        assert f'data-object-id="{object_id}"' in html
+    assert html.count('data-object="true"') == html.count("data-object-id=")
+
+
+def test_the_parser_reads_the_object_id_back():
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1))
+    box.text_frame.paragraphs[0].text = "제목"
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    result = pptx_to_html(buffer.getvalue())
+
+    parsed = parse_html_objects(result["htmlSlides"][0])
+    assert parsed[0]["id"] == result["source"]["slides"][0]["objects"][0]["id"]
+
+
+def test_table_cell_text_anchors_where_the_deck_anchors_it():
+    # Every cell was hardcoded to vertical-align:middle, so a short line in a tall
+    # report row floated in the middle of the cell instead of sitting at the top —
+    # the loudest difference between the editor and the deck.
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    table = slide.shapes.add_table(2, 1, Inches(1), Inches(1), Inches(6), Inches(4)).table
+    table.cell(0, 0).text = "위쪽 정렬"
+    table.cell(1, 0).text = "가운데 정렬"
+    table.cell(1, 0).text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    html = pptx_to_html(buffer.getvalue())["htmlSlides"][0]
+
+    assert "vertical-align:top" in html
+    assert "vertical-align:middle" in html
 
 
 def _png_of_at_least(size: int) -> bytes:

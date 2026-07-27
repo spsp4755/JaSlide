@@ -105,6 +105,9 @@ class _ObjectParser(HTMLParser):
                 return
             self.current = {
                 "tag": tag, "type": values.get("data-object-type"),
+                # Present on anything JaSlide extracted from a PPTX; absent on a
+                # ZIP deck authored elsewhere, where position in this list is the key.
+                "id": values.get("data-object-id"),
                 "style": values["style"], "text": "", "rows": [],
             }
             self.depth = 0 if tag in _VOID_TAGS else 1
@@ -158,7 +161,7 @@ def parse_html_objects(template: str) -> list[dict]:
         if width <= 0 or height <= 0 or left < 0 or top < 0 or left + width > 1920 or top + height > 1080:
             continue
         objects.append({
-            "type": item["type"], "text": " ".join(item["text"].split()),
+            "type": item["type"], "id": item.get("id"), "text": " ".join(item["text"].split()),
             "cells": [[" ".join(cell.split()) for cell in row] for row in item["rows"] if row],
             "x": left / 1920 * SLIDE_WIDTH, "y": top / 1080 * SLIDE_HEIGHT,
             "w": width / 1920 * SLIDE_WIDTH, "h": height / 1080 * SLIDE_HEIGHT,

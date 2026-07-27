@@ -5,7 +5,7 @@ from html import escape
 from io import BytesIO
 
 from pptx import Presentation
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.shapes.group import GroupShape
 from pptx.shapes.picture import Picture
@@ -178,6 +178,20 @@ def _text_align(shape) -> str:
     return {PP_ALIGN.CENTER: "center", PP_ALIGN.RIGHT: "right"}.get(alignment, "left")
 
 
+_ANCHOR_CSS = {MSO_ANCHOR.TOP: "top", MSO_ANCHOR.MIDDLE: "middle", MSO_ANCHOR.BOTTOM: "bottom"}
+
+
+def _cell_anchor(cell) -> str:
+    """Where the deck anchors this cell's text.
+
+    Every cell used to be hardcoded to middle, so two short lines in a tall
+    report row floated halfway down it instead of sitting at the top — the
+    loudest difference between the editor and the deck. PowerPoint's own
+    default when a cell states nothing is top.
+    """
+    return _ANCHOR_CSS.get(cell.text_frame.vertical_anchor, "top")
+
+
 def _table_html(shape, pt_to_px: float = 2.0) -> str:
     widths = [column.width for column in shape.table.columns]
     total_width = sum(widths) or 1
@@ -192,7 +206,7 @@ def _table_html(shape, pt_to_px: float = 2.0) -> str:
             # EMU / 12700 is points, not canvas px — scale it like every other length.
             cells.append(
                 f'<td style="width:{width}%;height:{row.height / 12700 * pt_to_px:.1f}px;box-sizing:border-box;'
-                f'border:1px solid #D1D5DB;padding:8px;vertical-align:middle;{surface}'
+                f'border:1px solid #D1D5DB;padding:8px;vertical-align:{_cell_anchor(cell)};{surface}'
                 f'font-size:{size}px;color:{color or "#1A1A1A"}">{text}</td>'
             )
         rows.append(f"<tr>{''.join(cells)}</tr>")
@@ -223,6 +237,11 @@ def pptx_to_html(content: bytes) -> dict:
         height = _px(shape.height, presentation.slide_height, CANVAS_HEIGHT)
         position = f"position:absolute;left:{left}px;top:{top}px;width:{width}px;height:{height}px"
         source_object = {"id": str(shape.shape_id), "left": left, "top": top, "width": width, "height": height}
+        # The editor renders this HTML and binds an objectEdit to the element it
+        # belongs to. Carrying the shape id is what makes that binding possible;
+        # without it the only key is array position, which stops being correct
+        # the moment the object list changes.
+        object_attrs = f'data-object="true" data-object-id="{escape(str(shape.shape_id), quote=True)}"'
         # A picture dropped into a layout's placeholder reports shape_type
         # PLACEHOLDER, not PICTURE, so match on the class instead.
         if isinstance(shape, Picture):
@@ -231,9 +250,9 @@ def pptx_to_html(content: bytes) -> dict:
             if len(image.blob) <= MAX_INLINE_IMAGE_BYTES and inlined + len(image.blob) <= MAX_INLINE_IMAGE_TOTAL_BYTES:
                 inlined += len(image.blob)
                 encoded = base64.b64encode(image.blob).decode("ascii")
-                objects.append(f'<img data-object="true" data-object-type="image" src="data:{image.content_type};base64,{encoded}" style="{position}">')
+                objects.append(f'<img {object_attrs} data-object-type="image" src="data:{image.content_type};base64,{encoded}" style="{position}">')
             else:
-                objects.append(f'<div data-object="true" data-object-type="image" style="{position};background:#E5E7EB"></div>')
+                objects.append(f'<div {object_attrs} data-object-type="image" style="{position};background:#E5E7EB"></div>')
         elif isinstance(shape, GroupShape):
             # Real decks group things constantly. Treating a group as one opaque box
             # made every diagram inside it uneditable, so descend into its members —
@@ -255,20 +274,20 @@ def pptx_to_html(content: bytes) -> dict:
                 "cells": [[cell.text for cell in row.cells] for row in shape.table.rows],
                 "rowHeights": row_heights, "columnWidths": column_widths,
             })
-            objects.append(f'<div data-object="true" data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape, pt_to_px)}</div>')
+            objects.append(f'<div {object_attrs} data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape, pt_to_px)}</div>')
         elif getattr(shape, "has_text_frame", False) and shape.text.strip():
             text, font_size, color = _text_html(shape, pt_to_px)
             source_objects.append({**source_object, "kind": "text", "text": shape.text, "align": _text_align(shape), "paragraphs": [{"text": paragraph.text, "level": paragraph.level} for paragraph in shape.text_frame.paragraphs], **_text_style(shape)})
             fill = _color(getattr(shape, "fill", None))
             surface = f"background:{fill};" if fill else ""
-            objects.append(f'<div data-object="true" data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
+            objects.append(f'<div {object_attrs} data-object-type="textbox" style="{position};box-sizing:border-box;overflow:hidden;{surface}{_line_style(shape)};font-size:{font_size}px;color:{color or "#1A1A1A"}">{text}</div>')
         else:
             fill = _color(getattr(shape, "fill", None))
             source_objects.append({**source_object, "kind": "shape", "fillColor": fill or "#FFFFFF",
                                    "lineColor": _color(getattr(shape, "line", None)) or "#202124",
                                    "lineWidth": _line_width(shape)})
             surface = f"background:{fill};" if fill else "background:transparent;"
-            objects.append(f'<div data-object="true" data-object-type="shape" style="{position};box-sizing:border-box;{surface}{_line_style(shape)}"></div>')
+            objects.append(f'<div {object_attrs} data-object-type="shape" style="{position};box-sizing:border-box;{surface}{_line_style(shape)}"></div>')
 
     for slide in presentation.slides:
         background = _color(slide.background.fill) or "#FFFFFF"
