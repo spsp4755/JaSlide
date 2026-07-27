@@ -446,6 +446,8 @@ export default function EditorPage() {
     const [slideHtml, setSlideHtml] = useState<Record<string, string>>({});
     // What the canvas has selected, and how it is formatted. Drives the toolbar.
     const [canvasFormat, setCanvasFormat] = useState<SlideSelectionFormat | null>(null);
+    const [fontSizeDraft, setFontSizeDraft] = useState('');
+    const [fontSizeTyping, setFontSizeTyping] = useState(false);
     const slideCanvasRef = useRef<SlideCanvasHandle>(null);
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
@@ -502,6 +504,11 @@ export default function EditorPage() {
         fillColor: selectedHtmlObject.backgroundColor,
     } : null);
 
+    useEffect(() => {
+        setFontSizeDraft(activeFormat ? String(activeFormat.fontSize) : '');
+        setFontSizeTyping(false);
+    }, [activeFormat?.fontSize]);
+
     /** Apply a formatting change to whichever object is selected. */
     const applyFormat = (updates: {
         fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean;
@@ -513,7 +520,10 @@ export default function EditorPage() {
             // else formats the live text selection when there is one, falling back
             // to the whole object when there is only a caret (or none).
             const perCharacter = updates.align === undefined && updates.fillColor === undefined;
-            if (perCharacter && slideCanvasRef.current?.formatSelection(updates)) return;
+            if (perCharacter && slideCanvasRef.current?.formatSelection(updates)) {
+                setCanvasFormat((format) => format ? { ...format, ...updates } : format);
+                return;
+            }
             updateNativeObject(canvasFormat.objectId, updates);
             return;
         }
@@ -528,6 +538,19 @@ export default function EditorPage() {
         if (updates.align !== undefined) { updateSelectedHtmlObject({ textAlign: updates.align }); return; }
         if (updates.fillColor !== undefined) { updateSelectedHtmlObject({ backgroundColor: updates.fillColor }); return; }
         formatSelectedHtmlText(css);
+    };
+
+    const commitFontSize = () => {
+        if (!activeFormat) return;
+        const fontSize = Math.max(1, Number(fontSizeDraft) || activeFormat.fontSize);
+        setFontSizeDraft(String(fontSize));
+        applyFormat({ fontSize });
+    };
+    const changeFontSize = (amount: number) => {
+        if (!activeFormat) return;
+        const fontSize = Math.max(1, (Number(fontSizeDraft) || activeFormat.fontSize) + amount);
+        setFontSizeDraft(String(fontSize));
+        applyFormat({ fontSize });
     };
 
     const deleteSelectedObject = () => (canvasFormat ? deleteNativeObject() : deleteSelectedHtmlObject());
@@ -1281,9 +1304,20 @@ export default function EditorPage() {
                         {activeFormat.objectType !== 'shape' && activeFormat.objectType !== 'image' && <>
                             <select aria-label="글꼴" value={activeFormat.fontFamily} onChange={(event) => applyFormat({ fontFamily: event.target.value })} className="h-8 rounded border px-2">{fontChoicesWith(activeFormat.fontFamily).map((name) => <option key={name} value={name}>{name}</option>)}</select>
                             <div className="flex items-center">
-                                <Button aria-label="글자 작게" type="button" size="icon" variant="ghost" onClick={() => applyFormat({ fontSize: Math.max(1, activeFormat.fontSize - 1) })}>−</Button>
-                                <input aria-label="글자 크기" type="number" min="1" value={activeFormat.fontSize} onChange={(event) => applyFormat({ fontSize: Math.max(1, Number(event.target.value) || 1) })} className="h-8 w-14 rounded border px-2 text-center" />
-                                <Button aria-label="글자 크게" type="button" size="icon" variant="ghost" onClick={() => applyFormat({ fontSize: activeFormat.fontSize + 1 })}>+</Button>
+                                <Button aria-label="글자 작게" type="button" size="icon" variant="ghost" onClick={() => changeFontSize(-1)}>−</Button>
+                                <input
+                                    aria-label="글자 크기" inputMode="numeric" value={fontSizeDraft}
+                                    onFocus={(event) => { event.currentTarget.select(); setFontSizeTyping(false); }}
+                                    onClick={(event) => { event.currentTarget.select(); setFontSizeTyping(false); }}
+                                    onChange={(event) => { setFontSizeTyping(true); setFontSizeDraft(event.target.value.replace(/\D/g, '')); }}
+                                    onBlur={commitFontSize}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
+                                        else if (!fontSizeTyping && /^\d$/.test(event.key)) { event.preventDefault(); setFontSizeTyping(true); setFontSizeDraft(event.key); }
+                                    }}
+                                    className="h-8 w-14 rounded border px-2 text-center"
+                                />
+                                <Button aria-label="글자 크게" type="button" size="icon" variant="ghost" onClick={() => changeFontSize(1)}>+</Button>
                             </div>
                             <Button aria-label="굵게" type="button" size="icon" variant={activeFormat.bold ? 'secondary' : 'ghost'} onClick={() => applyFormat({ bold: !activeFormat.bold })}><Bold className="h-4 w-4" /></Button>
                             <Button aria-label="기울임" type="button" size="icon" variant={activeFormat.italic ? 'secondary' : 'ghost'} onClick={() => applyFormat({ italic: !activeFormat.italic })}><Italic className="h-4 w-4" /></Button>

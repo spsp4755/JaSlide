@@ -55,11 +55,28 @@ test('the toolbar formats a live text selection before it formats the whole obje
 
     // Alignment and fill are paragraph/box properties, never per-character.
     assert.match(source, /const perCharacter = updates\.align === undefined && updates\.fillColor === undefined;/);
-    assert.match(source, /if \(perCharacter && slideCanvasRef\.current\?\.formatSelection\(updates\)\) return;/);
+    assert.match(source, /if \(perCharacter && slideCanvasRef\.current\?\.formatSelection\(updates\)\) \{/);
     // A PPTX object's text is now paragraphs+runs, not a flat string — the
     // canvas serializes what it renders, so the object map never drifts from it.
     assert.match(source, /onChangeParagraphs=\{\(objectId, paragraphs\) => updateNativeObjectContent\(objectId, \{ paragraphs, text: undefined \}\)\}/);
     assert.doesNotMatch(source, /onChangeText=\{/);
+});
+
+test('a character-level size change also updates the controlled toolbar value', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    assert.match(source, /if \(perCharacter && slideCanvasRef\.current\?\.formatSelection\(updates\)\) \{\s*setCanvasFormat\(\(format\) => format \? \{ \.\.\.format, \.\.\.updates \} : format\);\s*return;\s*\}/);
+});
+
+test('font size input keeps a draft until the user commits it', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    assert.match(source, /const \[fontSizeDraft, setFontSizeDraft\] = useState\(''\)/);
+  assert.match(source, /onBlur=\{commitFontSize\}/);
+  assert.match(source, /onFocus=\{\(event\) => \{ event\.currentTarget\.select\(\);/);
+  assert.match(source, /onClick=\{\(event\) => \{ event\.currentTarget\.select\(\);/);
+  assert.match(source, /inputMode="numeric"/);
+  assert.match(source, /!fontSizeTyping && \/\^\\d\$\/\.test\(event\.key\)/);
 });
 
 test('a native slide gesture does not also arm horizontal slide navigation', () => {
