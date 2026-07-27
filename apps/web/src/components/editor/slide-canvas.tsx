@@ -256,6 +256,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
     const [selectedBox, setSelectedBox] = useState<Box | null>(null);
     const [snapGuides, setSnapGuides] = useState<{ vertical: number[]; horizontal: number[] } | null>(null);
     const editingRef = useRef<HTMLElement | null>(null);
+    const savedRangeRef = useRef<Range | null>(null);
     const scaleRef = useRef(0);
     scaleRef.current = scale;
 
@@ -336,6 +337,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         element.removeAttribute('contentEditable');
         element.blur();
         editingRef.current = null;
+        savedRangeRef.current = null;
         // Dropping contentEditable does not drop the highlight. Leaving it meant a
         // drag-selection stayed lit across the slide until the next keystroke
         // happened to replace it.
@@ -362,15 +364,27 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') { event.preventDefault(); element.blur(); }
         };
+        const onSelectionChange = () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+            const range = selection.getRangeAt(0);
+            if (!element.contains(range.commonAncestorContainer)) return;
+            savedRangeRef.current = selection.isCollapsed ? null : range.cloneRange();
+        };
         const onBlur = () => {
             element.removeEventListener('input', onInput);
             element.removeEventListener('keydown', onKeyDown);
             element.removeEventListener('blur', onBlur);
-            stopEditing();
+            document.removeEventListener('selectionchange', onSelectionChange);
+            // Toolbar controls take focus too. Keep this live element and its
+            // saved range until the user clicks back onto the canvas, otherwise
+            // a size/font click falls through to whole-object formatting.
+            element.removeAttribute('contentEditable');
         };
         element.addEventListener('input', onInput);
         element.addEventListener('keydown', onKeyDown);
         element.addEventListener('blur', onBlur);
+        document.addEventListener('selectionchange', onSelectionChange);
     }, [onChangeCells, onChangeParagraphs, stopEditing]);
 
     // Character-level formatting: wraps the live browser selection in a styled
@@ -382,9 +396,13 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         const element = editingRef.current;
         if (!element) return false;
         const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
-        const range = selection.getRangeAt(0);
-        if (!element.contains(range.commonAncestorContainer)) return false;
+        const liveRange = selection && !selection.isCollapsed && selection.rangeCount > 0 && element.contains(selection.getRangeAt(0).commonAncestorContainer)
+            ? selection.getRangeAt(0)
+            : null;
+        const range = liveRange ?? savedRangeRef.current;
+        if (!selection || !range || !element.contains(range.commonAncestorContainer)) return false;
+        selection.removeAllRanges();
+        selection.addRange(range);
 
         const style = textRunStyle(updates as TextRun);
         const span = element.ownerDocument.createElement('span');
@@ -403,6 +421,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         restored.selectNodeContents(span);
         selection.removeAllRanges();
         selection.addRange(restored);
+        savedRangeRef.current = restored.cloneRange();
 
         const owner = element.closest<HTMLElement>('[data-object-id], [data-object="true"]') ?? element;
         const objectId = owner.dataset.objectId;
@@ -471,7 +490,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         const target = event.target as HTMLElement;
         // A caret is in this element: let the pointer select text rather than
         // dragging the object out from under it.
-        if (editingRef.current?.contains(target)) return;
+        if (editingRef.current?.isContentEditable && editingRef.current.contains(target)) return;
         // Anywhere else ends editing, without waiting for a blur that a
         // pointerdown on another element does not always deliver.
         stopEditing();

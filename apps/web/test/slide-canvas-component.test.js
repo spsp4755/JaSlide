@@ -107,7 +107,20 @@ test('a selected word can be formatted without formatting the whole object', () 
     assert.match(code, /useImperativeHandle\(ref, \(\) => \(\{ formatSelection \}\)/);
     // Falls back to whole-object formatting when there is no live selection —
     // this is the caller's job, so formatSelection must report which happened.
-    assert.match(code, /if \(!selection \|\| selection\.isCollapsed \|\| selection\.rangeCount === 0\) return false;/);
+    assert.match(code, /if \(!selection \|\| !range \|\| !element\.contains\(range\.commonAncestorContainer\)\) return false;/);
+});
+
+test('a toolbar click restores the text range it moved focus away from', () => {
+    const code = source();
+
+    // The HTML editor already keeps a saved Range. Without the same state on
+    // the PPTX canvas, clicking a size button collapsed the selection and the
+    // caller silently formatted the entire table object instead.
+    assert.match(code, /const savedRangeRef = useRef<Range \| null>\(null\)/);
+    assert.match(code, /document\.addEventListener\('selectionchange', onSelectionChange\)/);
+    assert.match(code, /savedRangeRef\.current = selection\.isCollapsed \? null : range\.cloneRange\(\)/);
+    assert.match(code, /const range = liveRange \?\? savedRangeRef\.current/);
+    assert.match(code, /if \(editingRef\.current\?\.isContentEditable && editingRef\.current\.contains\(target\)\) return;/);
 });
 
 test('a table cell serializes character formatting through the same run path', () => {
