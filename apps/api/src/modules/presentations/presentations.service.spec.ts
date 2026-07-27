@@ -135,6 +135,63 @@ describe('PresentationsService', () => {
         });
     });
 
+    // The editor renders this HTML itself instead of showing a server-rendered
+    // PNG, so it needs the slide's markup without the presentation payload
+    // carrying every template slide's inlined images.
+    describe('slideTemplateHtml', () => {
+        it('returns a ZIP deck slide\'s own generated HTML', async () => {
+            prisma.presentation.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                slides: [{ order: 0, content: { html: '<div>zip</div>', templateIndex: 0 } }],
+                template: { config: { htmlSlides: ['<div>template</div>'] } },
+            });
+
+            await expect(service.slideTemplateHtml('pres-123', 'user-123', 0))
+                .resolves.toEqual({ html: '<div>zip</div>' });
+        });
+
+        it('returns the PPTX template layout the generator picked', async () => {
+            prisma.presentation.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                slides: [{ order: 0, content: { templateIndex: 2 } }],
+                template: { config: { htmlSlides: ['a', 'b', '<div>chosen</div>'] } },
+            });
+
+            await expect(service.slideTemplateHtml('pres-123', 'user-123', 0))
+                .resolves.toEqual({ html: '<div>chosen</div>' });
+        });
+
+        // Empty rather than an error: the editor falls back to the PNG canvas,
+        // and a slide must never render as an empty stage.
+        it('reports no HTML instead of throwing', async () => {
+            prisma.presentation.findUnique.mockResolvedValue({
+                userId: 'user-123', slides: [{ order: 0, content: {} }], template: null,
+            });
+
+            await expect(service.slideTemplateHtml('pres-123', 'user-123', 0))
+                .resolves.toEqual({ html: '' });
+        });
+
+        it('refuses a slide order that is not in the deck', async () => {
+            prisma.presentation.findUnique.mockResolvedValue({
+                userId: 'user-123', slides: [], template: null,
+            });
+
+            await expect(service.slideTemplateHtml('pres-123', 'user-123', 9))
+                .rejects.toBeInstanceOf(NotFoundException);
+        });
+
+        it('denies another user\'s private deck', async () => {
+            prisma.presentation.findUnique.mockResolvedValue({
+                userId: 'someone-else', isPublic: false,
+                slides: [{ order: 0, content: { html: '<div>secret</div>' } }], template: null,
+            });
+
+            await expect(service.slideTemplateHtml('pres-123', 'user-123', 0))
+                .rejects.toBeInstanceOf(ForbiddenException);
+        });
+    });
+
     describe('delete', () => {
         it('should delete a presentation', async () => {
             prisma.presentation.findUnique.mockResolvedValue({ userId: 'user-123' });

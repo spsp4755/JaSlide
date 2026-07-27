@@ -8,6 +8,7 @@ import {
     Param,
     Query,
     UseGuards,
+    ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PresentationsService } from './presentations.service';
@@ -72,6 +73,18 @@ export class PresentationsController {
     @ApiOperation({ summary: 'Delete presentation' })
     async delete(@CurrentUser() user: any, @Param('id') id: string) {
         return this.presentationsService.delete(id, user.id);
+    }
+
+    @Get(':id/slides/:order/template-html')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Base HTML the editor renders for one slide' })
+    async slideTemplateHtml(
+        @CurrentUser() user: any,
+        @Param('id') id: string,
+        @Param('order', ParseIntPipe) order: number,
+    ) {
+        return this.presentationsService.slideTemplateHtml(id, user.id, order);
     }
 
     @Post(':id/share')

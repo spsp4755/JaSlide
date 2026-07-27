@@ -75,6 +75,39 @@ export class PresentationsService {
         return presentation;
     }
 
+    /**
+     * The markup the browser renders and edits for one slide.
+     *
+     * A ZIP deck generates HTML per slide, so that is the slide. A PPTX deck
+     * keeps its layouts on the template and records which one the generator
+     * chose, so resolve through `templateIndex`. Served per slide rather than
+     * with the presentation because a template's slides inline their images —
+     * a 17-slide deck runs to megabytes the editor would fetch on every load.
+     *
+     * Returns an empty string rather than throwing when a slide has no HTML:
+     * the editor falls back to the server-rendered PNG, and a slide must never
+     * render as an empty stage.
+     */
+    async slideTemplateHtml(id: string, userId: string, order: number): Promise<{ html: string }> {
+        const presentation = await this.findById(id, userId);
+        const slide = presentation.slides.find((item) => item.order === order);
+        if (!slide) {
+            throw new NotFoundException('Slide not found');
+        }
+
+        const content = (slide.content as any) || {};
+        if (typeof content.html === 'string' && content.html.trim()) {
+            return { html: content.html };
+        }
+
+        const htmlSlides = (presentation.template?.config as any)?.htmlSlides;
+        const index = content.templateIndex;
+        if (Array.isArray(htmlSlides) && Number.isInteger(index) && typeof htmlSlides[index] === 'string') {
+            return { html: htmlSlides[index] };
+        }
+        return { html: '' };
+    }
+
     async update(id: string, userId: string, dto: UpdatePresentationDto) {
         // Check ownership
         const existing = await this.prisma.presentation.findUnique({
