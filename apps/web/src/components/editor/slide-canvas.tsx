@@ -113,20 +113,25 @@ export function SlideCanvas({
         return () => observer.disconnect();
     }, []);
 
-    // Reapply every edit over a clean copy of the slide, so removing an edit
-    // reverts it. Skipped while a caret is in the slide: that element already
-    // holds the user's text, and resetting the markup would drop the selection
-    // mid-word.
-    useEffect(() => {
+    // Write the slide and reapply every edit over a clean copy of it, so removing
+    // an edit reverts it. Skipped while a caret is in the slide: that element
+    // already holds the user's text, and resetting the markup would drop the
+    // selection mid-word.
+    //
+    // This effect is the only writer of the stage's markup. Handing React the
+    // same job through dangerouslySetInnerHTML gave the node two owners, and
+    // React's copy — the template with none of the edits applied — is the one
+    // that survived. Layout effect, so the slide is populated before paint.
+    useLayoutEffect(() => {
         const stage = stageRef.current;
         if (!stage) return;
-        if (!editingRef.current) stage.innerHTML = baseHtml;
+        if (editingRef.current) return;
+        stage.innerHTML = baseHtml;
         objectEdits.forEach((edit, index) => {
             const element = findObject(stage, edit.objectId, index);
             if (!element) return;
             if (edit.delete) { element.style.display = 'none'; return; }
             Object.assign(element.style, objectEditStyle(edit));
-            if (element === editingRef.current) return;
             if (edit.cells) writeCells(element, edit.cells);
             const text = objectEditText(edit);
             if (text !== null && !edit.cells) writeText(element, text);
@@ -261,7 +266,6 @@ export function SlideCanvas({
                 }}
                 onPointerDown={onStagePointerDown}
                 onDoubleClick={onStageDoubleClick}
-                dangerouslySetInnerHTML={{ __html: baseHtml }}
             />
             {/* Overlay lives outside the stage but shares its scale, so handles stay
                 a constant size on screen instead of growing with the slide. */}

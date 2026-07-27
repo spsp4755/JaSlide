@@ -21,9 +21,14 @@ test('the slide canvas can draw the fonts the renderer resolves to', () => {
 
     assert.match(css, /font-family:\s*'NanumGothic'/);
     assert.match(css, /font-family:\s*'나눔고딕'/);
-    assert.match(css, /NanumGothicBold\.ttf/);
-    assert.ok(fs.existsSync(path.join(fonts, 'NanumGothic.ttf')));
-    assert.ok(fs.existsSync(path.join(fonts, 'NanumGothicBold.ttf')));
+    // WOFF2, not TTF: Chromium's webfont sanitiser rejects the original
+    // NanumGothic.ttf outright, and the rebuilt tables are a third the size.
+    assert.match(css, /NanumGothicBold\.woff2/);
+    for (const rule of css.match(/@font-face\s*\{[^}]*\}/g) || []) {
+        assert.doesNotMatch(rule, /\.ttf/, `still serving a TTF: ${rule}`);
+    }
+    assert.ok(fs.existsSync(path.join(fonts, 'NanumGothic.woff2')));
+    assert.ok(fs.existsSync(path.join(fonts, 'NanumGothicBold.woff2')));
     // Redistributed under OFL-1.1, which requires the licence to travel with it.
     assert.ok(fs.existsSync(path.join(fonts, 'LICENSE-nanum.txt')));
 });

@@ -12,8 +12,12 @@ const source = () => fs.readFileSync(
 test('the slide is live DOM, scaled as one stage', () => {
     const code = source();
 
-    assert.match(code, /dangerouslySetInnerHTML/);
+    assert.match(code, /stage\.innerHTML = baseHtml/);
     assert.match(code, /scale\(\$\{scale\}\)/);
+    // One writer of the stage's markup. Handing React the same job through
+    // dangerouslySetInnerHTML gave the node two owners, and React's copy — the
+    // template with none of the edits applied — is the one that survived.
+    assert.doesNotMatch(code, /dangerouslySetInnerHTML=/);
     assert.match(code, /transformOrigin/);
     // The whole point: no picture beneath the editing surface, so the slide's
     // own background, cell fills and borders stay visible while typing.

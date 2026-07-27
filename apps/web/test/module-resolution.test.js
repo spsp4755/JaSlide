@@ -63,7 +63,7 @@ test('the editing canvas has no image to draw text twice over', () => {
     // disagree with and no image underneath to cover up.
     assert.match(editor, /<SlideCanvas/);
     assert.doesNotMatch(canvas, /<img/);
-    assert.match(canvas, /dangerouslySetInnerHTML/);
+    assert.match(canvas, /stage\.innerHTML = baseHtml/);
 });
 
 test('a preview refresh invalidates only the slides that changed', () => {
