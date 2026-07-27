@@ -35,6 +35,31 @@ export function populatePptxTableCells(cells: unknown, values: string[]): string
     return rows.map((row) => row.map((text) => isTableLabel(text) ? text : (chunks.shift() ?? text)));
 }
 
+/**
+ * Template slides that can actually hold generated content.
+ *
+ * A PPTX slide whose objects are all pictures — a full-bleed screenshot, a
+ * diagram page — is artwork, not a layout. Offering it as one meant the outline
+ * model picked it, the generator found nothing to write into, and a synthesized
+ * text box got stamped across the picture. A ZIP template has no object map and
+ * every slide stays eligible.
+ */
+export function contentCapableTemplateIndexes(pptxSlides: any[] | undefined | null, total: number): number[] {
+    const all = Array.from({ length: total }, (_, index) => index);
+    if (!Array.isArray(pptxSlides)) return all;
+    const usable = all.filter((index) => (pptxSlides[index]?.objects || [])
+        .some((object: any) => object?.kind === 'text' || object?.kind === 'table'));
+    // A deck of nothing but pictures leaves nothing to choose; keep the whole
+    // list so generation still produces slides rather than none.
+    return usable.length ? usable : all;
+}
+
+/** Honour the outline's layout choice, but only among slides that can hold content. */
+export function selectTemplateIndex(requested: number, order: number, capable: number[]): number {
+    if (!capable.length) return -1;
+    return capable.includes(requested) ? requested : capable[order % capable.length];
+}
+
 /** Map a PPTX template slide's native objects onto the generated content. */
 export function pptxObjectEdits(objects: any[], slide: number, title: string, lines: string[]) {
     // Biggest type is the slide's real heading; source order puts small corner
@@ -304,6 +329,7 @@ export class GenerationService implements OnModuleInit {
                 ? (await this.prisma.template.findUnique({ where: { id: input.templateId }, select: { config: true } }))?.config as any
                 : null;
             const pptxSource = templateConfig?.source?.kind === 'pptx' ? templateConfig.source : null;
+            const capableTemplates = contentCapableTemplateIndexes(pptxSource?.slides, htmlTemplates.length);
 
             // Generate content for each slide
             const slides = [];
@@ -317,9 +343,7 @@ export class GenerationService implements OnModuleInit {
                     language,
                 });
                 const requestedTemplateIndex = Number.isInteger(slideOutline.templateIndex) ? slideOutline.templateIndex as number : -1;
-                const templateIndex = htmlTemplates.length
-                    ? (htmlTemplates[requestedTemplateIndex] ? requestedTemplateIndex : i % htmlTemplates.length)
-                    : -1;
+                const templateIndex = selectTemplateIndex(requestedTemplateIndex, i, capableTemplates);
                 // PPTX has its own object map and renderer preview. Keeping the
                 // extracted HTML here makes the editor choose the lossy HTML path.
                 let html = !pptxSource && templateIndex >= 0 ? htmlTemplates[templateIndex] : undefined;

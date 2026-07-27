@@ -4,7 +4,7 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class LlmService {} }));
 jest.mock('../queue/queue.service', () => ({ QueueService: class QueueService {} }));
 
 import { GenerationService } from './generation.service';
-import { defaultLayoutForSlideType, populatePptxTableCells, pptxObjectEdits, preservesTemplateStructure } from './generation.service';
+import { contentCapableTemplateIndexes, defaultLayoutForSlideType, populatePptxTableCells, pptxObjectEdits, preservesTemplateStructure, selectTemplateIndex } from './generation.service';
 
 describe('GenerationService cancellation', () => {
     const prisma = {
@@ -371,6 +371,43 @@ describe('populatePptxTableCells', () => {
     it('splits the lines across content cells instead of repeating them', () => {
         expect(populatePptxTableCells([['추진실적', '추진계획'], ['기존 내용\n둘째 줄', '']], ['• A', '• B', '• C', '• D']))
             .toEqual([['추진실적', '추진계획'], ['• A\n• B', '• C\n• D']]);
+    });
+});
+
+// The reported defect: a PPTX whose slides 1 and 2 were full-bleed screenshots
+// had them offered as layouts. The generator picked one, found nothing to write
+// into, and stamped a 34pt text box over the picture.
+describe('contentCapableTemplateIndexes', () => {
+    const weeklyReport = [
+        { objects: [{ id: '6', kind: 'text' }, { id: '14', kind: 'table' }] },
+        { objects: [{ id: '4', kind: 'image' }] },
+        { objects: [{ id: '4', kind: 'image' }] },
+    ];
+
+    it('drops template slides that are nothing but pictures', () => {
+        expect(contentCapableTemplateIndexes(weeklyReport, 3)).toEqual([0]);
+    });
+
+    it('keeps every slide of a ZIP template, which has no object map', () => {
+        expect(contentCapableTemplateIndexes(undefined, 3)).toEqual([0, 1, 2]);
+    });
+
+    it('keeps every slide rather than leaving nothing to pick from', () => {
+        expect(contentCapableTemplateIndexes([{ objects: [{ kind: 'image' }] }], 1)).toEqual([0]);
+    });
+});
+
+describe('selectTemplateIndex', () => {
+    it('honours the outline choice when that slide can hold content', () => {
+        expect(selectTemplateIndex(2, 5, [0, 2, 4])).toBe(2);
+    });
+
+    it('spreads over the usable slides when the outline picked a picture page', () => {
+        expect([0, 1, 2].map((order) => selectTemplateIndex(1, order, [0, 3]))).toEqual([0, 3, 0]);
+    });
+
+    it('reports no template when there is none', () => {
+        expect(selectTemplateIndex(0, 0, [])).toBe(-1);
     });
 });
 
