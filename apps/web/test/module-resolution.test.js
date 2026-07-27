@@ -52,17 +52,18 @@ test('the debounced save reads the slide from the store, not a stale closure', (
     assert.doesNotMatch(callback.slice(0, 900), /const slide = presentation\?\.slides\.find/);
 });
 
-test('the native object overlay does not repaint text over the preview image', () => {
+test('the editing canvas has no image to draw text twice over', () => {
     const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
-    const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
+    const canvas = fs.readFileSync(path.join(SRC, 'components', 'editor', 'slide-canvas.tsx'), 'utf8');
 
-    // The preview PNG already contains the deck's text. Drawing it again in the
-    // overlay showed every string twice, offset by the font difference.
-    assert.doesNotMatch(overlay, /\{edit\.text \?\? object\.text \?\? ''\}<\/div>/);
-    assert.doesNotMatch(overlay, />\{cellText\}<\/div>/);
-    // The edit surfaces still carry the text.
-    assert.match(overlay, /value=\{edit\.text \?\? object\.text \?\? ''\}/);
-    assert.match(overlay, /value=\{cellText\}/);
+    // Text used to appear twice — once baked into the preview PNG and once in the
+    // overlay drawn on top, offset by the font difference. The old fix was to
+    // paint the overlay only while the image lagged. The canvas removes the
+    // premise instead: it renders the slide, so there is no second copy to
+    // disagree with and no image underneath to cover up.
+    assert.match(editor, /<SlideCanvas/);
+    assert.doesNotMatch(canvas, /<img/);
+    assert.match(canvas, /dangerouslySetInnerHTML/);
 });
 
 test('a preview refresh invalidates only the slides that changed', () => {
@@ -77,13 +78,15 @@ test('a preview refresh invalidates only the slides that changed', () => {
     assert.match(editor, /for \(const offset of \[1, -1\]\)/);
 });
 
-test('an edit shows on the canvas before the new preview image arrives', () => {
-    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
-    const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
+test('an edit shows immediately, without waiting for a server render', () => {
+    const canvas = fs.readFileSync(path.join(SRC, 'components', 'editor', 'slide-canvas.tsx'), 'utf8');
 
-    // Only while the image lags — painting over a current preview is the double-text bug.
-    assert.match(overlay, /previewStale && editingNativeTextId !== object\.id && typeof edit\.text === 'string'/);
-    assert.match(overlay, /previewStale && edit\.cells \? cellText : ''/);
+    // This used to need an opaque patch drawn over the stale PNG until LibreOffice
+    // caught up ~1s later. Now the edited DOM *is* the slide, so the change is on
+    // screen as it is typed and the edits reapply locally.
+    assert.match(canvas, /objectEdits\.forEach/);
+    assert.match(canvas, /contentEditable/);
+    assert.doesNotMatch(canvas, /previewStale|previewUrl/);
 });
 
 test('the slide panel shows each slide, not the same grey icon', () => {
@@ -173,12 +176,13 @@ test('the admin template screen speaks Korean throughout', () => {
 
 test('manual editing has the handles, keys and stacking Google Slides users expect', () => {
     const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+    const canvas = fs.readFileSync(path.join(SRC, 'components', 'editor', 'slide-canvas.tsx'), 'utf8');
 
-    // Both canvases draw the same eight-handle ring; a single bottom-right handle
-    // meant an object could only ever grow down and right.
-    assert.equal((editor.match(/RESIZE_HANDLES\.map/g) || []).length, 2);
-    assert.match(editor, /startNativeTransform\(event, object, handle\)/);
-    assert.match(editor, /startHtmlTransform\(event, area\.index, handle\)/);
+    // The eight-handle ring moved to the canvas along with dragging; a single
+    // bottom-right handle meant an object could only ever grow down and right.
+    assert.match(canvas, /RESIZE_HANDLES\.map/);
+    assert.match(canvas, /startDrag\(event, handle\)/);
+    assert.match(canvas, /startDrag\(event, null\)/);
 
     // Delete used to only remove HTML objects, so a selected PPTX object ignored the key.
     assert.match(editor, /if \(selectedNativeObjectId\) deleteNativeObject\(\)/);
@@ -195,20 +199,21 @@ test('manual editing has the handles, keys and stacking Google Slides users expe
     assert.match(editor, /rotation: Number\(event\.target\.value\)/);
 
     // Snap guides while dragging; object-transform.test.js covers the geometry.
-    assert.match(editor, /snapBox\(\{ \.\.\.initial, left: initial\.left \+ dx, top: initial\.top \+ dy \}, neighbours\)/);
-    assert.match(editor, /snapGuides\?\.vertical\.map/);
+    assert.match(canvas, /snapBox\(\{ \.\.\.initial, left: initial\.left \+ dx, top: initial\.top \+ dy \}, neighbours\)/);
+    assert.match(canvas, /snapGuides\?\.vertical\.map/);
     // They must not linger once the pointer is released.
     // \r?\n, not \n: the repo checks out CRLF on Windows and this assertion
     // failed there for the line ending rather than for anything it tests.
-    assert.match(editor, /const stop = \(\) => \{\r?\n\s*setSnapGuides\(null\);/);
+    assert.match(canvas, /const stop = \(\) => \{\r?\n?\s*setSnapGuides\(null\);/);
 });
 
 test('shapes accept in-slide text editing, like Google Slides', () => {
-    const editor = fs.readFileSync(path.join(SRC, 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
-    const overlay = editor.slice(editor.indexOf('data-native-object'), editor.indexOf('htmlSelectionAreas.map'));
+    const canvas = fs.readFileSync(path.join(SRC, 'components', 'editor', 'slide-canvas.tsx'), 'utf8');
 
-    // An autoshape has a text frame, so double-click must open the editor on it too,
-    // not only on text boxes.
-    assert.match(overlay, /object\.kind !== 'text' && object\.kind !== 'shape'/);
-    assert.doesNotMatch(overlay, /object\.kind === 'text' && editingNativeTextId/);
+    // An autoshape has a text frame, so double-click must open the caret on it as
+    // well as on a text box. Only a picture has nothing to type into — the canvas
+    // now excludes that one kind instead of allowing two.
+    assert.match(canvas, /onStageDoubleClick/);
+    assert.match(canvas, /dataset\.objectType === 'image'/);
+    assert.match(canvas, /beginEditing\(/);
 });

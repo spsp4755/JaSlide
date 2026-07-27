@@ -16,9 +16,10 @@ import { CommentsPanel } from '@/components/editor/comments-panel';
 import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
+import { SlideCanvas } from '@/components/editor/slide-canvas';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
-import { RESIZE_HANDLES, resizeBox, nudgeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
+import { nudgeBox } from '@/lib/object-transform';
 import {
     ArrowLeft,
     Save,
@@ -195,27 +196,6 @@ function addHtmlText(html: string): string {
 }
 
 const EDITOR_COLORS = ['#111827', '#374151', '#6B7280', '#FFFFFF', '#DC2626', '#EA580C', '#D97706', '#16A34A', '#2563EB', '#4F46E5', '#9333EA', '#DB2777'];
-/** The object's own type, sized against the canvas rather than the viewport.
- *
- * Editing used to happen at a flat 14px whatever the object was, so you typed
- * into a 22pt title in small text and it snapped to its real size once the server
- * preview caught up — the part that did not feel like PowerPoint.
- *
- * The extractor reports fontSize in points while the object's geometry is in the
- * 1920x1080 canvas, and that canvas covers a 13.333in slide — 144px per inch, so
- * one point is two canvas px. The wrapper is a size container, so 1080 canvas px
- * is 100cqh and `size` points is `size * 2 / 10.8` cqh. */
-function nativeTextStyle(object: any, edit: any): CSSProperties {
-    const size = edit?.fontSize ?? object?.fontSize;
-    return {
-        fontSize: typeof size === 'number' && size > 0 ? `${size / 5.4}cqh` : undefined,
-        fontFamily: edit?.fontFamily ?? object?.fontFamily ?? undefined,
-        color: edit?.color ?? object?.color ?? undefined,
-        fontWeight: (edit?.bold ?? object?.bold) ? 700 : undefined,
-        fontStyle: (edit?.italic ?? object?.italic) ? 'italic' : undefined,
-    };
-}
-
 function ShapePickerGlyph({ kind }: { kind: string }) {
     // The icon has to read against the panel, not against a slide: a fixed
     // #202124 outline disappeared into the dark theme and a #FFFFFF body turned
@@ -447,6 +427,10 @@ export default function EditorPage() {
     const [htmlTextFormatCommand, setHtmlTextFormatCommand] = useState<{ id: number; updates: Record<string, string> } | null>(null);
     const [htmlSelectionStyle, setHtmlSelectionStyle] = useState<Record<string, string> | null>(null);
     const [selectedNativeObjectId, setSelectedNativeObjectId] = useState<string | null>(null);
+    // The slide's own markup, which the canvas renders instead of the PNG. Keyed
+    // by slide id and cached: it never changes for a given slide, and a PPTX
+    // template's inlined images make it expensive to refetch.
+    const [slideHtml, setSlideHtml] = useState<Record<string, string>>({});
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
 
@@ -482,6 +466,21 @@ export default function EditorPage() {
         handleSaveSlideDelayed(selectedSlide.id, { content });
     };
     const formatSelectedHtmlText = (updates: Record<string, string>) => setHtmlTextFormatCommand((current) => ({ id: (current?.id || 0) + 1, updates }));
+    // Fetch the selected slide's own markup once. A slide with none — an old deck,
+    // a deleted template — simply keeps the server-rendered PNG, so a failure here
+    // costs fidelity, never the slide itself.
+    useEffect(() => {
+        if (!presentation || !selectedSlide || slideHtml[selectedSlide.id] !== undefined) return;
+        let cancelled = false;
+        presentationsApi.slideTemplateHtml(presentation.id, selectedSlide.order)
+            .then(({ data }) => {
+                if (!cancelled) setSlideHtml((current) => ({ ...current, [selectedSlide.id]: typeof data?.html === 'string' ? data.html : '' }));
+            })
+            .catch(() => {
+                if (!cancelled) setSlideHtml((current) => ({ ...current, [selectedSlide.id]: '' }));
+            });
+        return () => { cancelled = true; };
+    }, [presentation, selectedSlide, slideHtml]);
     useEffect(() => {
         const receiveSelectionStyle = (event: MessageEvent) => {
             if (event.data?.type === 'taeslide-selection-style' && event.data.slideId === selectedSlideId) setHtmlSelectionStyle(event.data.style);
@@ -1323,7 +1322,7 @@ export default function EditorPage() {
                                         slide={selectedSlide}
                                         template={presentation.template}
                                         previewUrl={previewUrl}
-                                        previewStale={!!selectedSlide && previewKey !== `${selectedSlide.id}:${previewRevisions[selectedSlide.id] || 0}`}
+                                        baseHtml={slideHtml[selectedSlide.id] ?? ''}
                                         selectedHtmlTextIndex={selectedHtmlTextIndex}
                                         onSelectHtmlText={setSelectedHtmlTextIndex}
                                         nativeObjects={nativeObjects}
@@ -1691,7 +1690,8 @@ interface EditableSlidePreviewProps {
     slide: any;
     template?: any;
     previewUrl?: string | null;
-    previewStale?: boolean;
+    /** The slide's own markup. Empty means fall back to the server-rendered PNG. */
+    baseHtml?: string;
     selectedHtmlTextIndex: number | null;
     onSelectHtmlText: (index: number | null) => void;
     nativeObjects: any[];
@@ -1703,7 +1703,7 @@ interface EditableSlidePreviewProps {
     htmlTextFormatCommand: { id: number; updates: Record<string, string> } | null;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, previewStale, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
+function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
     const content = slide.content || {};
     const heading = content.heading || slide.title || '';
     const subheading = content.subheading || '';
@@ -1713,9 +1713,6 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
     const htmlTextFields = typeof content.html === 'string' ? getHtmlTextFields(content.html) : [];
     const htmlSelectionAreas = typeof content.html === 'string' ? getHtmlSelectionAreas(content.html) : [];
     const [inlineTextIndex, setInlineTextIndex] = useState<number | null>(null);
-    const [editingNativeTextId, setEditingNativeTextId] = useState<string | null>(null);
-    const [editingNativeCell, setEditingNativeCell] = useState<{ objectId: string; row: number; col: number } | null>(null);
-    const [snapGuides, setSnapGuides] = useState<{ vertical: number[]; horizontal: number[] } | null>(null);
     const htmlFrameRef = useRef<HTMLIFrameElement>(null);
     const htmlCanvasRef = useRef<HTMLDivElement>(null);
     const latestContentRef = useRef(content);
@@ -1905,87 +1902,6 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         );
     }
 
-    // `handle` null means drag the whole object; otherwise resize from that edge.
-    const startHtmlTransform = (event: any, index: number, handle: ResizeHandle | null) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const canvas = (event.currentTarget as HTMLElement).closest('[data-html-canvas]') as HTMLElement | null;
-        const field = htmlTextFields[index];
-        if (!canvas || !field) return;
-        const bounds = canvas.getBoundingClientRect();
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const initial = {
-            left: parseFloat(field.left) || 0,
-            top: parseFloat(field.top) || 0,
-            width: parseFloat(field.width) || 0,
-            height: parseFloat(field.height) || 0,
-        };
-        const move = (moveEvent: PointerEvent) => {
-            const dx = (moveEvent.clientX - startX) * 1920 / bounds.width;
-            const dy = (moveEvent.clientY - startY) * 1080 / bounds.height;
-            const box = handle
-                ? resizeBox(initial, handle, dx, dy)
-                : { ...initial, left: Math.round(initial.left + dx), top: Math.round(initial.top + dy) };
-            const changed = handle ? ['left', 'top', 'width', 'height'] as const : ['left', 'top'] as const;
-            const updates = Object.fromEntries(changed.map((key) => [key, String(box[key])]));
-            onUpdate({ content: { ...content, html: updateHtmlText(content.html, index, updates) } });
-        };
-        const stop = () => {
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', stop);
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', stop, { once: true });
-    };
-
-    // `handle` null means drag the whole object; otherwise resize from that edge.
-    const startNativeTransform = (event: any, object: any, handle: ResizeHandle | null) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const canvas = (event.currentTarget as HTMLElement).closest('[data-html-canvas]') as HTMLElement | null;
-        if (!canvas) return;
-        const bounds = canvas.getBoundingClientRect();
-        const current = (content.objectEdits || []).find((item: any) => item.objectId === object.id) || {};
-        const initial = { left: current.left ?? object.left ?? 0, top: current.top ?? object.top ?? 0, width: current.width ?? object.width ?? 0, height: current.height ?? object.height ?? 0 };
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const move = (moveEvent: PointerEvent) => {
-            const dx = (moveEvent.clientX - startX) * 1920 / bounds.width;
-            const dy = (moveEvent.clientY - startY) * 1080 / bounds.height;
-            let transform: Partial<Record<'left' | 'top' | 'width' | 'height', number>>;
-            if (handle) {
-                transform = resizeBox(initial, handle, dx, dy);
-                setSnapGuides(null);
-            } else {
-                // Snap against every other object on the slide, plus the slide centre.
-                const neighbours = nativeObjects
-                    .filter((item: any) => item.id !== object.id)
-                    .map((item: any) => {
-                        const other = (content.objectEdits || []).find((entry: any) => entry.objectId === item.id) || {};
-                        return {
-                            left: other.left ?? item.left ?? 0, top: other.top ?? item.top ?? 0,
-                            width: other.width ?? item.width ?? 0, height: other.height ?? item.height ?? 0,
-                        };
-                    });
-                const snapped = snapBox({ ...initial, left: initial.left + dx, top: initial.top + dy }, neighbours);
-                transform = { left: snapped.box.left, top: snapped.box.top };
-                setSnapGuides(snapped.guides.vertical.length || snapped.guides.horizontal.length ? snapped.guides : null);
-            }
-            const objectEdits = [...(content.objectEdits || [])];
-            const index = objectEdits.findIndex((item: any) => item.objectId === object.id);
-            if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...transform };
-            else objectEdits.push({ objectId: object.id, slide: content.templateIndex ?? slide.order ?? 0, ...transform });
-            onUpdate({ content: { ...content, objectEdits } });
-        };
-        const stop = () => {
-            setSnapGuides(null);
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', stop);
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', stop, { once: true });
-    };
 
     const updateNativeObjectContent = (objectId: string, updates: Record<string, any>) => {
         const objectEdits = [...(content.objectEdits || [])];
@@ -1995,149 +1911,21 @@ function EditableSlidePreview({ slide, template, previewUrl, previewStale, selec
         onUpdate({ content: { ...content, objectEdits } });
     };
 
-    if (previewUrl && (!content.html || nativeObjects.length)) {
-        // A size container, so on-slide text can be sized in cqh and track the canvas
-        // the way the objects' own percentage geometry already does.
+    // The slide renders itself. Nothing is painted underneath it, so the deck's
+    // own background, table fills and borders stay visible while a caret sits in
+    // the text — the reason the old textarea had to cover them with white.
+    if (baseHtml) {
         return (
-            <div className="relative h-full w-full touch-pan-y [container-type:size]" data-html-canvas onPointerDown={startSlideSwipe}>
-                <img src={previewUrl} alt={slide.title || '슬라이드 미리보기'} className="h-full w-full object-contain" />
-                {/* Guides only exist mid-drag, so they never obscure the slide at rest. */}
-                {snapGuides?.vertical.map((x) => (
-                    <div key={`v${x}`} aria-hidden="true" className="pointer-events-none absolute top-0 h-full border-l border-dashed border-fuchsia-500" style={{ left: `${x / 19.2}%` }} />
-                ))}
-                {snapGuides?.horizontal.map((y) => (
-                    <div key={`h${y}`} aria-hidden="true" className="pointer-events-none absolute left-0 w-full border-t border-dashed border-fuchsia-500" style={{ top: `${y / 10.8}%` }} />
-                ))}
-                {nativeObjects.map((object: any) => {
-                    const edit = (content.objectEdits || []).find((item: any) => item.objectId === object.id) || {};
-                    if (edit.delete) return null;
-                    const left = edit.left ?? object.left ?? 0;
-                    const top = edit.top ?? object.top ?? 0;
-                    const width = edit.width ?? object.width ?? 0;
-                    const height = edit.height ?? object.height ?? 0;
-                    const selected = selectedNativeObjectId === object.id;
-                    return <div key={object.id} data-editable-object data-native-object className={`absolute cursor-move ${selected ? 'border-2 border-purple-500 bg-purple-500/5' : 'border border-transparent hover:border-purple-400/70'}`} style={{ left: `${left / 19.2}%`, top: `${top / 10.8}%`, width: `${Math.max(1, width) / 19.2}%`, height: `${Math.max(1, height) / 10.8}%` }} onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, null); }} onDoubleClick={(event) => {
-                        // Shapes carry text too, the way they do in Google Slides: an
-                        // autoshape has a text frame and the renderer already writes
-                        // `text` into whichever object the edit targets.
-                        if (object.kind !== 'text' && object.kind !== 'shape') return;
-                        event.preventDefault(); event.stopPropagation();
-                        onSelectNativeObject(object.id);
-                        setEditingNativeTextId(object.id);
-                    }}>
-                        {/* Never paint text over an up-to-date preview: the image already shows
-                            it in the deck's real fonts, and drawing it twice was the double-text
-                            bug. While the image lags an edit, cover that region opaquely with the
-                            new text so the change shows up now instead of a round trip later. */}
-                        {previewStale && editingNativeTextId !== object.id && typeof edit.text === 'string' && <div
-                            className="pointer-events-none absolute inset-0 overflow-hidden bg-white p-1 leading-tight"
-                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any, ...nativeTextStyle(object, edit) }}
-                        >{edit.text}</div>}
-                        {editingNativeTextId === object.id && <textarea
-                            autoFocus
-                            aria-label="네이티브 텍스트 직접 편집"
-                            value={edit.text ?? object.text ?? ''}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onChange={(event) => updateNativeObjectContent(object.id, { text: event.target.value })}
-                            onBlur={() => setEditingNativeTextId(null)}
-                            onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeTextId(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
-                            style={{ textAlign: (edit.align ?? object.align ?? 'left') as any, ...nativeTextStyle(object, edit) }}
-                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white p-1 leading-tight outline-none"
-                        />}
-                        {object.kind === 'table' && (() => {
-                            const cells: string[][] = edit.cells || object.cells || [];
-                            const rowHeights: number[] = (object.rowHeights?.length === cells.length ? object.rowHeights : cells.map(() => 1));
-                            const columnWidths: number[] = (object.columnWidths?.length === (cells[0]?.length || 0) ? object.columnWidths : (cells[0] || []).map(() => 1));
-                            const rowTotal = rowHeights.reduce((sum: number, value: number) => sum + value, 0) || 1;
-                            const colTotal = columnWidths.reduce((sum: number, value: number) => sum + value, 0) || 1;
-                            return <div className="grid h-full w-full" style={{ gridTemplateRows: rowHeights.map((value) => `${(value / rowTotal) * 100}%`).join(' '), gridTemplateColumns: columnWidths.map((value) => `${(value / colTotal) * 100}%`).join(' ') }}>
-                                {cells.flatMap((row: string[], rowIndex: number) => row.map((cellText: string, colIndex: number) => {
-                                    const isEditing = !!editingNativeCell && editingNativeCell.objectId === object.id && editingNativeCell.row === rowIndex && editingNativeCell.col === colIndex;
-                                    return isEditing ? <textarea
-                                        key={`${rowIndex}-${colIndex}`}
-                                        autoFocus
-                                        aria-label="표 셀 직접 편집"
-                                        value={cellText}
-                                        onPointerDown={(event) => event.stopPropagation()}
-                                        onChange={(event) => {
-                                            const next = cells.map((source: string[]) => [...source]);
-                                            next[rowIndex][colIndex] = event.target.value;
-                                            updateNativeObjectContent(object.id, { cells: next });
-                                        }}
-                                        onBlur={() => setEditingNativeCell(null)}
-                                        onKeyDown={(event) => { if (event.key === 'Escape') { setEditingNativeCell(null); (event.currentTarget as HTMLTextAreaElement).blur(); } }}
-                                        className="resize-none border border-purple-600 bg-card p-1 text-xs leading-tight outline-none"
-                                    /> : <div
-                                        key={`${rowIndex}-${colIndex}`}
-                                        data-native-table-cell
-                                        // Hit target only, unless the preview still lags this edit.
-                                        className={`overflow-hidden border border-transparent p-1 text-xs leading-tight hover:border-purple-400/70 ${previewStale && edit.cells ? 'bg-white' : ''}`}
-                                        onPointerDown={(event) => { onSelectNativeObject(object.id); startNativeTransform(event, object, null); }}
-                                        onDoubleClick={(event) => { event.preventDefault(); event.stopPropagation(); onSelectNativeObject(object.id); setEditingNativeCell({ objectId: object.id, row: rowIndex, col: colIndex }); }}
-                                    >{previewStale && edit.cells ? cellText : ''}</div>;
-                                }))}
-                            </div>;
-                        })()}
-                        {selected && RESIZE_HANDLES.map(({ handle, label, cursor, position }) => (
-                            <button
-                                key={handle}
-                                type="button"
-                                aria-label={`크기 조절 ${label}`}
-                                className={`absolute ${position} ${cursor} h-3 w-3 rounded-sm border border-purple-700 bg-white`}
-                                onPointerDown={(event) => startNativeTransform(event, object, handle)}
-                            />
-                        ))}
-                    </div>;
-                })}
-                {htmlSelectionAreas.map((area) => {
-                    const field = htmlTextFields[area.index];
-                    return field && (
-                    <div
-                        key={area.index}
-                        data-editable-object
-                        className={`absolute ${field.positionable ? 'cursor-move' : 'cursor-pointer'} ${selectedHtmlTextIndex === area.index ? 'border border-purple-500/70 bg-purple-500/5 hover:bg-purple-500/15' : ''}`}
-                        style={{ left: `${(parseFloat(area.left) || 0) / 19.2}%`, top: `${(parseFloat(area.top) || 0) / 10.8}%`, width: `${Math.max(1, parseFloat(area.width) || 0) / 19.2}%`, height: `${Math.max(1, parseFloat(area.height) || 0) / 10.8}%` }}
-                        onPointerDown={(event) => {
-                            onSelectHtmlText(area.index);
-                            if (field.positionable) startHtmlTransform(event, area.index, null);
-                        }}
-                        onDoubleClick={(event) => {
-                            if (field.objectType === 'shape' || field.objectType === 'image') return;
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onSelectHtmlText(area.index);
-                            setInlineTextIndex(area.index);
-                        }}
-                    >
-                        {inlineTextIndex === area.index && <textarea
-                            autoFocus
-                            aria-label="슬라이드 텍스트 직접 편집"
-                            value={field.text}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onChange={(event) => onUpdate({ content: { ...content, html: updateHtmlText(content.html, area.index, { text: event.target.value }) } })}
-                            onBlur={() => { setInlineTextIndex(null); }}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Escape') { setInlineTextIndex(null); (event.currentTarget as HTMLTextAreaElement).blur(); }
-                                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { setInlineTextIndex(null); (event.currentTarget as HTMLTextAreaElement).blur(); }
-                            }}
-                            className="absolute inset-0 h-full w-full resize-none border-2 border-purple-600 bg-white/95 p-1 text-inherit leading-tight outline-none"
-                            style={{ color: field.color, fontFamily: field.fontFamily, fontSize: `${Math.max(12, (parseFloat(field.fontSize) || 24) / 4)}px`, textAlign: field.textAlign as any }}
-                        />}
-                        {selectedHtmlTextIndex === area.index && field.positionable && RESIZE_HANDLES.map(({ handle, label, cursor, position }) => (
-                            <button
-                                key={handle}
-                                type="button"
-                                aria-label={`크기 조절 ${label}`}
-                                className={`absolute ${position} ${cursor} h-3 w-3 rounded-sm border border-purple-700 bg-white`}
-                                onPointerDown={(event) => {
-                                    onSelectHtmlText(area.index);
-                                    startHtmlTransform(event, area.index, handle);
-                                }}
-                            />
-                        ))}
-                    </div>
-                    );
-                })}
+            <div className="relative h-full w-full touch-pan-y" onPointerDown={startSlideSwipe}>
+                <SlideCanvas
+                    baseHtml={baseHtml}
+                    objectEdits={content.objectEdits || []}
+                    selectedObjectId={selectedNativeObjectId}
+                    onSelectObject={onSelectNativeObject}
+                    onChangeText={(objectId, text) => updateNativeObjectContent(objectId, { text })}
+                    onChangeCells={(objectId, cells) => updateNativeObjectContent(objectId, { cells })}
+                    onTransform={(objectId, box) => updateNativeObjectContent(objectId, box)}
+                />
             </div>
         );
     }

@@ -33,7 +33,12 @@ test('TaeSlide editor persists generic HTML object styles', () => {
     assert.match(editor, /const EDITOR_COLORS/);
     assert.match(editor, /function ColorSwatches/);
     assert.match(editor, /\$\{label\} 메뉴/);
-    assert.match(editor, /슬라이드 텍스트 직접 편집/);
+    // On-slide text editing moved into the canvas, where a caret goes into the
+    // slide's own markup instead of into a labelled textarea drawn over a PNG.
+    assert.match(
+        fs.readFileSync(path.join(root, 'components', 'editor', 'slide-canvas.tsx'), 'utf8'),
+        /contentEditable = 'true'/,
+    );
     assert.match(editor, /persistHistoryState/);
     assert.match(editor, /saveSchedulerRef\.current\?\.cancelAll\(\)/);
     assert.doesNotMatch(editor, /onBlur=\{\(\) => \{ setInlineTextIndex\(null\); onSave\(\); \}\}/);
@@ -48,7 +53,11 @@ test('TaeSlide editor persists generic HTML object styles', () => {
     assert.match(editor, /selectedElement/);
     assert.match(editor, /selectedElement\.remove\(\)/);
     assert.match(editor, /candidate\?\.nodeType === 1/);
-    assert.ok(editor.indexOf('if (content.html)') < editor.indexOf('const startHtmlTransform'));
+    // A ZIP deck edits its own generated markup in the iframe; only a PPTX deck,
+    // whose content lives in objectEdits against a template layout, falls through
+    // to the canvas. Reversing these two would hand ZIP slides a canvas that
+    // renders the template instead of the deck.
+    assert.ok(editor.indexOf('if (content.html && !nativeObjects.length)') < editor.indexOf('if (baseHtml)'));
     assert.match(editor, /startSlideSwipe/);
     assert.match(editor, /onNavigate/);
     assert.match(editor, /kind = 'rect'/);
@@ -64,12 +73,12 @@ test('TaeSlide editor persists generic HTML object styles', () => {
         .split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
     assert.match(glyphMarkup, /stroke="currentColor"/);
     assert.doesNotMatch(glyphMarkup, /#202124|#FFFFFF/);
-    // On-slide editing happens at the object's real size: points against a
-    // 1920x1080 canvas over a 13.333in slide is two canvas px per point, and the
-    // canvas wrapper is a size container so cqh tracks it.
-    assert.match(editor, /function nativeTextStyle/);
-    assert.match(editor, /size \/ 5\.4\}cqh/);
-    assert.match(editor, /\[container-type:size\]/);
+    // On-slide editing happens at the object's real size. This used to need a
+    // container query and a /5.4 divisor to map points onto a scaled image;
+    // the canvas renders the slide at 1920x1080 and scales the whole stage, so
+    // a point is simply a point. slide-canvas.test.js checks the arithmetic.
+    assert.doesNotMatch(editor, /function nativeTextStyle/);
+    assert.doesNotMatch(editor, /cqh/);
     // A fresh blob handed straight to <img src> blanks for a frame; decode first.
     assert.match(editor, /image\.decode/);
     assert.match(editor, /shapeSvgMarkup\(kind, width, height\)/);
@@ -90,7 +99,14 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /selectedNativeObjectId/);
     assert.match(editor, /updateNativeObject/);
     assert.match(editor, /nativeObjects/);
-    assert.match(editor, /data-native-object/);
+    // Objects used to be transparent boxes stacked on a PNG and marked with this
+    // attribute. They are the slide's own elements now, found by the shape id the
+    // extractor writes into the markup.
+    assert.doesNotMatch(editor, /data-native-object/);
+    assert.match(
+        fs.readFileSync(path.join(root, 'components', 'editor', 'slide-canvas.tsx'), 'utf8'),
+        /data-object-id="/,
+    );
     assert.match(editor, /selectedNativeObject\.fontFamily/);
     assert.match(editor, /fontSize: Number/);
     assert.match(editor, /bold:/);
@@ -99,9 +115,13 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /lineColor/);
     assert.match(editor, /lineWidth/);
     assert.match(editor, /deleteNativeObject/);
-    assert.match(editor, /edit\.delete/);
+    // Hiding a deleted object is the canvas's job now; the export still reads the
+    // same `delete` flag off the edit.
+    assert.match(
+        fs.readFileSync(path.join(root, 'components', 'editor', 'slide-canvas.tsx'), 'utf8'),
+        /edit\.delete/,
+    );
     assert.match(editor, /item\.kind === 'image'/);
-    assert.match(editor, /flatMap\(\(row: string\[\]/);
     assert.match(editor, /new-image-\$\{crypto\.randomUUID\(\)\}/);
     assert.match(editor, /imageData/);
     assert.match(editor, /insertNativeText/);
@@ -115,15 +135,18 @@ assert.match(editor, /AI 패널 접기/);
     assert.match(editor, /insertOrderedList/);
     assert.match(editor, /IndentIncrease/);
     assert.match(editor, /event\.key === 'Tab'/);
-    assert.match(editor, /editingNativeTextId/);
-    assert.match(editor, /setEditingNativeTextId/);
-    assert.match(editor, /네이티브 텍스트 직접 편집/);
-    assert.match(editor, /editingNativeCell/);
-    assert.match(editor, /setEditingNativeCell/);
-    assert.match(editor, /표 셀 직접 편집/);
     assert.doesNotMatch(editor, /표 내용 \(줄마다 첫 번째 열\)/);
-    assert.match(editor, /gridTemplateRows/);
-    assert.match(editor, /gridTemplateColumns/);
-    assert.doesNotMatch(editor, /selectedNativeCells\.flatMap\(\(row: string\[\]/);
+
+    // Text and table cells are edited in the slide itself. The overlay needed
+    // separate editing state per object and per cell, plus a CSS grid rebuilt
+    // from rowHeights and columnWidths to stand in for the table. The canvas
+    // renders the deck's own <table>, so a cell is just a <td> with a caret in it.
+    const canvas = fs.readFileSync(path.join(root, 'components', 'editor', 'slide-canvas.tsx'), 'utf8');
+    assert.doesNotMatch(editor, /editingNativeTextId|editingNativeCell/);
+    assert.doesNotMatch(editor, /gridTemplateRows|gridTemplateColumns/);
+    assert.match(canvas, /contentEditable = 'true'/);
+    assert.match(canvas, /'td, th'/);
+    assert.match(canvas, /function writeCells/);
+    assert.match(canvas, /function readCells/);
     assert.match(layout, /TaeSlide/);
 });

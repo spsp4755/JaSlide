@@ -9,12 +9,25 @@ test('HTML slides expose text-only editing without replacing the template markup
     assert.match(source, /function getHtmlTextFields/);
     assert.match(source, /function updateHtmlText/);
     assert.match(source, /function addHtmlText/);
-    assert.match(source, /html: updateHtmlText\(selectedSlide\.content\.html, index, \{ text: event\.target\.value \}\)/);
-    assert.match(source, /const startHtmlTransform/);
-    // One bottom-right handle became the full eight-handle ring; object-transform.test.js
-    // covers the geometry each handle applies.
-    assert.match(source, /RESIZE_HANDLES\.map/);
-    assert.match(source, /selectedHtmlTextIndex === area\.index/);
     assert.match(source, /function getHtmlSelectionAreas/);
     assert.doesNotMatch(source, /if \(previewUrl && content\.html\)/);
+    // A ZIP deck already edits its own markup in a scaled iframe; the overlay of
+    // hit-boxes over a PNG that used to back it up is gone, and with it
+    // startHtmlTransform. The eight-handle ring lives on the canvas now —
+    // slide-canvas-component.test.js pins it, object-transform.test.js the geometry.
+    assert.match(source, /srcDoc=\{frameHtml\}/);
+    assert.doesNotMatch(source, /const startHtmlTransform/);
+});
+
+test('the editing surface is the slide itself, not a picture of it', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
+
+    assert.match(source, /<SlideCanvas/);
+    assert.match(source, /slideTemplateHtml/);
+    // The three approximations that made on-slide editing read like a notepad:
+    // a font size guessed from the container, an opaque cover for the stale
+    // preview, and percentage geometry derived from the image's own size.
+    assert.doesNotMatch(source, /function nativeTextStyle/);
+    assert.doesNotMatch(source, /previewStale/);
+    assert.doesNotMatch(source, /cqh/);
 });

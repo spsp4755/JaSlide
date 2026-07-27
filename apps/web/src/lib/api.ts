@@ -48,6 +48,11 @@ export const presentationsApi = {
     delete: (id: string) => api.delete(`/presentations/${id}`),
     duplicate: (id: string) => api.post(`/presentations/${id}/duplicate`),
     share: (id: string) => api.post(`/presentations/${id}/share`),
+    // The editor renders this markup itself rather than showing a server-rendered
+    // PNG. Fetched per slide: a PPTX template inlines its images, so the whole
+    // set would be megabytes the editor refetches on every load.
+    slideTemplateHtml: (id: string, order: number) =>
+        api.get(`/presentations/${id}/slides/${order}/template-html`),
 };
 
 // Slides
