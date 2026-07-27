@@ -71,8 +71,8 @@ function toHex(value: string): string {
  * has not touched yet has no edit, and the toolbar still has to show the
  * deck's own font and size rather than a made-up default.
  */
-function readFormat(element: HTMLElement): SlideSelectionFormat {
-    const run = element.querySelector('span') ?? element;
+function readFormat(element: HTMLElement, preferredRun?: HTMLElement): SlideSelectionFormat {
+    const run = preferredRun ?? element.querySelector('span') ?? element;
     const runStyle = getComputedStyle(run);
     const boxStyle = getComputedStyle(element);
     return {
@@ -370,6 +370,11 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
             const range = selection.getRangeAt(0);
             if (!element.contains(range.commonAncestorContainer)) return;
             savedRangeRef.current = selection.isCollapsed ? null : range.cloneRange();
+            const anchor = selection.anchorNode instanceof HTMLElement
+                ? selection.anchorNode
+                : selection.anchorNode?.parentElement;
+            const selectedRun = anchor?.closest<HTMLElement>('span') ?? undefined;
+            onSelectionFormat(readFormat(element, selectedRun));
         };
         const onBlur = () => {
             element.removeEventListener('input', onInput);
@@ -385,7 +390,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         element.addEventListener('keydown', onKeyDown);
         element.addEventListener('blur', onBlur);
         document.addEventListener('selectionchange', onSelectionChange);
-    }, [onChangeCells, onChangeParagraphs, stopEditing]);
+    }, [onChangeCells, onChangeParagraphs, onSelectionFormat, stopEditing]);
 
     // Character-level formatting: wraps the live browser selection in a styled
     // span, the same technique the ZIP HTML editor already uses

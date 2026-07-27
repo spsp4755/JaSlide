@@ -96,6 +96,13 @@ test('the canvas reports how the selection is formatted, for the toolbar', () =>
     assert.match(code, /parseFloat\(runStyle\.fontSize\) \/ CANVAS_PX_PER_PT/);
 });
 
+test('the toolbar reads the highlighted run instead of the object’s first run', () => {
+    const code = source();
+
+    assert.match(code, /function readFormat\(element: HTMLElement, preferredRun\?: HTMLElement\)/);
+    assert.match(code, /onSelectionFormat\(readFormat\(element, selectedRun\)\)/);
+});
+
 test('a selected word can be formatted without formatting the whole object', () => {
     const code = source();
 
