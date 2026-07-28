@@ -85,6 +85,7 @@ def test_a_straight_connector_is_a_line_not_a_shape():
     assert [item["type"] for item in scene["objects"]] == ["line"]
     line = scene["objects"][0]
     assert line["stroke"] == "#00AA00"
+    assert line["lineStyle"] == "straightLine"
 
 
 def test_rotation_defaults_to_zero_when_the_deck_states_none():

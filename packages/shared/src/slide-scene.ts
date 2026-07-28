@@ -89,10 +89,15 @@ export interface ShapeObject extends BaseObject {
 
 export interface LineObject extends BaseObject {
     type: 'line';
+    /**
+     * One of the insert picker's line kinds (`straightLine`, `arrowLine`, …).
+     * Reusing that vocabulary — rather than separate stroke-style booleans —
+     * means the scene canvas and the insert picker draw the exact same glyph
+     * for the exact same string instead of two rendering paths that could drift.
+     */
+    lineStyle: string;
     stroke: string;
     strokeWidth: number;
-    startArrow?: boolean;
-    endArrow?: boolean;
 }
 
 export interface ImageObject extends BaseObject {

@@ -134,6 +134,11 @@ def pptx_to_scene(content: bytes) -> dict:
         elif shape.shape_type == MSO_SHAPE_TYPE.LINE:
             objects.append({
                 **base, "type": "line",
+                # ponytail: arrowheads are not read from the connector's XML yet
+                # (headEnd/tailEnd) — every imported line comes back undecorated
+                # until that's worth adding. Not a fidelity regression: the old
+                # object map had no line kind at all, so this is a net gain.
+                "lineStyle": "straightLine",
                 "stroke": _line_color(shape, palette) or "#202124",
                 "strokeWidth": _line_width(shape),
             })
