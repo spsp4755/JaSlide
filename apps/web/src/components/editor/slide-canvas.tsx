@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { RESIZE_HANDLES, resizeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
+import { shapeSvgMarkup } from '@/lib/shape-glyphs';
 import {
     CANVAS_PX_PER_PT, SLIDE_H, SLIDE_W, canvasScale, objectEditAlign, objectEditBoxStyle, objectEditText, objectEditTextStyle,
     textRunStyle, toSlidePx, type ObjectEdit, type TableCellContent, type TextParagraph, type TextRun,
@@ -100,11 +101,28 @@ interface Box { left: number; top: number; width: number; height: number }
  * authored outside JaSlide may not, and position in the object list is the only
  * key those slides ever had — the same key the HTML editing path already uses.
  */
-function findObject(stage: HTMLElement, objectId: string, index: number): HTMLElement | null {
+function findObject(stage: HTMLElement, objectId: string, index: number, allowIndexFallback = true): HTMLElement | null {
     const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(objectId) : objectId;
     return stage.querySelector<HTMLElement>(`[data-object-id="${escaped}"]`)
-        ?? stage.querySelectorAll<HTMLElement>('[data-object="true"]')[index]
+        ?? (allowIndexFallback ? stage.querySelectorAll<HTMLElement>('[data-object="true"]')[index] : null)
         ?? null;
+}
+
+/** Build the live node for an inserted shape: template objects already exist. */
+function createInsertedObject(stage: HTMLElement, edit: ObjectEdit): HTMLElement | null {
+    const kind = edit.addShape ?? edit.addLine;
+    if (!kind) return null;
+    const width = edit.width ?? 420;
+    const height = edit.height ?? (edit.addLine ? 80 : 220);
+    const element = stage.ownerDocument.createElement('div');
+    element.dataset.object = 'true';
+    element.dataset.objectId = edit.objectId;
+    element.dataset.objectType = 'shape';
+    element.dataset.shapeType = kind;
+    element.style.cssText = `position:absolute;left:${edit.left ?? 180}px;top:${edit.top ?? 180}px;width:${width}px;height:${height}px;z-index:100;`;
+    element.innerHTML = shapeSvgMarkup(kind, width, height, edit.addLine ? 'none' : (edit.fillColor ?? '#FFFFFF'), edit.lineColor ?? '#202124');
+    stage.append(element);
+    return element;
 }
 
 /** The container that actually holds an object's text, skipping its wrapper. */
@@ -350,10 +368,11 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         if (editingRef.current) return;
         stage.innerHTML = baseHtml;
         objectEdits.forEach((edit, index) => {
-            const element = findObject(stage, edit.objectId, index);
+            const inserted = Boolean(edit.addShape || edit.addLine);
+            const element = findObject(stage, edit.objectId, index, !inserted) ?? createInsertedObject(stage, edit);
             if (!element) return;
             if (edit.delete) { element.style.display = 'none'; return; }
-            Object.assign(element.style, objectEditBoxStyle(edit));
+            Object.assign(element.style, objectEditBoxStyle(inserted ? { ...edit, lineColor: undefined, lineWidth: undefined } : edit));
             if (edit.cells) {
                 writeCells(element, edit.cells);
             } else if (edit.paragraphs) {

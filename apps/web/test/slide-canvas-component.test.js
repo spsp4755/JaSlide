@@ -28,6 +28,15 @@ test('objects are found by their native id', () => {
     assert.match(source(), /data-object-id="/);
 });
 
+test('inserted shapes and lines create their own live canvas object', () => {
+    const code = source();
+
+    assert.match(code, /function createInsertedObject\(stage: HTMLElement, edit: ObjectEdit\)/);
+    assert.match(code, /edit\.addShape \?\? edit\.addLine/);
+    assert.match(code, /shapeSvgMarkup\(kind/);
+    assert.match(code, /createInsertedObject\(stage, edit\)/);
+});
+
 test('text is edited in place, with nothing painted over the slide', () => {
     const code = source();
 

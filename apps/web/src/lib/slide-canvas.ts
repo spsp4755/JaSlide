@@ -53,6 +53,9 @@ export interface TableCellContent {
 
 export interface ObjectEdit {
     objectId: string;
+    /** An object inserted in the editor, so it has no matching template node yet. */
+    addShape?: string;
+    addLine?: string;
     text?: string;
     /**
      * Character-level formatting: a run the user bolded is a different run from
