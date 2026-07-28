@@ -37,6 +37,14 @@ test('inserted shapes and lines create their own live canvas object', () => {
     assert.match(code, /createInsertedObject\(stage, edit\)/);
 });
 
+test('shape fill changes update the live SVG before a preview refresh', () => {
+    const code = source();
+
+    assert.match(code, /setFillColor: \(objectId: string, fillColor: string\) => boolean/);
+    assert.match(code, /querySelectorAll<SVGPathElement>\('svg path'\)/);
+    assert.match(code, /path\.setAttribute\('fill', fillColor\)/);
+});
+
 test('text is edited in place, with nothing painted over the slide', () => {
     const code = source();
 
@@ -125,7 +133,7 @@ test('a selected word can be formatted without formatting the whole object', () 
     assert.match(code, /range\.extractContents\(\)/);
     assert.match(code, /function formatSelection|const formatSelection/);
     // Exposed imperatively so the toolbar (outside this component) can drive it.
-    assert.match(code, /useImperativeHandle\(ref, \(\) => \(\{ formatSelection \}\)/);
+    assert.match(code, /useImperativeHandle\(ref, \(\) => \(\{ formatSelection, setFillColor \}\)/);
     // Falls back to whole-object formatting when there is no live selection —
     // this is the caller's job, so formatSelection must report which happened.
     assert.match(code, /if \(!selection \|\| !range \|\| !element\.contains\(range\.commonAncestorContainer\)\) return false;/);

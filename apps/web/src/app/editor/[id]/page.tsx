@@ -524,6 +524,10 @@ export default function EditorPage() {
                 setCanvasFormat((format) => format ? { ...format, ...updates } : format);
                 return;
             }
+            if (updates.fillColor !== undefined) {
+                slideCanvasRef.current?.setFillColor(canvasFormat.objectId, updates.fillColor);
+                setCanvasFormat((format) => format ? { ...format, ...updates } : format);
+            }
             updateNativeObject(canvasFormat.objectId, updates);
             return;
         }

@@ -29,6 +29,8 @@ export interface SlideCanvasHandle {
      * otherwise.
      */
     formatSelection: (updates: RunFormatUpdate) => boolean;
+    /** Paint the rendered object immediately while its persisted edit is saved. */
+    setFillColor: (objectId: string, fillColor: string) => boolean;
 }
 
 /** What the toolbar shows for whatever is selected on the slide. */
@@ -520,7 +522,21 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         return true;
     }, [onChangeCells, onChangeParagraphs]);
 
-    useImperativeHandle(ref, () => ({ formatSelection }), [formatSelection]);
+    const setFillColor = useCallback((objectId: string, fillColor: string): boolean => {
+        const stage = stageRef.current;
+        if (!stage) return false;
+        const index = objectEdits.findIndex((edit) => edit.objectId === objectId);
+        const edit = objectEdits[index];
+        const element = findObject(stage, objectId, index, !(edit?.addShape || edit?.addLine));
+        if (!element) return false;
+        element.style.background = fillColor;
+        element.querySelectorAll<SVGPathElement>('svg path').forEach((path) => {
+            if (path.getAttribute('fill') !== 'none') path.setAttribute('fill', fillColor);
+        });
+        return true;
+    }, [objectEdits]);
+
+    useImperativeHandle(ref, () => ({ formatSelection, setFillColor }), [formatSelection, setFillColor]);
 
     const startDrag = useCallback((event: React.PointerEvent, handle: ResizeHandle | null) => {
         const stage = stageRef.current;
