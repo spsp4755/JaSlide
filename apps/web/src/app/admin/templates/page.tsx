@@ -3,7 +3,7 @@
 import { adminFetch } from '@/lib/admin-fetch';
 
 import { useEffect, useState } from 'react';
-import { Plus, FileText, Palette, Layout, ToggleLeft, ToggleRight, Trash2, Edit, Eye, X, Check, Loader2 } from 'lucide-react';
+import { Plus, FileText, Palette, Layout, ToggleLeft, ToggleRight, Trash2, Edit, Eye, X, Check, Loader2, AlertTriangle } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -17,6 +17,11 @@ interface Template {
     organization: { id: string; name: string } | null;
     _count: { presentations: number };
     createdAt: string;
+}
+
+interface FidelityReport {
+    degradedObjects: { objectId: string; type: string; reason: string }[];
+    missingFontFamilies: string[];
 }
 
 interface ColorPalette {
@@ -48,6 +53,7 @@ export default function AdminTemplatesPage() {
     const [saving, setSaving] = useState(false);
     const [templateQuery, setTemplateQuery] = useState('');
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+    const [fidelityReports, setFidelityReports] = useState<Record<string, FidelityReport | 'loading' | 'error'>>({});
 
     // Modal states
     const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -235,6 +241,16 @@ export default function AdminTemplatesPage() {
         const res = await adminFetch(`${API_URL}/admin/templates/${id}/reextract-pptx`, { method: 'POST', headers: getAuthHeaders() });
         if (!res.ok) return showToast('PPTX 재추출에 실패했습니다.', 'error');
         showToast('PPTX 객체 맵을 다시 추출했습니다.'); fetchData();
+    };
+    const handleCheckFidelity = async (id: string) => {
+        setFidelityReports((reports) => ({ ...reports, [id]: 'loading' }));
+        const res = await adminFetch(`${API_URL}/admin/templates/${id}/fidelity`, { headers: getAuthHeaders() });
+        if (!res.ok) {
+            setFidelityReports((reports) => ({ ...reports, [id]: 'error' }));
+            return showToast('재현 품질을 확인하지 못했습니다.', 'error');
+        }
+        const report = await res.json();
+        setFidelityReports((reports) => ({ ...reports, [id]: report }));
     };
 
     const handleImportPptx = async () => {
@@ -554,6 +570,21 @@ export default function AdminTemplatesPage() {
                                     <span>{template.category}</span>
                                     <span>{template._count?.presentations || 0}개 사용중</span>
                                 </div>
+                                {template.config?.source?.kind === 'pptx' && fidelityReports[template.id] && fidelityReports[template.id] !== 'loading' && fidelityReports[template.id] !== 'error' && (() => {
+                                    const report = fidelityReports[template.id] as FidelityReport;
+                                    const clean = report.degradedObjects.length === 0 && report.missingFontFamilies.length === 0;
+                                    return (
+                                        <div className={`mt-2 rounded p-2 text-xs ${clean ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-800'}`}>
+                                            {clean ? '재현 품질 문제 없음' : (
+                                                <>
+                                                    {report.degradedObjects.length > 0 && <div>객체 {report.degradedObjects.length}개가 원본과 다르게 표시될 수 있습니다.</div>}
+                                                    {report.missingFontFamilies.length > 0 && <div>서버에 없는 폰트: {report.missingFontFamilies.join(', ')}</div>}
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                                {fidelityReports[template.id] === 'error' && <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">확인 실패</div>}
                             </div>
                             <div className="px-4 py-3 border-t bg-secondary flex gap-2">
                                 <button
@@ -563,6 +594,11 @@ export default function AdminTemplatesPage() {
                                     <Eye size={14} className="inline mr-1" />미리보기
                                 </button>
                                 {template.config?.source?.kind === 'pptx' && <button onClick={() => handleReextractPptx(template.id)} className="p-1.5 border rounded hover:bg-secondary" title="PPTX 객체 맵 재추출"><Loader2 size={14} /></button>}
+                                {template.config?.source?.kind === 'pptx' && (
+                                    <button onClick={() => handleCheckFidelity(template.id)} className="p-1.5 border rounded hover:bg-secondary" title="재현 품질 확인">
+                                        {fidelityReports[template.id] === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => handleEditTemplate(template)}
                                     className="p-1.5 border rounded hover:bg-secondary"

@@ -18,6 +18,7 @@ from .services.style_extractor import extract_template_tokens
 from .services.html_template_archive import extract_html_template_archive
 from .services.html_renderer import render_slide_png, render_slides_pdf
 from .services.pptx_to_html import pptx_to_html
+from .services.template_fidelity import fidelity_report
 
 app = FastAPI(
     title="JaSlide Renderer",
@@ -148,6 +149,19 @@ async def extract_style(file: UploadFile = File(...)):
     except Exception as error:
         raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
     return {"config": config}
+
+
+@app.post("/api/extract/fidelity")
+async def extract_fidelity(file: UploadFile = File(...)):
+    if not (file.filename or "").lower().endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="PPTX file required")
+    content = await file.read()
+    if not _is_safe_pptx_package(content):
+        raise HTTPException(status_code=400, detail="Invalid PPTX package")
+    try:
+        return fidelity_report(content)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Invalid PPTX file") from error
 
 
 @app.post("/api/extract/html-template")

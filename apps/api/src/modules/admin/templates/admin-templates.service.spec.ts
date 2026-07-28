@@ -13,7 +13,7 @@ const pptxType = 'application/vnd.openxmlformats-officedocument.presentationml.p
 describe('AdminTemplatesService PPTX import', () => {
     const prisma = { template: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn() } };
     const config = { get: jest.fn().mockReturnValue('http://renderer.internal') };
-    const storage = { upload: jest.fn(), delete: jest.fn() };
+    const storage = { upload: jest.fn(), delete: jest.fn(), getBuffer: jest.fn() };
     let service: AdminTemplatesService;
 
     const file = (overrides: Partial<Express.Multer.File> = {}) => ({
@@ -125,6 +125,28 @@ describe('AdminTemplatesService PPTX import', () => {
 
         await service.create({ name: 'Private deck', category: 'CUSTOM', config: {}, isPublic: 'false' as any });
         expect(prisma.template.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublic: false }) }));
+    });
+
+    it('fetches the stored PPTX and returns the renderer fidelity report', async () => {
+        prisma.template.findUnique.mockResolvedValue({ config: { pptxTemplate: { storageKey: 'templates/brand.pptx', originalname: 'brand.pptx' } } });
+        storage.getBuffer.mockResolvedValue(Buffer.from('pptx-bytes'));
+        mockedAxios.post.mockResolvedValue({ data: { degradedObjects: [], missingFontFamilies: ['HY헤드라인M'] } } as any);
+
+        await expect(service.fidelity('template-1')).resolves.toEqual({ degradedObjects: [], missingFontFamilies: ['HY헤드라인M'] });
+
+        expect(storage.getBuffer).toHaveBeenCalledWith('templates/brand.pptx');
+        expect(mockedAxios.post).toHaveBeenCalledWith(
+            'http://renderer.internal/api/extract/fidelity',
+            expect.any(FormData),
+            expect.objectContaining({ timeout: expect.any(Number) }),
+        );
+    });
+
+    it('rejects a fidelity check when the template has no retained PPTX source', async () => {
+        prisma.template.findUnique.mockResolvedValue({ config: {} });
+
+        await expect(service.fidelity('template-1')).rejects.toThrow(BadRequestException);
+        expect(mockedAxios.post).not.toHaveBeenCalled();
     });
 
     it('removes the retained source file when an unused PPTX template is deleted', async () => {

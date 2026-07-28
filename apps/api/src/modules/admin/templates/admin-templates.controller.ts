@@ -47,6 +47,11 @@ export class AdminTemplatesController {
         return this.templatesService.reextractPptx(id);
     }
 
+    @Get(':id/fidelity')
+    async fidelity(@Param('id') id: string) {
+        return this.templatesService.fidelity(id);
+    }
+
     @Post('import-html-zip')
     @UseInterceptors(FileInterceptor('file', {
         limits: { fileSize: 20 * 1024 * 1024 },
