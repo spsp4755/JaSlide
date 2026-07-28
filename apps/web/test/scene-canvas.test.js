@@ -76,7 +76,7 @@ test('character formatting walks text nodes, not direct span children', () => {
     // just made — the bug caught in this session's own verification earlier.
     const code = source();
 
-    assert.match(code, /createTreeWalker\(.*NodeFilter\.SHOW_TEXT\)/);
+    assert.match(code, /createTreeWalker\(block, NodeFilter\.SHOW_TEXT/);
     assert.match(code, /range\.surroundContents\(span\)/);
 });
 
@@ -85,6 +85,33 @@ test('a table cell is edited in place, sharing the paragraph/run model with text
 
     assert.match(code, /'td, th'/);
     assert.doesNotMatch(code, /<textarea/);
+});
+
+test('bullet and indent are toggled on the caret\'s own paragraph, from the shared pure helpers', () => {
+    // toggleBullet/setParagraphLevel are pure and tested in packages/shared —
+    // this only has to find the right paragraph block and hand it off.
+    const code = source();
+
+    assert.match(code, /import \{[\s\S]*?toggleBullet[\s\S]*?\} from '@jaslide\/shared'/);
+    assert.match(code, /import \{[\s\S]*?setParagraphLevel[\s\S]*?\} from '@jaslide\/shared'/);
+    assert.match(code, /toggleBulletAtCaret/);
+    assert.match(code, /changeIndentAtCaret/);
+});
+
+test('the stage is built imperatively and skipped while a caret is live', () => {
+    // Rendering scene.objects as JSX let React reconcile the paragraph markup
+    // on every scene update — which happens on every keystroke — and React
+    // resets the caret to the start of the text on each one, confirmed by
+    // typing five characters in a row in the browser and watching them land
+    // in reverse order at the front instead of appended at the caret. Building
+    // real DOM nodes and skipping the rebuild entirely while editingRef is set
+    // (the same guard the legacy canvas already validated) is what fixes it.
+    const code = source();
+
+    assert.match(code, /function buildObjectElement/);
+    assert.match(code, /if \(!stage \|\| editingRef\.current\) return;/);
+    assert.match(code, /stage\.replaceChildren\(\.\.\.scene\.objects\.map/);
+    assert.doesNotMatch(code, /scene\.objects\.map\(\(object\) => \{[\s\S]{0,80}switch \(object\.type\)[\s\S]{0,80}return <Text/);
 });
 
 test('the object type union covers every SlideObject kind', () => {

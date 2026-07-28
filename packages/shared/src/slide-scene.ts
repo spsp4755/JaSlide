@@ -27,6 +27,7 @@ export interface TextParagraph {
     runs: TextRun[];
     level?: number;
     align?: 'left' | 'center' | 'right' | 'justify';
+    bulleted?: boolean;
 }
 
 export interface BorderSide {
@@ -147,4 +148,57 @@ export function applySceneCommand(scene: SlideScene, command: SceneCommand): Sli
     const objects = [...scene.objects];
     objects[index] = next;
     return { ...scene, objects };
+}
+
+/** A half-open character range: `[start, end)` within a paragraph's plain text. */
+export interface RunRange {
+    start: number;
+    end: number;
+}
+
+/**
+ * Apply a formatting patch to exactly the runs within a character range,
+ * splitting a run at the range's boundaries when the range starts or ends
+ * partway through it. The pure core behind "select a word, hit bold" — no DOM,
+ * no browser Selection/Range, no `surroundContents` quirks: given the same
+ * three inputs, the same array comes out every time, which is what makes the
+ * browser-driven editing path in scene-canvas.tsx checkable in isolation.
+ *
+ * Runs outside `[start, end)` are returned as-is (same reference, even) so a
+ * caller can tell what changed with a shallow comparison.
+ */
+export function formatRuns(runs: TextRun[], range: RunRange, patch: Partial<TextRun>): TextRun[] {
+    if (range.end <= range.start) return runs;
+    const result: TextRun[] = [];
+    let cursor = 0;
+    for (const run of runs) {
+        const runStart = cursor;
+        const runEnd = cursor + run.text.length;
+        cursor = runEnd;
+
+        const overlapStart = Math.max(runStart, range.start);
+        const overlapEnd = Math.min(runEnd, range.end);
+        if (overlapStart >= overlapEnd) {
+            result.push(run);
+            continue;
+        }
+
+        const before = run.text.slice(0, overlapStart - runStart);
+        const middle = run.text.slice(overlapStart - runStart, overlapEnd - runStart);
+        const after = run.text.slice(overlapEnd - runStart);
+        if (before) result.push({ ...run, text: before });
+        result.push({ ...run, ...patch, text: middle });
+        if (after) result.push({ ...run, text: after });
+    }
+    return result;
+}
+
+/** Toggle a paragraph's bullet marker on or off. */
+export function toggleBullet(paragraph: TextParagraph): TextParagraph {
+    return { ...paragraph, bulleted: !paragraph.bulleted };
+}
+
+/** Move a paragraph's indent level by `delta`, never below 0. */
+export function setParagraphLevel(paragraph: TextParagraph, delta: number): TextParagraph {
+    return { ...paragraph, level: Math.max(0, (paragraph.level ?? 0) + delta) };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { setParagraphLevel, toggleBullet } from '@jaslide/shared';
 import type {
     ImageObject, LineObject, ShapeObject, SlideObject, SlideScene, TableObject, TextObject, TextParagraph, TextRun,
 } from '@jaslide/shared';
@@ -32,6 +33,10 @@ export interface SceneCanvasHandle {
     /** Paint a shape or line's colour immediately, while the command that
      *  persists it is still in flight. */
     paintColor: (objectId: string, property: 'fill' | 'stroke', color: string) => boolean;
+    /** Toggle a bullet on the paragraph the caret is currently in. */
+    toggleBulletAtCaret: () => boolean;
+    /** Nudge the indent level of the paragraph the caret is currently in. */
+    changeIndentAtCaret: (delta: number) => boolean;
 }
 
 /** What the toolbar shows for whatever is selected on the slide. */
@@ -71,13 +76,9 @@ function findObjectElement(stage: HTMLElement, objectId: string): HTMLElement | 
     return stage.querySelector<HTMLElement>(`[data-object-id="${escaped}"]`);
 }
 
-/** The container that actually holds a run of text, skipping its wrapper. */
-function textHost(element: HTMLElement): HTMLElement {
-    return element;
-}
-
 /**
- * Every text node inside a block, in document order.
+ * Every text node inside a block, in document order — skipping a bullet
+ * marker's own glyph, which is decoration rather than content.
  *
  * `range.surroundContents` wraps a sub-selection in a span *nested inside* the
  * run it was part of, not as a sibling — formatting half of an existing run
@@ -87,7 +88,11 @@ function textHost(element: HTMLElement): HTMLElement {
  * Walking actual text nodes finds a run at any nesting depth.
  */
 function textNodesIn(block: HTMLElement): Text[] {
-    const walker = block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    const walker = block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) => (
+            node.parentElement?.closest('[data-bullet-marker]') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+        ),
+    });
     const nodes: Text[] = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text);
     return nodes;
@@ -114,7 +119,7 @@ function readRun(textNode: Text): TextRun {
     };
 }
 
-/** A text object's paragraph blocks — its `<div>` children, or itself when it
+/** A text host's paragraph blocks — its `<div>` children, or itself when it
  *  has none (a freshly inserted, still-empty text box). */
 function paragraphBlocks(host: HTMLElement): HTMLElement[] {
     const blocks = Array.from(host.children).filter((child): child is HTMLElement => child.tagName === 'DIV');
@@ -125,6 +130,10 @@ function paragraphBlocks(host: HTMLElement): HTMLElement[] {
  * Serialize a text host's current DOM into paragraphs and runs. The same
  * function reads a whole text object or a single table cell — both are just
  * "a container of paragraph blocks of run spans" once rendered.
+ *
+ * Level and bullet state live only in `data-level`/`data-bulleted` — nothing
+ * about them is otherwise recoverable from computed style — so they round-trip
+ * through ordinary typing exactly like every run's own formatting does.
  */
 function readParagraphs(host: HTMLElement): TextParagraph[] {
     return paragraphBlocks(host).map((block) => ({
@@ -133,23 +142,37 @@ function readParagraphs(host: HTMLElement): TextParagraph[] {
             return runs.length ? runs : [{ text: '' }];
         })(),
         align: (block.style.textAlign || undefined) as TextParagraph['align'],
+        level: block.dataset.level ? Number(block.dataset.level) : undefined,
+        bulleted: block.dataset.bulleted === 'true' || undefined,
     }));
 }
 
-/** Rebuild a text host's blocks and runs from stored paragraphs. */
-function writeParagraphs(host: HTMLElement, paragraphs: TextParagraph[]): void {
-    host.replaceChildren(...paragraphs.map((paragraph) => {
-        const block = host.ownerDocument.createElement('div');
-        if (paragraph.align) block.style.textAlign = paragraph.align;
-        if (paragraph.level) block.style.marginLeft = `${paragraph.level * 24}px`;
-        paragraph.runs.forEach((run) => {
-            const span = host.ownerDocument.createElement('span');
-            Object.assign(span.style, textRunStyle(run));
-            span.textContent = run.text;
-            block.appendChild(span);
-        });
-        return block;
-    }));
+/** Build one paragraph's DOM: a block carrying its own level/bullet state as
+ *  data attributes, an optional non-editable bullet glyph, and one span per run. */
+function buildParagraphElement(doc: Document, paragraph: TextParagraph): HTMLDivElement {
+    const block = doc.createElement('div');
+    if (paragraph.align) block.style.textAlign = paragraph.align;
+    if (paragraph.level) { block.style.marginLeft = `${paragraph.level * 24}px`; block.dataset.level = String(paragraph.level); }
+    if (paragraph.bulleted) {
+        block.dataset.bulleted = 'true';
+        const marker = doc.createElement('span');
+        marker.dataset.bulletMarker = 'true';
+        marker.contentEditable = 'false';
+        marker.style.marginRight = '0.35em';
+        marker.textContent = '•';
+        block.appendChild(marker);
+    }
+    paragraph.runs.forEach((run) => {
+        const span = doc.createElement('span');
+        Object.assign(span.style, textRunStyle(run));
+        span.textContent = run.text;
+        block.appendChild(span);
+    });
+    return block;
+}
+
+function buildParagraphsInto(container: HTMLElement, paragraphs: TextParagraph[]): void {
+    container.replaceChildren(...paragraphs.map((paragraph) => buildParagraphElement(container.ownerDocument, paragraph)));
 }
 
 function caretRangeAt(element: HTMLElement, clientX: number, clientY: number): Range | null {
@@ -217,6 +240,15 @@ function selectionRun(element: HTMLElement): HTMLElement | undefined {
     return (node instanceof HTMLElement ? node : node.parentElement)?.closest<HTMLElement>('span') ?? undefined;
 }
 
+/** The paragraph block containing the current native selection's anchor. */
+function selectionParagraph(host: HTMLElement): HTMLElement | undefined {
+    const selection = host.ownerDocument.getSelection();
+    const node = selection?.anchorNode;
+    if (!node || !host.contains(node)) return undefined;
+    const element = node instanceof HTMLElement ? node : node.parentElement;
+    return element?.closest<HTMLElement>('div') ?? paragraphBlocks(host)[0];
+}
+
 /** How an object is currently formatted, read off the rendered element so an
  *  object nobody has edited yet still shows the scene's own font and size. */
 function readFormat(object: SlideObject, element: HTMLElement, preferredRun?: HTMLElement): SceneSelectionFormat {
@@ -237,77 +269,127 @@ function readFormat(object: SlideObject, element: HTMLElement, preferredRun?: HT
     };
 }
 
-function objectBoxStyle(object: SlideObject): Record<string, string> {
-    const style: Record<string, string> = {
-        position: 'absolute', left: `${object.x}px`, top: `${object.y}px`,
-        width: `${object.width}px`, height: `${object.height}px`, boxSizing: 'border-box',
-    };
-    if (object.rotation) style.transform = `rotate(${object.rotation}deg)`;
-    return style;
+function applyObjectBoxStyle(element: HTMLElement, object: SlideObject): void {
+    element.style.position = 'absolute';
+    element.style.left = `${object.x}px`;
+    element.style.top = `${object.y}px`;
+    element.style.width = `${object.width}px`;
+    element.style.height = `${object.height}px`;
+    element.style.boxSizing = 'border-box';
+    if (object.rotation) element.style.transform = `rotate(${object.rotation}deg)`;
 }
 
-function TextRuns({ paragraphs }: { paragraphs: TextParagraph[] }) {
-    return <>{paragraphs.map((paragraph, index) => (
-        <div key={index} style={{ textAlign: paragraph.align, marginLeft: paragraph.level ? paragraph.level * 24 : undefined }}>
-            {paragraph.runs.map((run, runIndex) => <span key={runIndex} style={textRunStyle(run)}>{run.text}</span>)}
-        </div>
-    ))}</>;
+function buildTextElement(doc: Document, object: TextObject): HTMLElement {
+    const element = doc.createElement('div');
+    element.dataset.object = 'true';
+    element.dataset.objectId = object.id;
+    element.dataset.objectType = 'text';
+    applyObjectBoxStyle(element, object);
+    buildParagraphsInto(element, object.paragraphs);
+    return element;
 }
 
-function TextObjectView({ object }: { object: TextObject }) {
-    return <div data-object="true" data-object-id={object.id} data-object-type="text" style={objectBoxStyle(object)}>
-        <TextRuns paragraphs={object.paragraphs} />
-    </div>;
-}
+function buildTableElement(doc: Document, object: TableObject): HTMLElement {
+    const element = doc.createElement('div');
+    element.dataset.object = 'true';
+    element.dataset.objectId = object.id;
+    element.dataset.objectType = 'table';
+    applyObjectBoxStyle(element, object);
 
-function TableObjectView({ object }: { object: TableObject }) {
     const rowTotal = object.rowHeights.reduce((sum, value) => sum + value, 0) || 1;
     const colTotal = object.columnWidths.reduce((sum, value) => sum + value, 0) || 1;
-    return <div data-object="true" data-object-id={object.id} data-object-type="table" style={objectBoxStyle(object)}>
-        <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-            <colgroup>{object.columnWidths.map((width, index) => <col key={index} style={{ width: `${(width / colTotal) * 100}%` }} />)}</colgroup>
-            <tbody>
-                {object.cells.map((row, rowIndex) => (
-                    <tr key={rowIndex} style={{ height: `${(object.rowHeights[rowIndex] / rowTotal) * 100}%` }}>
-                        {row.map((cell, colIndex) => (
-                            <td key={colIndex} style={{ verticalAlign: 'top', border: '1px solid #D1D5DB', padding: 8, background: cell.fill }}>
-                                <TextRuns paragraphs={cell.paragraphs} />
-                            </td>
-                        ))}
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>;
+    const table = doc.createElement('table');
+    table.style.cssText = 'width:100%;height:100%;border-collapse:collapse;table-layout:fixed';
+    const colgroup = doc.createElement('colgroup');
+    object.columnWidths.forEach((width) => {
+        const col = doc.createElement('col');
+        col.style.width = `${(width / colTotal) * 100}%`;
+        colgroup.appendChild(col);
+    });
+    table.appendChild(colgroup);
+    const tbody = doc.createElement('tbody');
+    object.cells.forEach((row, rowIndex) => {
+        const tr = doc.createElement('tr');
+        tr.style.height = `${(object.rowHeights[rowIndex] / rowTotal) * 100}%`;
+        row.forEach((cell) => {
+            const td = doc.createElement('td');
+            td.style.cssText = 'vertical-align:top;border:1px solid #D1D5DB;padding:8px';
+            if (cell.fill) td.style.background = cell.fill;
+            buildParagraphsInto(td, cell.paragraphs);
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    element.appendChild(table);
+    return element;
 }
 
-function ShapeObjectView({ object }: { object: ShapeObject }) {
-    return <div
-        data-object="true" data-object-id={object.id} data-object-type="shape"
-        style={objectBoxStyle(object)}
-        dangerouslySetInnerHTML={{ __html: shapeSvgMarkup(object.shape, object.width, object.height, object.fill, object.stroke) }}
-    />;
+function buildShapeElement(doc: Document, object: ShapeObject): HTMLElement {
+    const element = doc.createElement('div');
+    element.dataset.object = 'true';
+    element.dataset.objectId = object.id;
+    element.dataset.objectType = 'shape';
+    applyObjectBoxStyle(element, object);
+    element.innerHTML = shapeSvgMarkup(object.shape, object.width, object.height, object.fill, object.stroke);
+    return element;
 }
 
-function LineObjectView({ object }: { object: LineObject }) {
-    return <div
-        data-object="true" data-object-id={object.id} data-object-type="line"
-        style={objectBoxStyle(object)}
-        dangerouslySetInnerHTML={{ __html: shapeSvgMarkup(object.lineStyle, object.width, object.height, 'none', object.stroke) }}
-    />;
+function buildLineElement(doc: Document, object: LineObject): HTMLElement {
+    const element = doc.createElement('div');
+    element.dataset.object = 'true';
+    element.dataset.objectId = object.id;
+    element.dataset.objectType = 'line';
+    applyObjectBoxStyle(element, object);
+    element.innerHTML = shapeSvgMarkup(object.lineStyle, object.width, object.height, 'none', object.stroke);
+    return element;
 }
 
-function ImageObjectView({ object }: { object: ImageObject }) {
-    return object.src
-        ? <img data-object="true" data-object-id={object.id} data-object-type="image" style={objectBoxStyle(object)} src={object.src} alt="" />
-        : <div data-object="true" data-object-id={object.id} data-object-type="image" style={{ ...objectBoxStyle(object), background: '#E5E7EB' }} />;
+function buildImageElement(doc: Document, object: ImageObject): HTMLElement {
+    if (object.src) {
+        const img = doc.createElement('img');
+        img.dataset.object = 'true';
+        img.dataset.objectId = object.id;
+        img.dataset.objectType = 'image';
+        applyObjectBoxStyle(img, object);
+        img.src = object.src;
+        img.alt = '';
+        return img;
+    }
+    const placeholder = doc.createElement('div');
+    placeholder.dataset.object = 'true';
+    placeholder.dataset.objectId = object.id;
+    placeholder.dataset.objectType = 'image';
+    applyObjectBoxStyle(placeholder, object);
+    placeholder.style.background = '#E5E7EB';
+    return placeholder;
+}
+
+function buildObjectElement(doc: Document, object: SlideObject): HTMLElement {
+    switch (object.type) {
+        case 'text': return buildTextElement(doc, object);
+        case 'table': return buildTableElement(doc, object);
+        case 'shape': return buildShapeElement(doc, object);
+        case 'line': return buildLineElement(doc, object);
+        case 'image': return buildImageElement(doc, object);
+    }
 }
 
 /**
  * The slide, rendered by the browser from the canonical SlideScene and edited
- * in place. Every object type gets its own renderer so a shape's colour lands
- * on its SVG path and never on the wrapper — painting a wrapper's background
- * once turned an arrow into a colored rectangle (fixed in 6ca5d80).
+ * in place.
+ *
+ * Objects are built as real DOM nodes by a single effect, not returned as JSX
+ * — rendering scene.objects declaratively let React reconcile the paragraph
+ * markup on every scene update, which happens on every keystroke, and React
+ * resets the caret to the start of the text on each one. Building the DOM
+ * imperatively and skipping that build entirely while a caret is live (the
+ * same guard the legacy canvas already validated) is what lets typing behave
+ * normally; every event handler below still just queries the live DOM.
+ *
+ * Every object type gets its own builder so a shape's colour lands on its SVG
+ * path and never on the wrapper — painting a wrapper's background once turned
+ * an arrow into a colored rectangle (fixed in 6ca5d80).
  */
 export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(function SceneCanvas({
     scene, selectedObjectId, onSelectObject, onSelectionFormat, onCommand,
@@ -331,6 +413,14 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(funct
         observer.observe(frame);
         return () => observer.disconnect();
     }, []);
+
+    // The one place the stage's objects are built. Skipped entirely while a
+    // caret is live in the slide — see the component doc comment for why.
+    useLayoutEffect(() => {
+        const stage = stageRef.current;
+        if (!stage || editingRef.current) return;
+        stage.replaceChildren(...scene.objects.map((object) => buildObjectElement(stage.ownerDocument, object)));
+    }, [scene]);
 
     // Track the selected object's rendered box so the outline and handles sit
     // on the element itself rather than a parallel copy of its geometry.
@@ -392,7 +482,7 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(funct
             if (!element.contains(range.commonAncestorContainer)) return;
             savedRangeRef.current = selection.isCollapsed ? null : range.cloneRange();
             const object = scene.objects.find((item) => item.id === objectId);
-            if (object) onSelectionFormat(readFormat(object, textHost(element), selectionRun(element)));
+            if (object) onSelectionFormat(readFormat(object, element, selectionRun(element)));
         };
         const onBlur = () => {
             // A toolbar control temporarily takes focus without ending text edit
@@ -461,7 +551,60 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(funct
         return paths.length > 0;
     }, []);
 
-    useImperativeHandle(ref, () => ({ formatSelection, paintColor }), [formatSelection, paintColor]);
+    /**
+     * Apply a pure paragraph transform (bullet/indent) to the caret's own
+     * paragraph, mutating only that block's own attributes and its bullet
+     * marker — never its run spans. Rebuilding the runs (as `buildParagraphsInto`
+     * does) would destroy the very caret this is meant to act at: the first
+     * version of this method did exactly that, so toggling a bullet worked but
+     * silently lost the caret, and immediately indenting after it found no
+     * selection left to indent.
+     */
+    const applyToCaretParagraph = useCallback((transform: (paragraph: TextParagraph) => TextParagraph): boolean => {
+        const element = editingRef.current;
+        if (!element) return false;
+        const block = selectionParagraph(element);
+        if (!block) return false;
+
+        const before: TextParagraph = {
+            runs: [],
+            align: (block.style.textAlign || undefined) as TextParagraph['align'],
+            level: block.dataset.level ? Number(block.dataset.level) : undefined,
+            bulleted: block.dataset.bulleted === 'true' || undefined,
+        };
+        const after = transform(before);
+
+        if (after.level) { block.style.marginLeft = `${after.level * 24}px`; block.dataset.level = String(after.level); }
+        else { block.style.marginLeft = ''; delete block.dataset.level; }
+
+        const existingMarker = block.querySelector<HTMLElement>('[data-bullet-marker]');
+        if (after.bulleted && !existingMarker) {
+            const marker = block.ownerDocument.createElement('span');
+            marker.dataset.bulletMarker = 'true';
+            marker.contentEditable = 'false';
+            marker.style.marginRight = '0.35em';
+            marker.textContent = '•';
+            block.insertBefore(marker, block.firstChild);
+            block.dataset.bulleted = 'true';
+        } else if (!after.bulleted && existingMarker) {
+            existingMarker.remove();
+            delete block.dataset.bulleted;
+        }
+
+        const owner = element.closest<HTMLElement>('[data-object-id]');
+        if (owner?.dataset.objectId) commitParagraphs(element, owner.dataset.objectId);
+        return true;
+    }, [commitParagraphs]);
+
+    const toggleBulletAtCaret = useCallback(() => applyToCaretParagraph(toggleBullet), [applyToCaretParagraph]);
+    const changeIndentAtCaret = useCallback(
+        (delta: number) => applyToCaretParagraph((paragraph) => setParagraphLevel(paragraph, delta)),
+        [applyToCaretParagraph],
+    );
+
+    useImperativeHandle(ref, () => ({ formatSelection, paintColor, toggleBulletAtCaret, changeIndentAtCaret }), [
+        formatSelection, paintColor, toggleBulletAtCaret, changeIndentAtCaret,
+    ]);
 
     const startDrag = useCallback((event: React.PointerEvent, objectId: string, handle: ResizeHandle | null) => {
         const object = scene.objects.find((item) => item.id === objectId);
@@ -559,18 +702,7 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(funct
                 }}
                 onPointerDown={onStagePointerDown}
                 onDoubleClick={onStageDoubleClick}
-            >
-                {scene.objects.map((object) => {
-                    switch (object.type) {
-                        case 'text': return <TextObjectView key={object.id} object={object} />;
-                        case 'table': return <TableObjectView key={object.id} object={object} />;
-                        case 'shape': return <ShapeObjectView key={object.id} object={object} />;
-                        case 'line': return <LineObjectView key={object.id} object={object} />;
-                        case 'image': return <ImageObjectView key={object.id} object={object} />;
-                        default: return null;
-                    }
-                })}
-            </div>
+            />
             {/* Overlay lives outside the stage but shares its scale, so handles stay
                 a constant size on screen instead of growing with the slide. */}
             {selectedBox && scale > 0 && (
