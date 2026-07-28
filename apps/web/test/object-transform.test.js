@@ -4,7 +4,7 @@ const { compileModule } = require('./compile-module');
 
 // Real behaviour, not a source-pattern match: eight handles with mirrored sign
 // conventions is exactly where geometry bugs hide. Compile the module and run it.
-const { resizeBox, nudgeBox, snapBox, RESIZE_HANDLES, MIN_WIDTH, MIN_HEIGHT, SLIDE_WIDTH } = compileModule('src/lib/object-transform.ts');
+const { resizeBox, nudgeBox, snapBox, RESIZE_HANDLES, LINE_RESIZE_HANDLES, MIN_WIDTH, MIN_HEIGHT, SLIDE_WIDTH } = compileModule('src/lib/object-transform.ts');
 
 const box = { left: 100, top: 100, width: 200, height: 100 };
 
@@ -37,6 +37,32 @@ test('the two remaining corners move both axes at once', () => {
     assert.deepEqual(resizeBox(box, 'nw', 50, 30), { left: 150, top: 130, width: 150, height: 70 });
     assert.deepEqual(resizeBox(box, 'sw', 50, 30), { left: 150, top: 100, width: 150, height: 130 });
     assert.deepEqual(resizeBox(box, 'ne', 50, 30), { left: 100, top: 130, width: 250, height: 70 });
+});
+
+test('every resize handle has its own visible canvas position', () => {
+    assert.deepEqual(
+        RESIZE_HANDLES.map(({ handle, x, y }) => [handle, x, y]),
+        [['nw', 0, 0], ['n', 50, 0], ['ne', 100, 0], ['e', 100, 50], ['se', 100, 100], ['s', 50, 100], ['sw', 0, 100], ['w', 0, 50]],
+    );
+});
+
+test('Shift keeps an object proportioned while its opposite corner stays anchored', () => {
+    const result = resizeBox(box, 'se', 50, 10, { lockAspectRatio: true });
+
+    assert.deepEqual(result, { left: 100, top: 100, width: 250, height: 125 });
+    assert.equal(result.width / result.height, box.width / box.height);
+});
+
+test('Ctrl resizes around the object centre', () => {
+    const result = resizeBox(box, 'se', 50, 40, { fromCenter: true });
+
+    assert.deepEqual(result, { left: 50, top: 60, width: 300, height: 180 });
+    assert.equal(result.left + result.width / 2, 200);
+    assert.equal(result.top + result.height / 2, 150);
+});
+
+test('a line exposes only its two endpoint handles', () => {
+    assert.deepEqual(LINE_RESIZE_HANDLES.map((item) => item.handle), ['ne', 'sw']);
 });
 
 test('an edge dragged past its opposite stops at the minimum instead of inverting', () => {

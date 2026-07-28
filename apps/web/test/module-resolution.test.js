@@ -180,7 +180,7 @@ test('manual editing has the handles, keys and stacking Google Slides users expe
 
     // The eight-handle ring moved to the canvas along with dragging; a single
     // bottom-right handle meant an object could only ever grow down and right.
-    assert.match(canvas, /RESIZE_HANDLES\.map/);
+    assert.match(canvas, /LINE_RESIZE_HANDLES : RESIZE_HANDLES/);
     assert.match(canvas, /startDrag\(event, handle\)/);
     assert.match(canvas, /startDrag\(event, null\)/);
 

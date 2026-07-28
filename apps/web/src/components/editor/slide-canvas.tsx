@@ -1,7 +1,7 @@
 'use client';
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-import { RESIZE_HANDLES, resizeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
+import { LINE_RESIZE_HANDLES, RESIZE_HANDLES, resizeBox, snapBox, type ResizeHandle } from '@/lib/object-transform';
 import { shapeSvgMarkup } from '@/lib/shape-glyphs';
 import {
     CANVAS_PX_PER_PT, SLIDE_H, SLIDE_W, canvasScale, objectEditAlign, objectEditBoxStyle, objectEditText, objectEditTextStyle,
@@ -553,7 +553,10 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
             }
             if (handle) {
                 setSnapGuides(null);
-                const box = resizeBox(initial, handle, dx, dy);
+                const box = resizeBox(initial, handle, dx, dy, {
+                    lockAspectRatio: moveEvent.shiftKey,
+                    fromCenter: moveEvent.ctrlKey || moveEvent.metaKey,
+                });
                 Object.assign(element.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
                 setSelectedBox(box);
                 onTransform(selectedObjectId, box);
@@ -641,12 +644,13 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
                         width: selectedBox.width * scale, height: selectedBox.height * scale,
                     }}
                 >
-                    {RESIZE_HANDLES.map(({ handle, label, cursor, position }) => (
+                    {(objectEdits.find((edit) => edit.objectId === selectedObjectId)?.addLine ? LINE_RESIZE_HANDLES : RESIZE_HANDLES).map(({ handle, label, cursor, x, y }) => (
                         <button
                             key={handle}
                             type="button"
                             aria-label={`크기 조절 ${label}`}
-                            className={`pointer-events-auto absolute ${position} ${cursor} h-3 w-3 rounded-sm border border-purple-700 bg-background`}
+                            className="pointer-events-auto absolute h-3 w-3 rounded-sm border border-purple-700 bg-background"
+                            style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)', cursor }}
                             onPointerDown={(event) => startDrag(event, handle)}
                         />
                     ))}

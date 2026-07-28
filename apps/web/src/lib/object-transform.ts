@@ -16,29 +16,46 @@ export interface Box {
 }
 
 /** Handle ring in visual order, with the cursor and corner offsets for each. */
-export const RESIZE_HANDLES: readonly { handle: ResizeHandle; label: string; cursor: string; position: string }[] = [
-    { handle: 'nw', label: '왼쪽 위', cursor: 'cursor-nwse-resize', position: '-top-1.5 -left-1.5' },
-    { handle: 'n', label: '위', cursor: 'cursor-ns-resize', position: '-top-1.5 left-1/2 -translate-x-1/2' },
-    { handle: 'ne', label: '오른쪽 위', cursor: 'cursor-nesw-resize', position: '-top-1.5 -right-1.5' },
-    { handle: 'e', label: '오른쪽', cursor: 'cursor-ew-resize', position: 'top-1/2 -right-1.5 -translate-y-1/2' },
-    { handle: 'se', label: '오른쪽 아래', cursor: 'cursor-nwse-resize', position: '-bottom-1.5 -right-1.5' },
-    { handle: 's', label: '아래', cursor: 'cursor-ns-resize', position: '-bottom-1.5 left-1/2 -translate-x-1/2' },
-    { handle: 'sw', label: '왼쪽 아래', cursor: 'cursor-nesw-resize', position: '-bottom-1.5 -left-1.5' },
-    { handle: 'w', label: '왼쪽', cursor: 'cursor-ew-resize', position: 'top-1/2 -left-1.5 -translate-y-1/2' },
+export const RESIZE_HANDLES: readonly { handle: ResizeHandle; label: string; cursor: string; position: string; x: number; y: number }[] = [
+    { handle: 'nw', label: '왼쪽 위', cursor: 'nwse-resize', position: '-top-1.5 -left-1.5', x: 0, y: 0 },
+    { handle: 'n', label: '위', cursor: 'ns-resize', position: '-top-1.5 left-1/2 -translate-x-1/2', x: 50, y: 0 },
+    { handle: 'ne', label: '오른쪽 위', cursor: 'nesw-resize', position: '-top-1.5 -right-1.5', x: 100, y: 0 },
+    { handle: 'e', label: '오른쪽', cursor: 'ew-resize', position: 'top-1/2 -right-1.5 -translate-y-1/2', x: 100, y: 50 },
+    { handle: 'se', label: '오른쪽 아래', cursor: 'nwse-resize', position: '-bottom-1.5 -right-1.5', x: 100, y: 100 },
+    { handle: 's', label: '아래', cursor: 'ns-resize', position: '-bottom-1.5 left-1/2 -translate-x-1/2', x: 50, y: 100 },
+    { handle: 'sw', label: '왼쪽 아래', cursor: 'nesw-resize', position: '-bottom-1.5 -left-1.5', x: 0, y: 100 },
+    { handle: 'w', label: '왼쪽', cursor: 'ew-resize', position: 'top-1/2 -left-1.5 -translate-y-1/2', x: 0, y: 50 },
 ] as const;
+
+/** Lines resize from their two ends, rather than as a rectangle with eight handles. */
+export const LINE_RESIZE_HANDLES = RESIZE_HANDLES.filter(({ handle }) => handle === 'ne' || handle === 'sw');
 
 export const MIN_WIDTH = 40;
 export const MIN_HEIGHT = 24;
+
+export interface ResizeOptions {
+    /** Google Slides: Shift + resize keeps the object's original proportions. */
+    lockAspectRatio?: boolean;
+    /** Google Slides: Ctrl/⌘ + resize expands from the centre. */
+    fromCenter?: boolean;
+}
 
 /**
  * Apply a pointer delta to the box, anchoring the edges the handle does not drag.
  * Dragging an edge past its opposite one stops at the minimum instead of inverting.
  */
-export function resizeBox(box: Box, handle: ResizeHandle, dx: number, dy: number): Box {
+export function resizeBox(box: Box, handle: ResizeHandle, dx: number, dy: number, options: ResizeOptions = {}): Box {
     const west = handle.includes('w');
     const east = handle.includes('e');
     const north = handle.startsWith('n');
     const south = handle.startsWith('s');
+    const horizontal = west || east;
+    const vertical = north || south;
+
+    if (options.fromCenter) {
+        dx *= 2;
+        dy *= 2;
+    }
 
     let { left, top, width, height } = box;
 
@@ -55,6 +72,35 @@ export function resizeBox(box: Box, handle: ResizeHandle, dx: number, dy: number
     } else if (north) {
         height = Math.max(MIN_HEIGHT, box.height - dy);
         top = box.top + box.height - height;
+    }
+
+    if (options.lockAspectRatio) {
+        const ratio = box.width / box.height;
+        const byWidth = (value: number) => {
+            width = Math.max(MIN_WIDTH, MIN_HEIGHT * ratio, value);
+            height = width / ratio;
+        };
+        const byHeight = (value: number) => {
+            height = Math.max(MIN_HEIGHT, MIN_WIDTH / ratio, value);
+            width = height * ratio;
+        };
+        if (horizontal && vertical) {
+            Math.abs(width / box.width - 1) >= Math.abs(height / box.height - 1) ? byWidth(width) : byHeight(height);
+        } else if (horizontal) {
+            byWidth(width);
+        } else {
+            byHeight(height);
+        }
+    }
+
+    if (options.fromCenter) {
+        left = box.left + (box.width - width) / 2;
+        top = box.top + (box.height - height) / 2;
+    } else {
+        if (west) left = box.left + box.width - width;
+        else if (!horizontal && options.lockAspectRatio) left = box.left + (box.width - width) / 2;
+        if (north) top = box.top + box.height - height;
+        else if (!vertical && options.lockAspectRatio) top = box.top + (box.height - height) / 2;
     }
 
     return { left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) };
