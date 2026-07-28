@@ -57,13 +57,25 @@ podman push harbor.example.internal/jaslide/redis:v0.5.0
 
 Create the `jaslide` project in Harbor first, and `podman login harbor.example.internal` before pushing.
 
-**4. Deploy:**
+**4. Deploy (first time only — create the registry secret as a YAML file so it never needs retyping):**
 
 ```bash
-kubectl -n jaslide create secret docker-registry harbor-regcred \
-  --docker-server=harbor.example.internal --docker-username=<user> --docker-password=<pass>
+kubectl create secret docker-registry harbor-regcred \
+  --docker-server=harbor.example.internal --docker-username=<user> --docker-password=<pass> \
+  --namespace jaslide --dry-run=client -o yaml > harbor-regcred.local.yaml
+kubectl apply -f harbor-regcred.local.yaml
 kubectl apply -k deploy/k8s
 kubectl -n jaslide get pods -w
 ```
+
+`--dry-run=client` only renders the YAML, it does not touch the cluster. Keep `harbor-regcred.local.yaml` outside git (it holds real credentials) and reapply it only if the credentials change — it is not part of every release.
+
+**5. Every later release:** edit the 5 `newTag` values in [deploy/k8s/kustomization.yaml](../deploy/k8s/kustomization.yaml) to the new version (instead of hunting through `jaslide-k8s.yaml`), then repeat steps 1-3 for the new tag and:
+
+```bash
+kubectl apply -k deploy/k8s
+```
+
+No `kubectl rollout restart` needed — each release uses a distinct image tag, so Kubernetes detects the changed pod template and rolls the deployments automatically.
 
 Readiness: `curl https://jaslide.internal/api/health` once the Ingress resolves. The default web image uses `/api`; rebuild it only when an external API origin is deliberately configured.

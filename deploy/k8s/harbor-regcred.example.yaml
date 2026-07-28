@@ -1,0 +1,27 @@
+# harbor-regcred Secret 예시. 이 파일 자체는 kustomization.yaml의 resources에
+# 포함되지 않습니다 — placeholder 값 그대로 적용되는 사고를 막기 위해서입니다.
+#
+# 실제 값이 채워진 사본은 git에 커밋하지 말고, 클러스터에만 적용해서 보관하세요.
+# 자격 증명이 바뀌지 않는 한 릴리즈마다 다시 만들 필요가 없습니다.
+#
+# 만드는 법 (dry-run이라 클러스터를 건드리지 않고 YAML만 생성합니다):
+#   kubectl create secret docker-registry harbor-regcred \
+#     --docker-server=harbor.CHANGE_ME \
+#     --docker-username=CHANGE_ME \
+#     --docker-password=CHANGE_ME \
+#     --namespace jaslide \
+#     --dry-run=client -o yaml > harbor-regcred.local.yaml
+#
+# 적용 (최초 1회, 이후 자격 증명이 바뀔 때만 다시):
+#   kubectl apply -f harbor-regcred.local.yaml
+#
+# 아래는 그 결과물의 형태입니다 — 참고용이며 직접 편집해 적용하지 마세요.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: harbor-regcred
+  namespace: jaslide
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: |
+    {"auths":{"harbor.CHANGE_ME":{"username":"CHANGE_ME","password":"CHANGE_ME","auth":"CHANGE_ME_BASE64_OF_username:password"}}}
