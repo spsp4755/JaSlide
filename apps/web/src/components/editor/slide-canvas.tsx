@@ -112,6 +112,71 @@ function textHost(element: HTMLElement): HTMLElement {
     return element.tagName === 'TD' || element.tagName === 'TH' ? element : element;
 }
 
+function caretRangeAt(element: HTMLElement, clientX: number, clientY: number): Range | null {
+    const document = element.ownerDocument as Document & {
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+    const range = document.caretRangeFromPoint?.(clientX, clientY);
+    return range && element.contains(range.startContainer) ? range : null;
+}
+
+/** Put the native selection on the word the user double-clicked. */
+function selectWordAt(element: HTMLElement, clientX: number, clientY: number): void {
+    const document = element.ownerDocument;
+    const range = caretRangeAt(element, clientX, clientY);
+    const selection = document.getSelection();
+    if (!range || !selection) return;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const movable = selection as Selection & {
+        modify?: (alter: 'move' | 'extend', direction: 'backward' | 'forward', granularity: 'word') => void;
+    };
+    movable.modify?.('move', 'backward', 'word');
+    movable.modify?.('extend', 'forward', 'word');
+}
+
+/** Native text selection is unreliable inside the scaled slide, so own the range. */
+function beginTextSelection(element: HTMLElement, event: React.PointerEvent): void {
+    const anchor = caretRangeAt(element, event.clientX, event.clientY);
+    const selection = element.ownerDocument.getSelection();
+    const view = element.ownerDocument.defaultView;
+    if (!anchor || !selection || !view) return;
+    event.preventDefault();
+
+    const selectTo = (focus: Range) => {
+        const range = element.ownerDocument.createRange();
+        if (anchor.compareBoundaryPoints(Range.START_TO_START, focus) <= 0) {
+            range.setStart(anchor.startContainer, anchor.startOffset);
+            range.setEnd(focus.startContainer, focus.startOffset);
+        } else {
+            range.setStart(focus.startContainer, focus.startOffset);
+            range.setEnd(anchor.startContainer, anchor.startOffset);
+        }
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+    selectTo(anchor);
+
+    const move = (moveEvent: PointerEvent) => {
+        const focus = caretRangeAt(element, moveEvent.clientX, moveEvent.clientY);
+        if (focus) selectTo(focus);
+    };
+    const stop = () => {
+        view.removeEventListener('pointermove', move);
+        view.removeEventListener('pointerup', stop);
+    };
+    view.addEventListener('pointermove', move);
+    view.addEventListener('pointerup', stop, { once: true });
+}
+
+/** The run under the current native selection, when it belongs to this object. */
+function selectionRun(element: HTMLElement): HTMLElement | undefined {
+    const selection = element.ownerDocument.getSelection();
+    const node = selection?.anchorNode;
+    if (!node || !element.contains(node)) return;
+    return (node instanceof HTMLElement ? node : node.parentElement)?.closest<HTMLElement>('span') ?? undefined;
+}
+
 /**
  * Write plain text into an object, keeping the deck's own type.
  *
@@ -328,15 +393,15 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         setSelectedBox(element
             ? { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight }
             : null);
-        onSelectionFormat(element ? readFormat(element) : null);
+        onSelectionFormat(element ? readFormat(element, selectionRun(element)) : null);
     }, [selectedObjectId, objectEdits, baseHtml, scale, onSelectionFormat]);
 
     const stopEditing = useCallback(() => {
         const element = editingRef.current;
         if (!element) return;
+        editingRef.current = null;
         element.removeAttribute('contentEditable');
         element.blur();
-        editingRef.current = null;
         savedRangeRef.current = null;
         // Dropping contentEditable does not drop the highlight. Leaving it meant a
         // drag-selection stayed lit across the slide until the next keystroke
@@ -370,13 +435,12 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
             const range = selection.getRangeAt(0);
             if (!element.contains(range.commonAncestorContainer)) return;
             savedRangeRef.current = selection.isCollapsed ? null : range.cloneRange();
-            const anchor = selection.anchorNode instanceof HTMLElement
-                ? selection.anchorNode
-                : selection.anchorNode?.parentElement;
-            const selectedRun = anchor?.closest<HTMLElement>('span') ?? undefined;
-            onSelectionFormat(readFormat(element, selectedRun));
+            onSelectionFormat(readFormat(element, selectionRun(element)));
         };
         const onBlur = () => {
+            // A toolbar control temporarily takes focus without ending text edit
+            // mode; Esc or selecting another object calls stopEditing explicitly.
+            if (editingRef.current === element) return;
             element.removeEventListener('input', onInput);
             element.removeEventListener('keydown', onKeyDown);
             element.removeEventListener('blur', onBlur);
@@ -495,7 +559,9 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         const target = event.target as HTMLElement;
         // A caret is in this element: let the pointer select text rather than
         // dragging the object out from under it.
-        if (editingRef.current?.isContentEditable && editingRef.current.contains(target)) return;
+        if (editingRef.current?.getAttribute('contenteditable') === 'true' && editingRef.current.contains(target)) {
+            beginTextSelection(editingRef.current, event); return;
+        }
         // Anywhere else ends editing, without waiting for a blur that a
         // pointerdown on another element does not always deliver.
         stopEditing();
@@ -522,13 +588,14 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         const target = event.target as HTMLElement;
         const object = target.closest<HTMLElement>('[data-object-id], [data-object="true"]');
         if (!object || object.dataset.objectType === 'image') return;
-        event.preventDefault();
         event.stopPropagation();
         const id = object.dataset.objectId;
         if (!id) return;
         onSelectObject(id);
         // A table is edited cell by cell, the way it is in a deck.
-        beginEditing(target.closest<HTMLElement>('td, th') ?? object, id);
+        const editTarget = target.closest<HTMLElement>('td, th') ?? object;
+        beginEditing(editTarget, id);
+        selectWordAt(editTarget, event.clientX, event.clientY);
     };
 
     return (

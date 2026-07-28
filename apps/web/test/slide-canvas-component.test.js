@@ -58,6 +58,7 @@ test('a table cell is edited where it sits', () => {
 
 test('a second click can enter text editing without arming an immediate object drag', () => {
     const code = source();
+    const doubleClickHandler = code.match(/const onStageDoubleClick = \(event: React\.MouseEvent\) => \{[\s\S]*?\n    \};/)?.[0] ?? '';
 
     // The old pointer-down handler called preventDefault before the browser had
     // a chance to dispatch dblclick. Its leftover window pointermove listener
@@ -65,6 +66,9 @@ test('a second click can enter text editing without arming an immediate object d
     assert.match(code, /let dragging = Boolean\(handle\)/);
     assert.match(code, /if \(!dragging && Math\.hypot\(dx, dy\) < 4\) return;/);
     assert.match(code, /if \(handle\) event\.preventDefault\(\);/);
+    assert.doesNotMatch(doubleClickHandler, /event\.preventDefault\(\)/);
+    assert.match(code, /function selectWordAt\(element: HTMLElement, clientX: number, clientY: number\)/);
+    assert.match(doubleClickHandler, /selectWordAt\(editTarget, event\.clientX, event\.clientY\)/);
 });
 
 test('a drag-selection is released when the caret leaves', () => {
@@ -90,7 +94,7 @@ test('the canvas reports how the selection is formatted, for the toolbar', () =>
     const code = source();
 
     assert.match(code, /function readFormat/);
-    assert.match(code, /onSelectionFormat\(element \? readFormat\(element\) : null\)/);
+    assert.match(code, /onSelectionFormat\(element \? readFormat\(element, selectionRun\(element\)\) : null\)/);
     // Points, the unit the deck states and python-pptx wants back. CSS pt is
     // 1.333px, not the canvas 2px-per-point, so the conversion is explicit.
     assert.match(code, /parseFloat\(runStyle\.fontSize\) \/ CANVAS_PX_PER_PT/);
@@ -100,7 +104,8 @@ test('the toolbar reads the highlighted run instead of the object’s first run'
     const code = source();
 
     assert.match(code, /function readFormat\(element: HTMLElement, preferredRun\?: HTMLElement\)/);
-    assert.match(code, /onSelectionFormat\(readFormat\(element, selectedRun\)\)/);
+    assert.match(code, /selectionRun\(element\)/);
+    assert.match(code, /onSelectionFormat\(element \? readFormat\(element, selectionRun\(element\)\) : null\)/);
 });
 
 test('a selected word can be formatted without formatting the whole object', () => {
@@ -127,7 +132,11 @@ test('a toolbar click restores the text range it moved focus away from', () => {
     assert.match(code, /document\.addEventListener\('selectionchange', onSelectionChange\)/);
     assert.match(code, /savedRangeRef\.current = selection\.isCollapsed \? null : range\.cloneRange\(\)/);
     assert.match(code, /const range = liveRange \?\? savedRangeRef\.current/);
-    assert.match(code, /if \(editingRef\.current\?\.isContentEditable && editingRef\.current\.contains\(target\)\) return;/);
+    assert.match(code, /editingRef\.current\?\.getAttribute\('contenteditable'\) === 'true'/);
+    assert.match(code, /function beginTextSelection\(element: HTMLElement, event: React\.PointerEvent\)/);
+    assert.match(code, /beginTextSelection\(editingRef\.current, event\); return;/);
+    assert.match(code, /if \(editingRef\.current === element\) return;/);
+    assert.match(code, /editingRef\.current = null;[\s\S]*element\.blur\(\)/);
 });
 
 test('a table cell serializes character formatting through the same run path', () => {
