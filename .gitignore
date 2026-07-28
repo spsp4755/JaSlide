@@ -56,3 +56,6 @@ docker-compose.override.yml
 # Uploads
 uploads/*
 !uploads/.gitkeep
+
+# Test compile scratch (compile-module.js)
+**/.test-compile/

@@ -35,3 +35,49 @@ export function snapAgainstNeighbours(box: Box, scene: SlideScene, movingId: str
 
 export { applySceneCommand };
 export type { SceneCommand };
+
+/**
+ * Undo/redo history for a scene, sitting above scene-canvas.tsx rather than
+ * inside it — the canvas is a controlled component that only ever emits
+ * commands and renders whatever scene it is handed (see its own doc comment),
+ * so the history that makes those commands reversible belongs one level up.
+ */
+export interface CommandStack {
+    past: SlideScene[];
+    present: SlideScene;
+    future: SlideScene[];
+}
+
+export function initCommandStack(scene: SlideScene): CommandStack {
+    return { past: [], present: scene, future: [] };
+}
+
+/** Apply a command and push the prior scene onto the undo history. A fresh
+ *  action after an undo discards whatever redo branch was abandoned — the
+ *  same rule every editor with undo/redo follows. */
+export function pushSceneCommand(stack: CommandStack, command: SceneCommand): CommandStack {
+    return { past: [...stack.past, stack.present], present: applySceneCommand(stack.present, command), future: [] };
+}
+
+export function canUndo(stack: CommandStack): boolean {
+    return stack.past.length > 0;
+}
+
+export function canRedo(stack: CommandStack): boolean {
+    return stack.future.length > 0;
+}
+
+/** Step back one scene. A no-op, not an error, when there is nothing to undo —
+ *  a keyboard shortcut fires this without checking `canUndo` first. */
+export function undo(stack: CommandStack): CommandStack {
+    if (!stack.past.length) return stack;
+    const present = stack.past[stack.past.length - 1];
+    return { past: stack.past.slice(0, -1), present, future: [stack.present, ...stack.future] };
+}
+
+/** Step forward one scene. A no-op, not an error, when there is nothing to redo. */
+export function redo(stack: CommandStack): CommandStack {
+    if (!stack.future.length) return stack;
+    const [present, ...future] = stack.future;
+    return { past: [...stack.past, stack.present], present, future };
+}
