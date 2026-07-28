@@ -26,13 +26,21 @@ tar -czf jaslide-pnpm-store.tar.gz pnpm-store
 ## 2. 폐쇄망 반입 및 실행
 
 1. `jaslide-v0.5.0-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
-2. Kubernetes/Harbor 배포 환경에서는 Podman으로 로드한 뒤 Harbor에 푸시합니다. 실제 태그·푸시·`kubectl apply -k` 절차는 [Kubernetes 배포 문서](deployment.md#kubernetes--harbor-closed-network)를 따릅니다.
+2. Kubernetes 배포 환경에서는 **레지스트리 없이** 각 워커 노드의 containerd로 직접 import합니다. 실제 `kubectl apply` 절차는 [Kubernetes 배포 문서](deployment.md#kubernetes-no-registry-closed-network)를 따릅니다.
 
 ```bash
 shasum -a 256 -c jaslide-v0.5.0-linux-amd64-images.tar.gz.sha256
+sudo ctr -n k8s.io images import jaslide-v0.5.0-linux-amd64-images.tar.gz
+sudo ctr -n k8s.io images ls | grep jaslide   # 5개(api/web/renderer/postgres/redis) 모두 amd64인지 확인
+```
+
+Harbor 등 레지스트리를 쓰기로 했다면 대신 Podman으로 로드해 태그·푸시합니다:
+
+```bash
 podman load -i jaslide-v0.5.0-linux-amd64-images.tar.gz
-podman image inspect jaslide/api:v0.5.0 jaslide/web:v0.5.0 jaslide/renderer:v0.5.0 jaslide/postgres:v0.5.0 jaslide/redis:v0.5.0
 podman image inspect --format '{{.Architecture}}' jaslide/api:v0.5.0  # amd64
+podman tag jaslide/api:v0.5.0 <레지스트리>/jaslide/api:v0.5.0
+podman push <레지스트리>/jaslide/api:v0.5.0
 ```
 
 `docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.5.0`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
@@ -59,6 +67,6 @@ cd ../web
 
 - 로컬 LLM 엔드포인트와 모델 파일이 사내에 준비되어 있다.
 - 이미지 tarball SHA-256이 준비 환경의 값과 일치한다.
-- Podman 이미지 5개가 모두 `podman image inspect`에 존재하고 아키텍처가 `amd64`이다.
+- 이미지 5개가 모두 워커 노드의 `ctr -n k8s.io images ls`(또는 Podman `image inspect`)에 존재하고 아키텍처가 `amd64`이다.
 - `docker compose ... up -d --no-build` 중 외부 DNS/레지스트리 요청이 없다.
 - 업로드 저장소, PostgreSQL, Redis 볼륨의 백업 정책이 적용되어 있다.

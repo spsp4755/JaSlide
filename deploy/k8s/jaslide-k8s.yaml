@@ -1,31 +1,24 @@
-# JaSlide k8s 배포 매니페스트 (폐쇄망 + Harbor 레지스트리)
+# JaSlide k8s 배포 매니페스트 — 레지스트리 없이 배포
 #
 # 이미지 준비 (인터넷 되는 amd64 빌드 PC에서 — 상세는 docs/deployment.md 참고):
-#   ./scripts/release/build-amd64-images.sh v0.5.0  # 기본값 /api: Ingress 도메인에 독립적
+#   ./scripts/release/build-amd64-images.sh v0.5.0
 #   # dist/release/jaslide-v0.5.0-linux-amd64-images.tar.gz 및 SHA-256 파일을 반입
 #
-# 폐쇄망 반입 후 (podman이 있는 내부 PC에서):
-#   podman load -i jaslide-v0.5.0-linux-amd64-images.tar.gz
-#   podman tag jaslide/api:v0.5.0 harbor.CHANGE_ME/jaslide/api:v0.5.0
-#   podman push harbor.CHANGE_ME/jaslide/api:v0.5.0
-#   (web, renderer, postgres, redis도 v0.5.0 태그로 반복)
+# 폐쇄망 반입 후, 각 워커 노드 전부에서:
+#   sudo ctr -n k8s.io images import jaslide-v0.5.0-linux-amd64-images.tar.gz
 #
-# 클러스터에서 (최초 1회 — harbor-regcred.example.yaml 참고해 시크릿을 먼저 만들어 적용):
-#   kubectl apply -f harbor-regcred.local.yaml
-#   kubectl apply -k deploy/k8s
+# 마스터에서:
+#   kubectl apply -f namespace.yaml
+#   kubectl apply -f jaslide-k8s.yaml
 #
-# 다음 릴리즈부터는 이 시크릿을 다시 만들 필요 없이(자격 증명이 안 바뀌는 한),
-# kustomization.yaml의 newTag 5개만 새 버전으로 바꾸고 `kubectl apply -k deploy/k8s`만
-# 실행하면 됩니다. 태그가 바뀌면 k8s가 자동으로 롤링 재시작하므로
-# `kubectl rollout restart`는 필요 없습니다.
-#
-# 아래에서 CHANGE_ME 와 Ingress host 만 실제 값으로 바꾸면 됩니다.
-# (harbor.CHANGE_ME는 이 파일과 kustomization.yaml의 images: 항목 양쪽 모두에서
-# 같은 값으로 바꿔야 합니다.)
+# 아래에서 CHANGE_ME 와 Ingress host만 실제 값으로 바꾸면 됩니다.
+# Harbor 등 레지스트리를 쓰는 경우에만 image를 <레지스트리>/jaslide/api:v0.5.0 형태로
+# 바꾸고, 각 Deployment에 imagePullSecrets를 추가하세요.
 apiVersion: v1
 kind: Secret
 metadata:
   name: jaslide-secrets
+  namespace: jaslide
 type: Opaque
 stringData:
   DATABASE_URL: postgresql://jaslide:CHANGE_ME@jaslide-db:5432/jaslide
@@ -38,6 +31,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: jaslide-config
+  namespace: jaslide
 data:
   REDIS_URL: redis://jaslide-redis:6379
   RENDERER_URL: http://jaslide-renderer:8000
@@ -55,6 +49,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaslide-api
+  namespace: jaslide
 spec:
   replicas: 1   # ponytail: uploads PVC가 RWO라 1로 고정. 스케일 필요 시 RWX 스토리지 또는 오브젝트 스토리지로 전환
   selector:
@@ -63,12 +58,10 @@ spec:
     metadata:
       labels: { app: jaslide-api }
     spec:
-      imagePullSecrets:
-        - name: harbor-regcred
       containers:
         - name: api
-          image: harbor.CHANGE_ME/jaslide/api:v0.5.0
-          imagePullPolicy: IfNotPresent
+          image: jaslide/api:v0.5.0     # 워커에 import한 이미지 그대로 (빌드 스크립트가 이 태그로 만듦)
+          imagePullPolicy: IfNotPresent  # 노드에 있는 이미지 사용 (폐쇄망: 밖에서 pull 안 함)
           ports: [{ containerPort: 4000 }]
           envFrom:
             - secretRef: { name: jaslide-secrets }
@@ -92,6 +85,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: jaslide-uploads
+  namespace: jaslide
 spec:
   accessModes: [ReadWriteOnce]
   resources: { requests: { storage: 10Gi } }
@@ -100,6 +94,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaslide-api
+  namespace: jaslide
 spec:
   selector: { app: jaslide-api }
   ports: [{ port: 4000, targetPort: 4000 }]
@@ -109,6 +104,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaslide-web
+  namespace: jaslide
 spec:
   replicas: 1
   selector:
@@ -117,11 +113,9 @@ spec:
     metadata:
       labels: { app: jaslide-web }
     spec:
-      imagePullSecrets:
-        - name: harbor-regcred
       containers:
         - name: web
-          image: harbor.CHANGE_ME/jaslide/web:v0.5.0
+          image: jaslide/web:v0.5.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 3000 }]
           readinessProbe:
@@ -135,6 +129,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaslide-web
+  namespace: jaslide
 spec:
   selector: { app: jaslide-web }
   ports: [{ port: 3000, targetPort: 3000 }]
@@ -144,6 +139,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaslide-renderer
+  namespace: jaslide
 spec:
   replicas: 1
   selector:
@@ -152,11 +148,9 @@ spec:
     metadata:
       labels: { app: jaslide-renderer }
     spec:
-      imagePullSecrets:
-        - name: harbor-regcred
       containers:
         - name: renderer
-          image: harbor.CHANGE_ME/jaslide/renderer:v0.5.0
+          image: jaslide/renderer:v0.5.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8000 }]
           readinessProbe:
@@ -170,6 +164,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaslide-renderer
+  namespace: jaslide
 spec:
   selector: { app: jaslide-renderer }
   ports: [{ port: 8000, targetPort: 8000 }]
@@ -179,6 +174,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaslide-redis
+  namespace: jaslide
 spec:
   replicas: 1
   selector:
@@ -187,11 +183,9 @@ spec:
     metadata:
       labels: { app: jaslide-redis }
     spec:
-      imagePullSecrets:
-        - name: harbor-regcred
       containers:
         - name: redis
-          image: harbor.CHANGE_ME/jaslide/redis:v0.5.0
+          image: jaslide/redis:v0.5.0
           imagePullPolicy: IfNotPresent
           args: ["--appendonly", "yes"]   # 재시작 시 큐 유실 방지
           ports: [{ containerPort: 6379 }]
@@ -208,6 +202,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: jaslide-redis-data
+  namespace: jaslide
 spec:
   accessModes: [ReadWriteOnce]
   resources: { requests: { storage: 1Gi } }
@@ -216,6 +211,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaslide-redis
+  namespace: jaslide
 spec:
   selector: { app: jaslide-redis }
   ports: [{ port: 6379 }]
@@ -225,6 +221,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: jaslide-db
+  namespace: jaslide
 spec:
   serviceName: jaslide-db
   replicas: 1
@@ -234,11 +231,9 @@ spec:
     metadata:
       labels: { app: jaslide-db }
     spec:
-      imagePullSecrets:
-        - name: harbor-regcred
       containers:
         - name: postgres
-          image: harbor.CHANGE_ME/jaslide/postgres:v0.5.0
+          image: jaslide/postgres:v0.5.0
           imagePullPolicy: IfNotPresent
           env:
             - { name: POSTGRES_USER, value: jaslide }
@@ -263,6 +258,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaslide-db
+  namespace: jaslide
 spec:
   selector: { app: jaslide-db }
   ports: [{ port: 5432 }]
@@ -273,6 +269,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: jaslide
+  namespace: jaslide
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: 100m   # PPTX 템플릿/파일 업로드 허용 크기
 spec:

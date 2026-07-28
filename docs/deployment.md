@@ -23,9 +23,9 @@ The renderer image includes LibreOffice and Korean Noto font fallback for PPTX-t
 
 After the first login, register the internal model in **Admin > Models** and run the connection test. Import example PPTX files in **Admin > Templates** before assigning them to generated presentations.
 
-## Kubernetes + Harbor (closed network)
+## Kubernetes, no registry (closed network)
 
-Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [Kustomization](../deploy/k8s/kustomization.yaml). Replace every `CHANGE_ME` and the Ingress host before applying. Kustomize places all namespaced resources in the `jaslide` namespace.
+Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [namespace.yaml](../deploy/k8s/namespace.yaml). No Harbor, no `imagePullSecrets` — every worker node imports the image tar directly into containerd, and the build script already tags images exactly as the manifest references them (`jaslide/api:v0.5.0`, etc.), so there is no retagging step either. Replace every `CHANGE_ME` and the Ingress host before applying.
 
 **1. Build images on an internet-connected machine.** The release image defaults to relative `/api`, so it remains valid when the final Ingress hostname changes:
 
@@ -37,45 +37,32 @@ Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [Kustom
 
 The script produces `dist/release/jaslide-v0.5.0-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
 
-**3. Load and push to Harbor (inside the closed network):**
+**3. Import on every worker node (inside the closed network):**
 
 ```bash
 shasum -a 256 -c jaslide-v0.5.0-linux-amd64-images.tar.gz.sha256
-podman load -i jaslide-v0.5.0-linux-amd64-images.tar.gz
-podman image inspect --format '{{.Architecture}}' jaslide/api:v0.5.0  # amd64
-podman tag jaslide/api:v0.5.0 harbor.example.internal/jaslide/api:v0.5.0
-podman tag jaslide/web:v0.5.0 harbor.example.internal/jaslide/web:v0.5.0
-podman tag jaslide/renderer:v0.5.0 harbor.example.internal/jaslide/renderer:v0.5.0
-podman tag jaslide/postgres:v0.5.0 harbor.example.internal/jaslide/postgres:v0.5.0
-podman tag jaslide/redis:v0.5.0 harbor.example.internal/jaslide/redis:v0.5.0
-podman push harbor.example.internal/jaslide/api:v0.5.0
-podman push harbor.example.internal/jaslide/web:v0.5.0
-podman push harbor.example.internal/jaslide/renderer:v0.5.0
-podman push harbor.example.internal/jaslide/postgres:v0.5.0
-podman push harbor.example.internal/jaslide/redis:v0.5.0
+sudo ctr -n k8s.io images import jaslide-v0.5.0-linux-amd64-images.tar.gz
+sudo ctr -n k8s.io images ls | grep jaslide   # confirm all 5 images landed
 ```
 
-Create the `jaslide` project in Harbor first, and `podman login harbor.example.internal` before pushing.
+Run this on **every** node the pods can schedule onto — `imagePullPolicy: IfNotPresent` means a node without the image locally will fail to start its pod rather than reaching out to a registry.
 
-**4. Deploy (first time only — create the registry secret as a YAML file so it never needs retyping):**
+**4. Deploy (from the master):**
 
 ```bash
-kubectl create secret docker-registry harbor-regcred \
-  --docker-server=harbor.example.internal --docker-username=<user> --docker-password=<pass> \
-  --namespace jaslide --dry-run=client -o yaml > harbor-regcred.local.yaml
-kubectl apply -f harbor-regcred.local.yaml
-kubectl apply -k deploy/k8s
+kubectl apply -f deploy/k8s/namespace.yaml
+kubectl apply -f deploy/k8s/jaslide-k8s.yaml
 kubectl -n jaslide get pods -w
 ```
 
-`--dry-run=client` only renders the YAML, it does not touch the cluster. Keep `harbor-regcred.local.yaml` outside git (it holds real credentials) and reapply it only if the credentials change — it is not part of every release.
-
-**5. Every later release:** edit the 5 `newTag` values in [deploy/k8s/kustomization.yaml](../deploy/k8s/kustomization.yaml) to the new version (instead of hunting through `jaslide-k8s.yaml`), then repeat steps 1-3 for the new tag and:
+**5. Every later release:** repeat steps 1-3 for the new tag, edit the image tag (`v0.5.0` → `v0.6.0`) on the 5 `image:` lines in `jaslide-k8s.yaml`, then:
 
 ```bash
-kubectl apply -k deploy/k8s
+kubectl apply -f deploy/k8s/jaslide-k8s.yaml
 ```
 
 No `kubectl rollout restart` needed — each release uses a distinct image tag, so Kubernetes detects the changed pod template and rolls the deployments automatically.
 
 Readiness: `curl https://jaslide.internal/api/health` once the Ingress resolves. The default web image uses `/api`; rebuild it only when an external API origin is deliberately configured.
+
+**Using a registry instead (e.g. Harbor):** change each `image:` to `<registry>/jaslide/<service>:v0.5.0`, add `imagePullSecrets: [{ name: <your-secret> }]` under each Deployment's pod spec, and create that secret once with `kubectl create secret docker-registry <name> --docker-server=... --dry-run=client -o yaml > secret.local.yaml && kubectl apply -f secret.local.yaml` (keep that file out of git — it holds real credentials).
