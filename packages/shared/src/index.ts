@@ -4,6 +4,7 @@ export * from './types/slide';
 export * from './types/template';
 export * from './types/user';
 export * from './types/generation';
+export * from './slide-scene';
 
 // Constants
 export * from './constants/slide-types';

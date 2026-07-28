@@ -9,7 +9,8 @@
         "build": "tsup src/index.ts --format cjs,esm --dts",
         "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
         "lint": "eslint src/",
-        "clean": "rimraf dist"
+        "clean": "rimraf dist",
+        "test": "node --test ./test/*.test.js"
     },
     "devDependencies": {
         "@types/node": "^20.10.0",
