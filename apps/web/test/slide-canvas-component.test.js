@@ -43,6 +43,11 @@ test('shape fill changes update the live SVG before a preview refresh', () => {
     assert.match(code, /setFillColor: \(objectId: string, fillColor: string\) => boolean/);
     assert.match(code, /querySelectorAll<SVGPathElement>\('svg path'\)/);
     assert.match(code, /path\.setAttribute\('fill', fillColor\)/);
+    // SVG shapes own their visual fill; painting their wrapper turns every
+    // arrow or triangle back into a coloured rectangle.
+    assert.match(code, /if \(paths\.length\) \{/);
+    assert.match(code, /\} else \{\s*element\.style\.background = fillColor;/);
+    assert.match(code, /inserted \? \{ \.\.\.edit, fillColor: undefined, lineColor: undefined, lineWidth: undefined \} : edit/);
 });
 
 test('text is edited in place, with nothing painted over the slide', () => {

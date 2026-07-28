@@ -374,7 +374,7 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
             const element = findObject(stage, edit.objectId, index, !inserted) ?? createInsertedObject(stage, edit);
             if (!element) return;
             if (edit.delete) { element.style.display = 'none'; return; }
-            Object.assign(element.style, objectEditBoxStyle(inserted ? { ...edit, lineColor: undefined, lineWidth: undefined } : edit));
+            Object.assign(element.style, objectEditBoxStyle(inserted ? { ...edit, fillColor: undefined, lineColor: undefined, lineWidth: undefined } : edit));
             if (edit.cells) {
                 writeCells(element, edit.cells);
             } else if (edit.paragraphs) {
@@ -529,10 +529,15 @@ export const SlideCanvas = forwardRef<SlideCanvasHandle, SlideCanvasProps>(funct
         const edit = objectEdits[index];
         const element = findObject(stage, objectId, index, !(edit?.addShape || edit?.addLine));
         if (!element) return false;
-        element.style.background = fillColor;
-        element.querySelectorAll<SVGPathElement>('svg path').forEach((path) => {
-            if (path.getAttribute('fill') !== 'none') path.setAttribute('fill', fillColor);
-        });
+        const paths = element.querySelectorAll<SVGPathElement>('svg path');
+        if (paths.length) {
+            element.style.background = '';
+            paths.forEach((path) => {
+                if (path.getAttribute('fill') !== 'none') path.setAttribute('fill', fillColor);
+            });
+        } else {
+            element.style.background = fillColor;
+        }
         return true;
     }, [objectEdits]);
 
