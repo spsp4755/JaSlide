@@ -517,7 +517,8 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(funct
         selection.addRange(range);
 
         const span = element.ownerDocument.createElement('span');
-        Object.assign(span.style, textRunStyle(updates as TextRun));
+        const runStyle = textRunStyle(updates as TextRun);
+        Object.assign(span.style, runStyle);
         try {
             range.surroundContents(span);
         } catch {
@@ -528,6 +529,12 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(funct
             span.appendChild(fragment);
             range.insertNode(span);
         }
+        // A pre-existing run already carries its own explicit style on every
+        // property (buildParagraphElement never leaves one to inherit), so an
+        // element moved inside the new wrapper keeps overriding it — nesting
+        // alone changes nothing for a selection that crossed a run boundary.
+        // Push the same update onto every span the wrap now contains.
+        span.querySelectorAll<HTMLElement>('[style]').forEach((descendant) => Object.assign(descendant.style, runStyle));
         const restored = element.ownerDocument.createRange();
         restored.selectNodeContents(span);
         selection.removeAllRanges();

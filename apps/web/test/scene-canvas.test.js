@@ -80,6 +80,21 @@ test('character formatting walks text nodes, not direct span children', () => {
     assert.match(code, /range\.surroundContents\(span\)/);
 });
 
+test('formatting a selection that crosses an existing run boundary reaches every run inside it', () => {
+    // Found in real-browser verification: selecting text spanning two
+    // pre-existing runs makes surroundContents throw (its range isn't
+    // wholly inside one element), so the code falls back to
+    // extractContents+insertNode — which moves each run's own <span>,
+    // explicit style and all, inside the new wrapper. Every run's own
+    // font-weight/etc is set explicitly (buildParagraphElement never
+    // leaves one to inherit), so that explicit value keeps winning over
+    // the new wrapper's — the format silently never took effect until
+    // the same update is also pushed onto each moved run directly.
+    const code = source();
+
+    assert.match(code, /span\.querySelectorAll<HTMLElement>\('\[style\]'\)\.forEach\(\(descendant\) => Object\.assign\(descendant\.style, runStyle\)\)/);
+});
+
 test('a table cell is edited in place, sharing the paragraph/run model with text objects', () => {
     const code = source();
 
