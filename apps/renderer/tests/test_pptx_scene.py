@@ -3,6 +3,9 @@ from io import BytesIO
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR
+from pptx.oxml.xmlchemy import OxmlElement
+from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 from apps.renderer.src.services.pptx_scene import apply_edits_to_scene, pptx_to_scene
@@ -54,6 +57,67 @@ def test_a_table_cell_keeps_its_fill_and_paragraphs():
     assert table["cells"][0][0]["paragraphs"][0]["runs"][0]["text"] == "Header"
     assert table["cells"][0][0]["fill"] == "#D9D9D9"
     assert len(table["rowHeights"]) == 1 and len(table["columnWidths"]) == 2
+
+
+def test_a_table_keeps_cell_borders_and_merge_geometry():
+    def add_border(cell, side, color, width):
+        tc_pr = cell._tc.get_or_add_tcPr()
+        line = OxmlElement(f"a:ln{side}")
+        line.set("w", str(width))
+        fill = OxmlElement("a:solidFill")
+        rgb = OxmlElement("a:srgbClr")
+        rgb.set("val", color)
+        fill.append(rgb)
+        line.append(fill)
+        tc_pr.append(line)
+
+    def build(slide):
+        table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(6), Inches(2)).table
+        table.cell(0, 0).text = "Merged header"
+        table.cell(0, 0).merge(table.cell(0, 1))
+        add_border(table.cell(0, 0), "B", "FF0000", 25400)
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    table = next(item for item in scene["objects"] if item["type"] == "table")
+    header = table["cells"][0][0]
+
+    assert header["colSpan"] == 2
+    assert header["border"]["bottom"] == {"color": "#FF0000", "width": 2}
+    assert table["cells"][0][1]["spanned"] is True
+
+
+def test_a_table_keeps_a_theme_coloured_border():
+    def build(slide):
+        cell = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(1)).table.cell(0, 0)
+        line = OxmlElement("a:lnT")
+        fill = OxmlElement("a:solidFill")
+        color = OxmlElement("a:schemeClr")
+        color.set("val", "accent1")
+        fill.append(color)
+        line.append(fill)
+        cell._tc.get_or_add_tcPr().append(line)
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    cell = next(item for item in scene["objects"] if item["type"] == "table")["cells"][0][0]
+
+    assert cell["border"]["top"] == {"color": "#4F81BD", "width": 1}
+
+
+def test_a_table_keeps_cell_padding_and_vertical_alignment():
+    def build(slide):
+        cell = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(2)).table.cell(0, 0)
+        cell.text = "Centered"
+        cell.margin_top = Pt(10)
+        cell.margin_right = Pt(12)
+        cell.margin_bottom = Pt(8)
+        cell.margin_left = Pt(6)
+        cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    cell = next(item for item in scene["objects"] if item["type"] == "table")["cells"][0][0]
+
+    assert cell["verticalAlign"] == "middle"
+    assert cell["padding"] == {"top": 20, "right": 24, "bottom": 16, "left": 12}
 
 
 def test_an_autoshape_keeps_its_preset_geometry_fill_and_rotation():

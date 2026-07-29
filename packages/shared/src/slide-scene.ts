@@ -38,6 +38,12 @@ export interface BorderSide {
 export interface TableCell {
     paragraphs: TextParagraph[];
     fill?: string;
+    /** A merged-away cell is not rendered independently. */
+    spanned?: boolean;
+    rowSpan?: number;
+    colSpan?: number;
+    verticalAlign?: 'top' | 'middle' | 'bottom';
+    padding?: { top: number; right: number; bottom: number; left: number };
     border?: {
         top?: BorderSide;
         right?: BorderSide;

@@ -49,6 +49,11 @@ export interface TextParagraph {
 /** A table cell uses the same paragraph/run model as a text box. */
 export interface TableCellContent {
     paragraphs: TextParagraph[];
+    fill?: string;
+    spanned?: boolean;
+    rowSpan?: number;
+    colSpan?: number;
+    borders?: Partial<Record<'top' | 'right' | 'bottom' | 'left', { color: string; width: number }>>;
 }
 
 export interface ObjectEdit {

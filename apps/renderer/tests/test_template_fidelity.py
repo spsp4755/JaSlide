@@ -34,6 +34,7 @@ def test_a_connector_is_flagged_because_its_arrow_direction_is_not_extracted():
 
     assert len(report["degradedObjects"]) == 1
     assert report["degradedObjects"][0]["type"] == "line"
+    assert report["summary"] == {"slides": 1, "editableObjects": 1, "tables": 0, "mergedCells": 0}
 
 
 def test_a_font_installed_on_this_server_is_not_reported_missing():
@@ -74,6 +75,7 @@ def test_a_table_cells_font_is_checked_too():
         report = fidelity_report(source)
 
     assert "Missing Font" in report["missingFontFamilies"]
+    assert report["summary"] == {"slides": 1, "editableObjects": 1, "tables": 1, "mergedCells": 0}
 
 
 def test_extract_fidelity_upload_returns_the_report():
@@ -86,7 +88,7 @@ def test_extract_fidelity_upload_returns_the_report():
 
     assert response.status_code == 200
     body = response.json()
-    assert list(body) == ["degradedObjects", "missingFontFamilies"]
+    assert list(body) == ["degradedObjects", "missingFontFamilies", "summary"]
     assert body["degradedObjects"][0]["type"] == "line"
 
 

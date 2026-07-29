@@ -4,6 +4,7 @@ from io import BytesIO
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
 from apps.renderer.src.services.pptx_scene import pptx_to_scene
@@ -74,6 +75,30 @@ def test_a_table_cells_new_text_reaches_the_original_table():
     cell = Presentation(BytesIO(output)).slides[0].shapes[0].table.cell(0, 0)
     assert cell.text == "New"
     assert cell.text_frame.paragraphs[0].runs[0].font.bold
+
+
+def test_an_untouched_merged_table_keeps_its_cell_border_on_export():
+    def build(slide):
+        table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(4), Inches(2)).table
+        header = table.cell(0, 0)
+        header.text = "Merged"
+        header.merge(table.cell(0, 1))
+        line = OxmlElement("a:lnB")
+        line.set("w", "25400")
+        fill = OxmlElement("a:solidFill")
+        rgb = OxmlElement("a:srgbClr")
+        rgb.set("val", "FF0000")
+        fill.append(rgb)
+        line.append(fill)
+        header._tc.get_or_add_tcPr().append(line)
+
+    source = _source_deck_bytes(build)
+    output = scene_to_pptx(pptx_to_scene(source)["slides"][0], source)
+    table = Presentation(BytesIO(output)).slides[0].shapes[0].table
+
+    assert table.cell(0, 0).span_width == 2
+    assert table.cell(0, 1).is_spanned
+    assert table.cell(0, 0)._tc.tcPr.find("{http://schemas.openxmlformats.org/drawingml/2006/main}lnB") is not None
 
 
 def test_an_object_with_no_source_ref_is_inserted_as_a_new_shape():

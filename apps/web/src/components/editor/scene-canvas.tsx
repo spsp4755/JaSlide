@@ -312,9 +312,16 @@ function buildTableElement(doc: Document, object: TableObject): HTMLElement {
         const tr = doc.createElement('tr');
         tr.style.height = `${(object.rowHeights[rowIndex] / rowTotal) * 100}%`;
         row.forEach((cell) => {
+            if (cell.spanned) return;
             const td = doc.createElement('td');
-            td.style.cssText = 'vertical-align:top;border:1px solid #D1D5DB;padding:8px';
+            const padding = cell.padding ?? { top: 8, right: 8, bottom: 8, left: 8 };
+            td.style.cssText = `vertical-align:${cell.verticalAlign ?? 'top'};padding:${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px`;
+            if (cell.rowSpan && cell.rowSpan > 1) td.rowSpan = cell.rowSpan;
+            if (cell.colSpan && cell.colSpan > 1) td.colSpan = cell.colSpan;
             if (cell.fill) td.style.background = cell.fill;
+            Object.entries(cell.border ?? {}).forEach(([side, border]) => {
+                if (border) td.style.setProperty(`border-${side}`, `${border.width}px solid ${border.color}`);
+            });
             buildParagraphsInto(td, cell.paragraphs);
             tr.appendChild(td);
         });

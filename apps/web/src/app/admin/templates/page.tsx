@@ -22,6 +22,7 @@ interface Template {
 interface FidelityReport {
     degradedObjects: { objectId: string; type: string; reason: string }[];
     missingFontFamilies: string[];
+    summary: { slides: number; editableObjects: number; tables: number; mergedCells: number };
 }
 
 interface ColorPalette {
@@ -573,7 +574,10 @@ export default function AdminTemplatesPage() {
                                 {template.config?.source?.kind === 'pptx' && fidelityReports[template.id] && fidelityReports[template.id] !== 'loading' && fidelityReports[template.id] !== 'error' && (() => {
                                     const report = fidelityReports[template.id] as FidelityReport;
                                     const clean = report.degradedObjects.length === 0 && report.missingFontFamilies.length === 0;
+                                    const summary = `Slides ${report.summary.slides} · editable ${report.summary.editableObjects} · tables ${report.summary.tables}${report.summary.mergedCells ? ` · merged ${report.summary.mergedCells}` : ''}`;
                                     return (
+                                        <>
+                                        <div className="mt-2 text-xs text-muted-foreground">{summary}</div>
                                         <div className={`mt-2 rounded p-2 text-xs ${clean ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-800'}`}>
                                             {clean ? '재현 품질 문제 없음' : (
                                                 <>
@@ -582,6 +586,7 @@ export default function AdminTemplatesPage() {
                                                 </>
                                             )}
                                         </div>
+                                        </>
                                     );
                                 })()}
                                 {fidelityReports[template.id] === 'error' && <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">확인 실패</div>}

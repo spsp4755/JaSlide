@@ -18,7 +18,7 @@ from io import BytesIO
 
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.shapes.group import GroupShape
 from pptx.shapes.picture import Picture
@@ -89,6 +89,33 @@ def _table_cell_dict(cell, pt_to_px: float, palette: dict[str, str]) -> dict:
     fill = _color(cell.fill, palette)
     if fill:
         result["fill"] = fill
+    result["verticalAlign"] = {
+        MSO_ANCHOR.MIDDLE: "middle", MSO_ANCHOR.BOTTOM: "bottom",
+    }.get(cell.text_frame.vertical_anchor, "top")
+    result["padding"] = {
+        "top": round(cell.margin_top / 12700 * pt_to_px),
+        "right": round(cell.margin_right / 12700 * pt_to_px),
+        "bottom": round(cell.margin_bottom / 12700 * pt_to_px),
+        "left": round(cell.margin_left / 12700 * pt_to_px),
+    }
+    if cell.is_spanned:
+        result["spanned"] = True
+        return result
+    if cell.is_merge_origin:
+        result["rowSpan"] = cell.span_height
+        result["colSpan"] = cell.span_width
+    borders = {}
+    tc_pr = cell._tc.tcPr
+    for xml_side, name in (("T", "top"), ("R", "right"), ("B", "bottom"), ("L", "left")):
+        line = tc_pr.find(qn(f"a:ln{xml_side}")) if tc_pr is not None else None
+        rgb = line.find(f".//{qn('a:srgbClr')}") if line is not None else None
+        scheme = line.find(f".//{qn('a:schemeClr')}") if line is not None else None
+        color = f"#{rgb.get('val').upper()}" if rgb is not None and rgb.get("val") else palette.get(scheme.get("val")) if scheme is not None else None
+        if color:
+            width = int(line.get("w", "12700"))
+            borders[name] = {"color": color, "width": round(width / 12700)}
+    if borders:
+        result["border"] = borders
     return result
 
 

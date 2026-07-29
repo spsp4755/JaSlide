@@ -67,7 +67,7 @@ export class AdminTemplatesService {
         const form = new FormData();
         form.append('file', new Blob([new Uint8Array(source)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), config?.pptxTemplate?.originalname || 'template.pptx');
         const rendererUrl = this.configService.get<string>('RENDERER_URL') || 'http://localhost:8000';
-        return postToRenderer<{ degradedObjects: unknown[]; missingFontFamilies: string[] }>(rendererUrl, '/api/extract/fidelity', form, {
+        return postToRenderer<{ degradedObjects: unknown[]; missingFontFamilies: string[]; summary: { slides: number; editableObjects: number; tables: number; mergedCells: number } }>(rendererUrl, '/api/extract/fidelity', form, {
             timeout: 30000,
             rejectedMessage: '템플릿의 재현 품질을 확인하지 못했습니다. 원본 파일이 손상되지 않았는지 확인해주세요.',
         });

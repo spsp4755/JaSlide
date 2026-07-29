@@ -29,6 +29,10 @@ def _paragraph_edit(paragraph: dict) -> dict:
 
 
 def _cell_edit(cell: dict) -> dict:
+    # A merged-away cell has no independent text frame in the PPTX. Rewriting it
+    # can corrupt the merge, so only its origin is exported.
+    if cell.get("spanned"):
+        return {"spanned": True}
     return {"paragraphs": [_paragraph_edit(paragraph) for paragraph in cell.get("paragraphs", [])]}
 
 

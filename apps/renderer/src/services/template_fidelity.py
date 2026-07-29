@@ -53,27 +53,38 @@ def _run_fonts(paragraphs) -> set:
 
 
 def fidelity_report(source_pptx: bytes) -> dict:
-    """`{"degradedObjects": [{"objectId","type","reason"}], "missingFontFamilies": [...]}`."""
+    """Extraction limits plus a small, actionable template support summary."""
     presentation = Presentation(BytesIO(source_pptx))
     degraded: list[dict] = []
     fonts_used: set = set()
+    table_count = 0
+    merged_cell_count = 0
+    editable_object_count = 0
 
     def walk(shape) -> None:
+        nonlocal table_count, merged_cell_count, editable_object_count
         if isinstance(shape, GroupShape):
             for member in shape.shapes:
                 walk(member)
             return
         if isinstance(shape, Picture):
+            editable_object_count += 1
             return
         if getattr(shape, "has_table", False):
+            editable_object_count += 1
+            table_count += 1
             for row in shape.table.rows:
                 for cell in row.cells:
                     fonts_used.update(_run_fonts(cell.text_frame.paragraphs))
+                    if cell.is_merge_origin:
+                        merged_cell_count += 1
             return
         if getattr(shape, "has_text_frame", False) and shape.text.strip():
+            editable_object_count += 1
             fonts_used.update(_run_fonts(shape.text_frame.paragraphs))
             return
         if shape.shape_type == MSO_SHAPE_TYPE.LINE:
+            editable_object_count += 1
             degraded.append({
                 "objectId": str(shape.shape_id), "type": "line",
                 "reason": "화살표 방향은 추출되지 않아 항상 직선으로 표시됩니다",
@@ -84,6 +95,8 @@ def fidelity_report(source_pptx: bytes) -> dict:
                 "objectId": str(shape.shape_id), "type": "shape",
                 "reason": "원본 도형의 윤곽을 인식하지 못해 사각형으로 표시됩니다",
             })
+        else:
+            editable_object_count += 1
 
     for slide in presentation.slides:
         for shape in slide.shapes:
@@ -96,4 +109,13 @@ def fidelity_report(source_pptx: bytes) -> dict:
     installed = _installed_font_families()
     missing_fonts = sorted(fonts_used - installed)
 
-    return {"degradedObjects": degraded, "missingFontFamilies": missing_fonts}
+    return {
+        "degradedObjects": degraded,
+        "missingFontFamilies": missing_fonts,
+        "summary": {
+            "slides": len(presentation.slides),
+            "editableObjects": editable_object_count,
+            "tables": table_count,
+            "mergedCells": merged_cell_count,
+        },
+    }
