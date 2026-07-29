@@ -72,9 +72,17 @@ def test_scene_to_html_round_trips_through_html_to_scene():
     assert len(reparsed["objects"]) == len(scene["objects"])
     text = next(item for item in reparsed["objects"] if item["type"] == "text")
     original_text = next(item for item in scene["objects"] if item["type"] == "text")
-    assert text["paragraphs"][0]["runs"][0]["text"] == original_text["paragraphs"][0]["runs"][0]["text"]
+    original_run = original_text["paragraphs"][0]["runs"][0]
+    run = text["paragraphs"][0]["runs"][0]
+    assert run["text"] == original_run["text"]
     assert (text["x"], text["y"], text["width"], text["height"]) == \
         (original_text["x"], original_text["y"], original_text["width"], original_text["height"])
+    # `_object_dict` (the reader) has only ever read a text object's font off
+    # its own wrapper element, never a nested span — a save that only styled
+    # per-run spans would come back with no font at all on the next open.
+    assert run["fontFamily"] == original_run["fontFamily"] == "Pretendard"
+    assert run["fontSize"] == original_run["fontSize"]
+    assert run["bold"] == original_run["bold"] is True
 
 
 def test_scene_to_html_keeps_bold_and_color_on_the_written_run():

@@ -162,11 +162,33 @@ def _object_style(object_: dict) -> str:
     return ";".join(declarations)
 
 
+def _dominant_run_style(object_: dict) -> str:
+    """The text object's first run's style, written onto the wrapper too.
+
+    `_object_dict` (`html_scene.py`, the read side) has always read a text
+    object's font entirely off its own wrapper `style` attribute — never off
+    a child element — because the ORIGINAL upload/legacy editor path wrote a
+    flat `<div data-object ... style="...font-size:32px...">text</div>` with
+    no nested spans. This module's own per-run `<span>`s (for the richness a
+    live edit can show) are invisible to that reader: without this, a save
+    round-trips through a re-parse that finds no font on the wrapper at all,
+    not just the documented "collapses to one run" ceiling.
+    """
+    paragraphs = object_.get("paragraphs", [])
+    runs = [run for paragraph in paragraphs for run in paragraph.get("runs", [])]
+    declarations = [_run_style(runs[0])] if runs else []
+    align = paragraphs[0].get("align") if paragraphs else None
+    if align:
+        declarations.append(f"text-align:{align}")
+    return ";".join(declaration for declaration in declarations if declaration)
+
+
 def _object_html(object_: dict) -> str:
     style = escape(_object_style(object_), quote=True)
     kind = object_["type"]
     if kind == "text":
-        return f'<div data-object="true" data-object-type="textbox" style="{style}">{_text_html(object_)}</div>'
+        text_style = escape(f"{_object_style(object_)};{_dominant_run_style(object_)}", quote=True)
+        return f'<div data-object="true" data-object-type="textbox" style="{text_style}">{_text_html(object_)}</div>'
     if kind == "table":
         return f'<div data-object="true" data-object-type="table" style="{style}">{_table_html(object_)}</div>'
     if kind == "image":
