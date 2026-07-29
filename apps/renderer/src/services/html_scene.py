@@ -13,6 +13,7 @@ layout-hint path, which this module does not touch or depend on.
 """
 
 import re
+from html import escape
 
 from .html_template import _ObjectParser, _color, _font_name, _pixels, _resolve_variables, _style_values
 
@@ -103,3 +104,89 @@ def _slide_to_scene(html: str) -> dict:
 def html_to_scene(html_slides: list[str]) -> dict:
     """`{"slides": [SlideScene, ...]}`, one per slide HTML string given."""
     return {"slides": [_slide_to_scene(html) for html in html_slides if isinstance(html, str)]}
+
+
+def _run_style(run: dict) -> str:
+    declarations = []
+    if run.get("fontFamily"):
+        declarations.append(f"font-family:{run['fontFamily']}")
+    if run.get("fontSize"):
+        # `_object_dict` reads a run's fontSize back as `_pixels(...) / 2` —
+        # the inverse of that halving, so a round trip keeps the same value.
+        declarations.append(f"font-size:{run['fontSize'] * 2}px")
+    if run.get("color"):
+        declarations.append(f"color:{run['color']}")
+    if run.get("bold"):
+        declarations.append("font-weight:700")
+    if run.get("italic"):
+        declarations.append("font-style:italic")
+    if run.get("underline"):
+        declarations.append("text-decoration:underline")
+    return ";".join(declarations)
+
+
+def _paragraph_html(paragraph: dict) -> str:
+    runs_html = "".join(
+        f'<span style="{escape(_run_style(run), quote=True)}">{escape(run.get("text", ""))}</span>'
+        for run in paragraph.get("runs", [])
+    )
+    align = paragraph.get("align")
+    style = f' style="text-align:{align}"' if align and align != "left" else ""
+    return f"<div{style}>{runs_html}</div>"
+
+
+def _text_html(object_: dict) -> str:
+    return "".join(_paragraph_html(paragraph) for paragraph in object_["paragraphs"])
+
+
+def _table_html(object_: dict) -> str:
+    rows_html = []
+    for row in object_["cells"]:
+        cells_html = []
+        for cell in row:
+            content = "".join(_paragraph_html(paragraph) for paragraph in cell["paragraphs"])
+            style = f' style="background:{cell["fill"]}"' if cell.get("fill") else ""
+            cells_html.append(f"<td{style}>{content}</td>")
+        rows_html.append(f"<tr>{''.join(cells_html)}</tr>")
+    return f"<table>{''.join(rows_html)}</table>"
+
+
+def _object_style(object_: dict) -> str:
+    declarations = [
+        "position:absolute",
+        f"left:{object_['x']}px", f"top:{object_['y']}px",
+        f"width:{object_['width']}px", f"height:{object_['height']}px",
+    ]
+    if object_.get("rotation"):
+        declarations.append(f"transform:rotate({object_['rotation']}deg)")
+    return ";".join(declarations)
+
+
+def _object_html(object_: dict) -> str:
+    style = escape(_object_style(object_), quote=True)
+    kind = object_["type"]
+    if kind == "text":
+        return f'<div data-object="true" data-object-type="textbox" style="{style}">{_text_html(object_)}</div>'
+    if kind == "table":
+        return f'<div data-object="true" data-object-type="table" style="{style}">{_table_html(object_)}</div>'
+    if kind == "image":
+        src = escape(object_.get("src", ""), quote=True)
+        return f'<img data-object="true" data-object-type="image" style="{style}" src="{src}" alt="" />'
+    # shape / line — ponytail: HTML export renders any shape as its bounding
+    # rect; only the PPTX importer/exporter carries a real preset silhouette.
+    # Add an SVG path table here if HTML decks need exact shape glyphs.
+    fill = object_.get("fill", "#FFFFFF") if kind == "shape" else "transparent"
+    border_width = max(1, round(object_.get("strokeWidth", 1)))
+    border = f"border:{border_width}px solid {object_.get('stroke', '#202124')}"
+    return f'<div data-object="true" data-object-type="shape" style="{style};background:{fill};{border}"></div>'
+
+
+def scene_to_html(scene: dict) -> str:
+    """Serialize a `SlideScene` back into the `data-object` HTML markup
+    `html_to_scene`/`_ObjectParser` read — the mirror of `html_to_scene`."""
+    objects_html = "".join(_object_html(object_) for object_ in scene["objects"])
+    return (
+        '<div class="slide-container" '
+        f'style="position:relative;width:{scene["width"]}px;height:{scene["height"]}px;background:#FFFFFF">'
+        f"{objects_html}</div>"
+    )

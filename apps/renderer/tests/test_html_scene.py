@@ -1,4 +1,4 @@
-from apps.renderer.src.services.html_scene import html_to_scene
+from apps.renderer.src.services.html_scene import html_to_scene, scene_to_html
 
 SLIDE = (
     '<div class="slide-container" style="position:relative;width:1920px;height:1080px;background:#FFFFFF">'
@@ -61,3 +61,53 @@ def test_one_scene_per_input_slide():
     scenes = html_to_scene([SLIDE, SLIDE])["slides"]
 
     assert len(scenes) == 2
+
+
+def test_scene_to_html_round_trips_through_html_to_scene():
+    scene = html_to_scene([SLIDE])["slides"][0]
+
+    html = scene_to_html(scene)
+    reparsed = html_to_scene([html])["slides"][0]
+
+    assert len(reparsed["objects"]) == len(scene["objects"])
+    text = next(item for item in reparsed["objects"] if item["type"] == "text")
+    original_text = next(item for item in scene["objects"] if item["type"] == "text")
+    assert text["paragraphs"][0]["runs"][0]["text"] == original_text["paragraphs"][0]["runs"][0]["text"]
+    assert (text["x"], text["y"], text["width"], text["height"]) == \
+        (original_text["x"], original_text["y"], original_text["width"], original_text["height"])
+
+
+def test_scene_to_html_keeps_bold_and_color_on_the_written_run():
+    scene = {
+        "width": 1920, "height": 1080,
+        "objects": [{
+            "id": "obj-1", "x": 10, "y": 20, "width": 300, "height": 60, "rotation": 0,
+            "type": "text",
+            "paragraphs": [{"runs": [{"text": "Hi", "bold": True, "color": "#FF0000", "fontSize": 24}], "level": 0, "align": "left"}],
+        }],
+    }
+
+    html = scene_to_html(scene)
+
+    assert "font-weight:700" in html
+    assert "color:#FF0000" in html
+    assert ">Hi<" in html
+
+
+def test_scene_to_html_writes_a_table_with_its_cell_text():
+    scene = {
+        "width": 1920, "height": 1080,
+        "objects": [{
+            "id": "table-1", "x": 0, "y": 0, "width": 400, "height": 200, "rotation": 0,
+            "type": "table", "rowHeights": [200], "columnWidths": [200, 200],
+            "cells": [[
+                {"paragraphs": [{"runs": [{"text": "A"}], "level": 0, "align": "left"}]},
+                {"paragraphs": [{"runs": [{"text": "B"}], "level": 0, "align": "left"}]},
+            ]],
+        }],
+    }
+
+    html = scene_to_html(scene)
+
+    assert "<table>" in html
+    assert ">A<" in html and ">B<" in html
