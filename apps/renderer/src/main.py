@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any
+import base64
 import io
 import asyncio
 import zipfile
@@ -19,6 +20,9 @@ from .services.html_template_archive import extract_html_template_archive
 from .services.html_renderer import render_slide_png, render_slides_pdf
 from .services.pptx_to_html import pptx_to_html
 from .services.template_fidelity import fidelity_report
+from .services.pptx_scene import pptx_to_scene, apply_edits_to_scene
+from .services.html_scene import html_to_scene, scene_to_html
+from .services.scene_to_pptx import scene_to_edits
 
 app = FastAPI(
     title="JaSlide Renderer",
@@ -88,6 +92,24 @@ class RenderRequest(BaseModel):
 class PreviewRequest(BaseModel):
     presentation: Presentation
     slideIndex: int = 0
+
+
+class PptxSceneLoadRequest(BaseModel):
+    sourcePptx: str
+    templateIndex: int = 0
+    objectEdits: List[dict] = []
+
+
+class PptxSceneSaveRequest(BaseModel):
+    scene: dict
+
+
+class HtmlSceneLoadRequest(BaseModel):
+    html: str
+
+
+class HtmlSceneSaveRequest(BaseModel):
+    scene: dict
 
 
 def _html_slides(presentation: Presentation) -> list[str] | None:
@@ -189,6 +211,41 @@ async def extract_content(file: UploadFile = File(...)):
     if not extracted["slides"]:
         raise HTTPException(status_code=400, detail="PPTX has no extractable content")
     return extracted
+
+
+@app.post("/api/scene/pptx/load")
+async def scene_pptx_load(request: PptxSceneLoadRequest):
+    try:
+        content = base64.b64decode(request.sourcePptx)
+        slides = pptx_to_scene(content)["slides"]
+        base_scene = slides[request.templateIndex]
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Invalid PPTX source or templateIndex") from error
+    return {"scene": apply_edits_to_scene(base_scene, request.objectEdits)}
+
+
+@app.post("/api/scene/pptx/save")
+async def scene_pptx_save(request: PptxSceneSaveRequest):
+    try:
+        return {"objectEdits": scene_to_edits(request.scene)}
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Invalid scene") from error
+
+
+@app.post("/api/scene/html/load")
+async def scene_html_load(request: HtmlSceneLoadRequest):
+    scenes = html_to_scene([request.html])["slides"]
+    if not scenes:
+        raise HTTPException(status_code=400, detail="Invalid slide HTML")
+    return {"scene": scenes[0]}
+
+
+@app.post("/api/scene/html/save")
+async def scene_html_save(request: HtmlSceneSaveRequest):
+    try:
+        return {"html": scene_to_html(request.scene)}
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Invalid scene") from error
 
 
 @app.post("/api/render/pptx")
