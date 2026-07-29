@@ -103,3 +103,9 @@ export class ReorderSlidesDto {
     @Type(() => SlideOrderItem)
     slideOrders: SlideOrderItem[];
 }
+
+export class SaveSceneDto {
+    @ApiProperty({ description: 'The current SlideScene JSON' })
+    @IsObject()
+    scene: Record<string, any>;
+}

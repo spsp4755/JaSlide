@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Put,
+    Patch,
     Delete,
     Body,
     Param,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SlidesService } from './slides.service';
-import { CreateSlideDto, UpdateSlideDto, ReorderSlidesDto } from './dto/slides.dto';
+import { CreateSlideDto, UpdateSlideDto, ReorderSlidesDto, SaveSceneDto } from './dto/slides.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -76,5 +77,17 @@ export class SlidesController {
     @ApiOperation({ summary: 'Duplicate slide' })
     async duplicate(@CurrentUser() user: any, @Param('id') id: string) {
         return this.slidesService.duplicate(id, user.id);
+    }
+
+    @Get(':id/scene')
+    @ApiOperation({ summary: 'Get the slide as an editable SlideScene' })
+    async getScene(@CurrentUser() user: any, @Param('id') id: string) {
+        return this.slidesService.getScene(id, user.id);
+    }
+
+    @Patch(':id/scene')
+    @ApiOperation({ summary: 'Save an edited SlideScene back onto the slide' })
+    async saveScene(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: SaveSceneDto) {
+        return this.slidesService.saveScene(id, user.id, dto.scene);
     }
 }

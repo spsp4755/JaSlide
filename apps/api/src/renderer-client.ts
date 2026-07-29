@@ -4,7 +4,8 @@ import axios from 'axios';
 const logger = new Logger('RendererClient');
 
 /**
- * POST a multipart form to the renderer and return its JSON body.
+ * POST a body (multipart form or plain JSON) to the renderer and return its
+ * JSON body.
  *
  * A renderer that is unreachable, timing out, or erroring is an infrastructure
  * fault, not a bad upload. Every call site used to swallow the cause in a bare
@@ -15,11 +16,11 @@ const logger = new Logger('RendererClient');
 export async function postToRenderer<T>(
     rendererUrl: string,
     path: string,
-    form: FormData,
+    body: FormData | Record<string, unknown>,
     options: { timeout: number; rejectedMessage: string },
 ): Promise<T> {
     try {
-        const response = await axios.post(`${rendererUrl}${path}`, form, { timeout: options.timeout });
+        const response = await axios.post(`${rendererUrl}${path}`, body, { timeout: options.timeout });
         return response.data as T;
     } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
