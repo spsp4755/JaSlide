@@ -15,10 +15,14 @@ const nextConfig = {
         ],
     },
     async rewrites() {
+        // Only reached when a request lands on the Next.js server itself — SSR/server-component
+        // fetches to '/api/...', or a client hitting web:3000 directly instead of through the
+        // Ingress (which normally routes /api straight to the api Service, bypassing this).
+        const apiOrigin = process.env.API_INTERNAL_URL || 'http://localhost:4000';
         return [
             {
                 source: '/api/:path*',
-                destination: 'http://localhost:4000/api/:path*',
+                destination: `${apiOrigin}/api/:path*`,
             },
         ];
     },
