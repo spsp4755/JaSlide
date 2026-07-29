@@ -37,12 +37,9 @@ test('presentations page exposes a confirmed delete action', () => {
     assert.match(page, /window\.confirm/);
 });
 
-test('editor resolves imported template CSS variables for editable content', () => {
+test('editor loads each slide preview as a decoded object URL', () => {
     const editor = fs.readFileSync(path.join(webRoot, 'src', 'app', 'editor', '[id]', 'page.tsx'), 'utf8');
 
-    assert.match(editor, /function resolveTemplateValue/);
-    assert.match(editor, /matchAll/);
-    assert.match(editor, /style=\{\{ color: previewStyle\.color, fontFamily: previewStyle\.fontFamily \}\}/);
     assert.match(editor, /exportApi\.preview\(presentationId, slideIndex\)/);
     assert.match(editor, /URL\.createObjectURL/);
     assert.match(editor, /<img src=\{previewUrl\}/);

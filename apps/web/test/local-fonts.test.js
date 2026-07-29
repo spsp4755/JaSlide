@@ -39,9 +39,8 @@ test('the font picker offers what is installed, not a hand-kept list', () => {
 
     assert.match(editor, /import \{ DECK_FONTS \} from '@\/lib\/deck-fonts'/);
     assert.match(editor, /const FONT_CHOICES = \[\.\.\.DECK_FONTS/);
-    // Both the toolbar and the object panel offer the installed families.
+    // The toolbar offers the installed families for whatever is selected.
     assert.match(editor, /fontChoicesWith\(activeFormat\.fontFamily\)/);
-    assert.match(editor, /fontChoicesWith\(selectedNativeObject\.fontFamily\)/);
     // Neither makes you spell a family into a free-text box any more.
     assert.doesNotMatch(editor, /글꼴<input/);
     // A deck can name a font nobody installed; dropping it from the list would

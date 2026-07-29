@@ -16,7 +16,7 @@ import { CommentsPanel } from '@/components/editor/comments-panel';
 import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
-import { SlideCanvas, type SlideCanvasHandle, type SlideSelectionFormat } from '@/components/editor/slide-canvas';
+import { SceneCanvas, type SceneCanvasHandle, type SceneSelectionFormat } from '@/components/editor/scene-canvas';
 import { applySceneCommand, type SlideScene, type SlideObject, type SceneCommand } from '@jaslide/shared';
 import { DECK_FONTS } from '@/lib/deck-fonts';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
@@ -76,20 +76,6 @@ const slideTypeIcons: Record<string, any> = {
     SECTION_HEADER: Type,
 };
 
-function resolveTemplateValue(value: string | undefined, html: string): string | undefined {
-    const variables = Object.fromEntries([...html.matchAll(/(--[\w-]+)\s*:\s*([^;}]+)/g)].map(([, name, value]) => [name, value.trim()]));
-    return value?.replace(/var\((--[\w-]+)\)/g, (_, name) => variables[name] || _).trim();
-}
-
-function getTemplatePreviewStyle(template: any): CSSProperties {
-    const config = template?.config || {};
-    const html = config.htmlTemplate || '';
-    const background = resolveTemplateValue(config.colors?.background || html.match(/background(?:-color)?\s*:\s*([^;}]+)/)?.[1], html);
-    const color = resolveTemplateValue(config.colors?.text || html.match(/(?:^|[;\s])color\s*:\s*([^;}]+)/)?.[1], html);
-    const fontFamily = resolveTemplateValue(config.typography?.titleFont || html.match(/font-family\s*:\s*([^;}]+)/)?.[1], html);
-    return { backgroundColor: background, color, fontFamily };
-}
-
 function resolveAiEditTargets(instruction: string, slides: Array<{ id: string }>): string[] {
     const numbers = new Set<number>();
     for (const match of instruction.matchAll(/(\d+)\s*[~〜-]\s*(\d+)\s*(?:번|페이지|슬라이드)?/g)) {
@@ -99,102 +85,6 @@ function resolveAiEditTargets(instruction: string, slides: Array<{ id: string }>
     for (const match of instruction.matchAll(/(\d+)\s*(?:번\s*(?:슬라이드)?|페이지|슬라이드)/g)) numbers.add(Number(match[1]));
     const ids = [...numbers].map((number) => slides[number - 1]?.id).filter((id): id is string => Boolean(id));
     return ids.length ? ids : slides.map((slide) => slide.id);
-}
-
-function htmlTextElements(document: Document): HTMLElement[] {
-    const objectSelector = '[data-object="true"]';
-    const objects = Array.from(document.querySelectorAll<HTMLElement>(objectSelector))
-        .flatMap((element) => {
-            if (element.dataset.objectType === 'shape' || element.dataset.objectType === 'image') return [element];
-            const cells = Array.from(element.querySelectorAll<HTMLElement>('th, td')).filter((cell) => !!cell.textContent?.trim());
-            return element.dataset.objectType === 'table' ? [element, ...cells] : cells.length ? cells : [element];
-        })
-        .filter((element) => (element.dataset.objectType === 'shape' || element.dataset.objectType === 'image' || !!element.textContent?.trim()) && !element.querySelector('[data-object="true"]'));
-    const editableTextSelector = 'h1,h2,h3,h4,h5,h6,p,li,th,td,span,div';
-    const generatedText = Array.from(document.querySelectorAll<HTMLElement>(editableTextSelector))
-        .filter((element) => !element.closest(objectSelector) && !!element.textContent?.trim())
-        .filter((element) => !element.querySelector(editableTextSelector));
-    return [...objects, ...generatedText];
-}
-
-function getHtmlTextFields(html: string) {
-    return htmlTextElements(new DOMParser().parseFromString(html, 'text/html')).map((element) => ({
-        text: element.textContent?.trim() || '',
-        left: element.style.left || '0',
-        top: element.style.top || '0',
-        width: element.style.width || '640',
-        height: element.style.height || element.style.minHeight || '64',
-        positionable: element.dataset.object === 'true',
-        generated: element.dataset.object !== 'true',
-        objectType: element.dataset.objectType || 'textbox',
-        fontFamily: element.style.fontFamily || '', fontSize: element.style.fontSize || '24', color: element.style.color || '#1A1A1A',
-        backgroundColor: element.style.backgroundColor || '#ffffff', borderColor: element.style.borderColor || '#000000',
-        borderWidth: element.style.borderWidth || '0', textAlign: element.style.textAlign || 'left',
-        fontWeight: element.style.fontWeight || '400', fontStyle: element.style.fontStyle || 'normal', textDecoration: element.style.textDecoration || 'none',
-    }));
-}
-
-function getHtmlSelectionAreas(html: string) {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const fields = htmlTextElements(document);
-    return fields.map((element, index) => ({
-        index,
-        left: element.style.left || '0', top: element.style.top || '0',
-        width: element.style.width || '0', height: element.style.height || '0',
-    })).filter((area) => fields[area.index].dataset.object === 'true');
-}
-
-function updateHtmlObject(html: string, index: number, updates: Record<string, string | undefined>): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const element = htmlTextElements(document)[index];
-    if (!element) return html;
-    if (updates.text !== undefined) {
-        element.replaceChildren(...updates.text.split('\n').flatMap((line, lineIndex) => lineIndex ? [document.createElement('br'), document.createTextNode(line)] : [document.createTextNode(line)]));
-    }
-    if (updates.left !== undefined) element.style.left = `${updates.left}px`;
-    if (updates.top !== undefined) element.style.top = `${updates.top}px`;
-    if (updates.width !== undefined) element.style.width = `${updates.width}px`;
-    if (updates.height !== undefined) element.style.height = `${updates.height}px`;
-    if (updates.fontFamily !== undefined) element.style.fontFamily = updates.fontFamily;
-    if (updates.fontSize !== undefined) {
-        const size = `${Math.max(1, Number(updates.fontSize) || 24)}px`;
-        element.style.setProperty('font-size', size, 'important');
-        element.querySelectorAll<HTMLElement>('*').forEach((child) => child.style.setProperty('font-size', size, 'important'));
-    }
-    if (updates.color !== undefined) element.style.color = updates.color;
-    if (updates.backgroundColor !== undefined) element.style.backgroundColor = updates.backgroundColor;
-    if (updates.borderColor !== undefined) element.style.borderColor = updates.borderColor;
-    if (updates.borderWidth !== undefined) { element.style.borderStyle = 'solid'; element.style.borderWidth = `${updates.borderWidth}px`; }
-    if (updates.textAlign !== undefined) element.style.textAlign = updates.textAlign;
-    if (updates.fontWeight !== undefined) element.style.fontWeight = updates.fontWeight;
-    if (updates.fontStyle !== undefined) element.style.fontStyle = updates.fontStyle;
-    if (updates.textDecoration !== undefined) element.style.textDecoration = updates.textDecoration;
-    if (updates.listStyleType !== undefined) element.style.listStyleType = updates.listStyleType;
-    return document.documentElement.outerHTML;
-}
-
-function updateHtmlText(html: string, index: number, updates: Record<string, string | undefined>): string { return updateHtmlObject(html, index, updates); }
-
-function editorFrameHtml(html: string): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    document.querySelectorAll('script, iframe, object, embed').forEach((element) => element.remove());
-    htmlTextElements(document).forEach((element, index) => element.dataset.taeslideEditorIndex = String(index));
-    document.querySelectorAll<HTMLElement>('*').forEach((element) => {
-        for (const attribute of [...element.attributes]) if (attribute.name.startsWith('on')) element.removeAttribute(attribute.name);
-    });
-    return `<!doctype html>${document.documentElement.outerHTML}`;
-}
-
-function addHtmlText(html: string): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const container = document.querySelector('.slide-container') || document.body;
-    const element = document.createElement('div');
-    element.dataset.object = 'true';
-    element.dataset.objectType = 'textbox';
-    element.style.cssText = 'position:absolute;left:120px;top:120px;width:640px;min-height:64px;font-size:32px;color:#1A1A1A;z-index:100';
-    element.textContent = '새 텍스트';
-    container.append(element);
-    return document.documentElement.outerHTML;
 }
 
 const EDITOR_COLORS = ['#111827', '#374151', '#6B7280', '#FFFFFF', '#DC2626', '#EA580C', '#D97706', '#16A34A', '#2563EB', '#4F46E5', '#9333EA', '#DB2777'];
@@ -220,92 +110,9 @@ function ShapePickerGlyph({ kind }: { kind: string }) {
     return <svg aria-hidden="true" viewBox="0 0 100 100" className="h-5 w-5 overflow-visible text-foreground"><path d={glyphPath(kind)} fill={stroked ? 'none' : 'currentColor'} fillOpacity={stroked ? undefined : 0.18} stroke="currentColor" strokeWidth={6} vectorEffect="non-scaling-stroke" /></svg>;
 }
 
-function addHtmlShape(html: string, kind = 'rect'): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const container = document.querySelector('.slide-container') || document.body;
-    const element = document.createElement('div');
-    element.dataset.object = 'true'; element.dataset.objectType = 'shape'; element.dataset.shapeType = kind;
-    const [width, height] = isStrokeOnly(kind) ? [420, 160] : [320, 180];
-    element.style.cssText = `position:absolute;left:180px;top:180px;width:${width}px;height:${height}px;z-index:100;`;
-    // The same outline the picker icon draws, so what you clicked is what you get.
-    element.innerHTML = shapeSvgMarkup(kind, width, height);
-    container.append(element);
-    return document.documentElement.outerHTML;
-}
-
 function ColorSwatches({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
     const [open, setOpen] = useState(false);
     return <div className="relative text-xs"><button type="button" aria-label={`${label} 메뉴`} onClick={() => setOpen((visible) => !visible)} className="flex h-8 items-center gap-1 rounded px-2 hover:bg-secondary"><span>{label}</span><span className="h-3 w-4 border-b-4" style={{ borderColor: value }} /></button>{open && <div className="absolute left-0 top-9 z-50 w-52 rounded-lg border bg-card p-2 shadow-xl"><div className="grid grid-cols-6 gap-1">{EDITOR_COLORS.map((color) => <button key={color} type="button" aria-label={`${label} ${color}`} title={color} onClick={() => { onChange(color); setOpen(false); }} className={`h-6 w-6 rounded border ${value.toLowerCase() === color.toLowerCase() ? 'ring-2 ring-purple-500 ring-offset-1' : ''}`} style={{ backgroundColor: color }} />)}</div><label className="mt-2 flex items-center justify-between text-xs text-muted-foreground">사용자 색상 <input aria-label={`${label} 사용자 색상`} type="color" value={value} onChange={(event) => onChange(event.target.value)} /></label></div>}</div>;
-}
-
-function deleteHtmlObject(html: string, index: number): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    htmlTextElements(document)[index]?.remove();
-    return document.documentElement.outerHTML;
-}
-
-function duplicateHtmlObject(html: string, index: number): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const source = htmlTextElements(document)[index];
-    if (!source?.dataset.object || !source.parentElement) return html;
-    const copy = source.cloneNode(true) as HTMLElement;
-    copy.style.left = `${(parseFloat(source.style.left) || 0) + 32}px`;
-    copy.style.top = `${(parseFloat(source.style.top) || 0) + 32}px`;
-    source.parentElement.append(copy);
-    return document.documentElement.outerHTML;
-}
-
-function setHtmlList(html: string, index: number, ordered: boolean): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const source = htmlTextElements(document)[index];
-    if (!source?.dataset.object || source.dataset.objectType !== 'textbox' || !source.parentElement) return html;
-    const list = document.createElement(ordered ? 'ol' : 'ul');
-    list.dataset.object = 'true'; list.dataset.objectType = 'textbox';
-    list.style.cssText = source.style.cssText;
-    list.style.paddingLeft ||= '40px';
-    const lines = Array.from(source.querySelectorAll(':scope > li')).map((item) => item.textContent || '')
-        .concat(source.querySelector('li') ? [] : source.innerHTML.split(/<br\s*\/?\s*>/i).map((part) => {
-            const node = document.createElement('div'); node.innerHTML = part; return node.textContent || '';
-        }))
-        .map((line) => line.trim()).filter(Boolean);
-    for (const line of lines.length ? lines : [source.textContent || '목록 항목']) {
-        const item = document.createElement('li'); item.textContent = line; list.append(item);
-    }
-    source.replaceWith(list);
-    return document.documentElement.outerHTML;
-}
-
-function addHtmlTable(html: string): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const container = document.querySelector('.slide-container') || document.body;
-    const table = document.createElement('table');
-    table.dataset.object = 'true'; table.dataset.objectType = 'table';
-    table.style.cssText = 'position:absolute;left:180px;top:220px;width:1000px;height:300px;border-collapse:collapse;background:#FFFFFF;border:1px solid #94A3B8;z-index:100';
-    table.innerHTML = '<tbody><tr><th style="border:1px solid #94A3B8;padding:16px;background:#E2E8F0">항목</th><th style="border:1px solid #94A3B8;padding:16px;background:#E2E8F0">내용</th></tr><tr><td style="border:1px solid #94A3B8;padding:16px">새 항목</td><td style="border:1px solid #94A3B8;padding:16px">내용 입력</td></tr></tbody>';
-    container.append(table);
-    return document.documentElement.outerHTML;
-}
-
-function addHtmlList(html: string, ordered: boolean): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const container = document.querySelector('.slide-container') || document.body;
-    const list = document.createElement(ordered ? 'ol' : 'ul');
-    list.dataset.object = 'true'; list.dataset.objectType = 'textbox';
-    list.style.cssText = 'position:absolute;left:180px;top:180px;width:720px;min-height:160px;padding-left:40px;font-size:28px;color:#1A1A1A;z-index:100';
-    list.innerHTML = '<li>첫 번째 항목</li><li>두 번째 항목</li><li>세 번째 항목</li>';
-    container.append(list);
-    return document.documentElement.outerHTML;
-}
-
-function addHtmlImage(html: string, source: string): string {
-    const document = new DOMParser().parseFromString(html, 'text/html');
-    const container = document.querySelector('.slide-container') || document.body;
-    const image = document.createElement('img');
-    image.dataset.object = 'true'; image.dataset.objectType = 'image';
-    image.src = source; image.alt = '삽입 이미지';
-    image.style.cssText = 'position:absolute;left:180px;top:180px;width:640px;height:360px;object-fit:cover;z-index:100';
-    container.append(image);
-    return document.documentElement.outerHTML;
 }
 
 interface DraggableSlideProps {
@@ -437,24 +244,16 @@ export default function EditorPage() {
     const previewCacheRef = useRef(new Map<string, string>());
     const previewPendingRef = useRef(new Map<string, Promise<string | null>>());
     const previewSlideIdRef = useRef<string | null>(null);
-    const [selectedHtmlTextIndex, setSelectedHtmlTextIndex] = useState<number | null>(null);
-    const [htmlTextFormatCommand, setHtmlTextFormatCommand] = useState<{ id: number; updates: Record<string, string> } | null>(null);
-    const [htmlSelectionStyle, setHtmlSelectionStyle] = useState<Record<string, string> | null>(null);
     const [selectedNativeObjectId, setSelectedNativeObjectId] = useState<string | null>(null);
-    // The slide's own markup, which the canvas renders instead of the PNG. Keyed
-    // by slide id and cached: it never changes for a given slide, and a PPTX
-    // template's inlined images make it expensive to refetch.
-    const [slideHtml, setSlideHtml] = useState<Record<string, string>>({});
-    // The current slide's editable scene — fetched on demand per slide (same
-    // fetch-per-slide shape as `slideHtml` above), null while loading or when
-    // the slide has nothing scene-derivable to show yet.
+    // The current slide's editable scene — fetched on demand per slide, null
+    // while loading or when the slide has nothing scene-derivable to show yet.
     const [scene, setScene] = useState<SlideScene | null>(null);
     const [sceneError, setSceneError] = useState(false);
     // What the canvas has selected, and how it is formatted. Drives the toolbar.
-    const [canvasFormat, setCanvasFormat] = useState<SlideSelectionFormat | null>(null);
+    const [canvasFormat, setCanvasFormat] = useState<SceneSelectionFormat | null>(null);
     const [fontSizeDraft, setFontSizeDraft] = useState('');
     const [fontSizeTyping, setFontSizeTyping] = useState(false);
-    const slideCanvasRef = useRef<SlideCanvasHandle>(null);
+    const sceneCanvasRef = useRef<SceneCanvasHandle>(null);
     const [leftPanelWidth, setLeftPanelWidth] = useState(208);
     const [rightPanelWidth, setRightPanelWidth] = useState(336);
 
@@ -463,52 +262,19 @@ export default function EditorPage() {
     }, []);
 
     const selectedSlide = presentation?.slides.find((s) => s.id === selectedSlideId);
-    const selectedHtmlObject = selectedSlide?.content?.html && selectedHtmlTextIndex !== null
-        ? getHtmlTextFields(selectedSlide.content.html)[selectedHtmlTextIndex] : null;
-    const activeHtmlTextStyle = htmlSelectionStyle || selectedHtmlObject;
-    const nativeObjects = presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide
-        ? [
-            ...(presentation.template.config.source.slides?.[selectedSlide.content?.templateIndex ?? selectedSlide.order]?.objects || []),
-            ...(selectedSlide.content?.objectEdits || [])
-                .filter((item: any) => item.kind && (item.imageData || item.addText || item.addShape || item.addLine || item.duplicate) && !item.delete)
-                .map((item: any) => ({ ...item, id: item.objectId })),
-        ]
-        : [];
-    const selectedNativeObject = nativeObjects.find((item: any) => item.id === selectedNativeObjectId);
+    const selectedObject = scene?.objects.find((item) => item.id === selectedNativeObjectId);
     const navigateSlide = (direction: -1 | 1) => {
         const index = presentation?.slides.findIndex((slide) => slide.id === selectedSlideId) ?? -1;
         const target = presentation?.slides[index + direction];
         if (!target) return;
         setSelectedSlide(target.id);
-        setSelectedHtmlTextIndex(null);
         setSelectedNativeObjectId(null);
     };
-    const updateSelectedHtmlObject = (updates: Record<string, string>) => {
-        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
-        const content = { ...selectedSlide.content, html: updateHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex, updates) };
-        updateSlide(selectedSlide.id, { content });
-        handleSaveSlideDelayed(selectedSlide.id, { content });
-    };
-    const formatSelectedHtmlText = (updates: Record<string, string>) => setHtmlTextFormatCommand((current) => ({ id: (current?.id || 0) + 1, updates }));
 
-    // One formatting bar for both deck kinds.
-    //
-    // The bar used to read `selectedHtmlObject`, which only exists for a ZIP
-    // deck's generated markup. A PPTX deck has no `content.html`, so selecting
-    // one of its objects left the bar showing "객체를 선택하면…" forever and the
-    // only way to change a font was a side panel behind 수동 편집. The canvas
-    // reports what it has selected; both kinds now drive the same controls.
-    const activeFormat = canvasFormat ?? (selectedHtmlObject ? {
-        objectType: selectedHtmlObject.objectType,
-        fontFamily: activeHtmlTextStyle?.fontFamily || '',
-        fontSize: Math.round(parseFloat(activeHtmlTextStyle?.fontSize || '') || 24),
-        bold: activeHtmlTextStyle?.fontWeight === '700' || activeHtmlTextStyle?.fontWeight === 'bold',
-        italic: activeHtmlTextStyle?.fontStyle === 'italic',
-        underline: selectedHtmlObject.textDecoration.includes('underline'),
-        color: activeHtmlTextStyle?.color || selectedHtmlObject.color,
-        align: selectedHtmlObject.textAlign,
-        fillColor: selectedHtmlObject.backgroundColor,
-    } : null);
+    // One formatting bar for both deck kinds — the canvas reports what it has
+    // selected (`canvasFormat`, from `SceneCanvas`'s `onSelectionFormat`), so
+    // there is no separate HTML-path derivation to keep in sync with it.
+    const activeFormat = canvasFormat;
 
     useEffect(() => {
         setFontSizeDraft(activeFormat ? String(activeFormat.fontSize) : '');
@@ -526,28 +292,25 @@ export default function EditorPage() {
             // else formats the live text selection when there is one, falling back
             // to the whole object when there is only a caret (or none).
             const perCharacter = updates.align === undefined && updates.fillColor === undefined;
-            if (perCharacter && slideCanvasRef.current?.formatSelection(updates)) {
+            if (perCharacter && sceneCanvasRef.current?.formatSelection(updates)) {
                 setCanvasFormat((format) => format ? { ...format, ...updates } : format);
                 return;
             }
             if (updates.fillColor !== undefined) {
-                slideCanvasRef.current?.setFillColor(canvasFormat.objectId, updates.fillColor);
-                setCanvasFormat((format) => format ? { ...format, ...updates } : format);
+                sceneCanvasRef.current?.paintColor(canvasFormat.objectId, 'fill', updates.fillColor);
+                onSceneCommand({ objectId: canvasFormat.objectId, patch: { fill: updates.fillColor } as Partial<SlideObject> });
             }
-            updateNativeObject(canvasFormat.objectId, updates);
-            return;
+            if (updates.align !== undefined) {
+                const target = scene?.objects.find((item) => item.id === canvasFormat.objectId);
+                if (target && target.type === 'text') {
+                    onSceneCommand({
+                        objectId: canvasFormat.objectId,
+                        patch: { paragraphs: target.paragraphs.map((paragraph) => ({ ...paragraph, align: updates.align as any })) } as Partial<SlideObject>,
+                    });
+                }
+            }
+            setCanvasFormat((format) => format ? { ...format, ...updates } : format);
         }
-        // The HTML path speaks CSS; translate rather than teach it a second dialect.
-        const css: Record<string, string> = {};
-        if (updates.fontFamily !== undefined) css.fontFamily = updates.fontFamily;
-        if (updates.fontSize !== undefined) css.fontSize = String(updates.fontSize);
-        if (updates.bold !== undefined) css.fontWeight = updates.bold ? '700' : '400';
-        if (updates.italic !== undefined) css.fontStyle = updates.italic ? 'italic' : 'normal';
-        if (updates.underline !== undefined) css.textDecoration = updates.underline ? 'underline' : 'none';
-        if (updates.color !== undefined) css.color = updates.color;
-        if (updates.align !== undefined) { updateSelectedHtmlObject({ textAlign: updates.align }); return; }
-        if (updates.fillColor !== undefined) { updateSelectedHtmlObject({ backgroundColor: updates.fillColor }); return; }
-        formatSelectedHtmlText(css);
     };
 
     const commitFontSize = () => {
@@ -563,23 +326,6 @@ export default function EditorPage() {
         applyFormat({ fontSize });
     };
 
-    const deleteSelectedObject = () => (canvasFormat ? deleteNativeObject() : deleteSelectedHtmlObject());
-    const duplicateSelectedObject = () => (canvasFormat ? duplicateNativeObject() : duplicateSelectedHtmlObject());
-    // Fetch the selected slide's own markup once. A slide with none — an old deck,
-    // a deleted template — simply keeps the server-rendered PNG, so a failure here
-    // costs fidelity, never the slide itself.
-    useEffect(() => {
-        if (!presentation || !selectedSlide || slideHtml[selectedSlide.id] !== undefined) return;
-        let cancelled = false;
-        presentationsApi.slideTemplateHtml(presentation.id, selectedSlide.order)
-            .then(({ data }) => {
-                if (!cancelled) setSlideHtml((current) => ({ ...current, [selectedSlide.id]: typeof data?.html === 'string' ? data.html : '' }));
-            })
-            .catch(() => {
-                if (!cancelled) setSlideHtml((current) => ({ ...current, [selectedSlide.id]: '' }));
-            });
-        return () => { cancelled = true; };
-    }, [presentation, selectedSlide, slideHtml]);
     useEffect(() => {
         if (!presentation || !selectedSlide) { setScene(null); setSceneError(false); return; }
         let cancelled = false;
@@ -590,70 +336,6 @@ export default function EditorPage() {
             .catch(() => { if (!cancelled) setSceneError(true); });
         return () => { cancelled = true; };
     }, [presentation, selectedSlide]);
-    useEffect(() => {
-        const receiveSelectionStyle = (event: MessageEvent) => {
-            if (event.data?.type === 'taeslide-selection-style' && event.data.slideId === selectedSlideId) setHtmlSelectionStyle(event.data.style);
-        };
-        window.addEventListener('message', receiveSelectionStyle);
-        return () => window.removeEventListener('message', receiveSelectionStyle);
-    }, [selectedSlideId]);
-    const updateNativeObject = (objectId: string, updates: Record<string, any>) => {
-        if (!selectedSlide) return;
-        const objectEdits = [...(selectedSlide.content?.objectEdits || [])];
-        const index = objectEdits.findIndex((item: any) => item.objectId === objectId);
-        const base = { objectId, slide: selectedSlide.content?.templateIndex ?? selectedSlide.order ?? 0 };
-        if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...updates };
-        else objectEdits.push({ ...base, ...updates });
-        const content = { ...selectedSlide.content, objectEdits };
-        updateSlide(selectedSlide.id, { content });
-        handleSaveSlideDelayed(selectedSlide.id, { content });
-    };
-    // Ctrl+D. The copy carries its own id so it can be moved and restyled straight
-    // away, and lands offset so it is visibly a second object.
-    const duplicateNativeObject = () => {
-        if (!selectedNativeObject) return;
-        const edit = (selectedSlide?.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObjectId) || {};
-        const copyId = `copy-${crypto.randomUUID()}`;
-        updateNativeObject(copyId, {
-            kind: selectedNativeObject.kind,
-            duplicate: selectedNativeObjectId,
-            left: (edit.left ?? selectedNativeObject.left ?? 0) + 40,
-            top: (edit.top ?? selectedNativeObject.top ?? 0) + 40,
-        });
-        setSelectedNativeObjectId(copyId);
-    };
-
-    const deleteNativeObject = () => {
-        if (!selectedNativeObjectId) return;
-        updateNativeObject(selectedNativeObjectId, { delete: true });
-        setSelectedNativeObjectId(null);
-    };
-    const insertNativeText = () => {
-        if (!selectedSlide) return;
-        const objectId = `new-text-${crypto.randomUUID()}`;
-        updateNativeObject(objectId, { kind: 'text', addText: '새 텍스트', text: '새 텍스트', left: 180, top: 180, width: 640, height: 100, fontSize: 24, color: '#1A1A1A' });
-        setSelectedNativeObjectId(objectId);
-        setRibbonTab('home');
-    };
-    const insertNativeTable = (rows: number, columns: number) => {
-        if (!selectedSlide) return;
-        const objectId = `new-table-${crypto.randomUUID()}`;
-        updateNativeObject(objectId, {
-            kind: 'table',
-            addTable: { rows, columns },
-            left: 240, top: 300, width: 1440, height: Math.min(700, 90 * rows),
-            cells: Array.from({ length: rows }, () => Array.from({ length: columns }, () => '')),
-        });
-        setSelectedNativeObjectId(objectId);
-    };
-
-    const insertNativeShape = (kind: string, line = false) => {
-        if (!selectedSlide) return;
-        const objectId = `new-${line ? 'line' : 'shape'}-${crypto.randomUUID()}`;
-        updateNativeObject(objectId, { kind: 'shape', [line ? 'addLine' : 'addShape']: kind, left: 180, top: 180, width: 420, height: line ? 80 : 220, fillColor: '#FFFFFF', lineColor: '#202124', lineWidth: 2 });
-        setSelectedNativeObjectId(objectId);
-    };
-
     // Dropdowns only closed by clicking their own button again, which left the shape
     // sheet covering the canvas. Close on an outside click or Escape, as menus do.
     useEffect(() => {
@@ -726,6 +408,29 @@ export default function EditorPage() {
         window.addEventListener('pointerup', stop, { once: true });
     };
 
+    // Debounced scene save — same 500ms shape as `handleSaveSlideDelayed`, but
+    // posts the whole scene so the server can convert it to whichever legacy
+    // format (objectEdits or html) this slide's source actually needs.
+    const sceneSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const saveSceneDelayed = useCallback((nextScene: SlideScene) => {
+        if (!presentation || !selectedSlide) return;
+        if (sceneSaveTimerRef.current) clearTimeout(sceneSaveTimerRef.current);
+        sceneSaveTimerRef.current = setTimeout(() => {
+            slidesApi.saveScene(presentation.id, selectedSlide.id, nextScene).catch(() => {
+                toast({ title: '저장 실패', description: '편집 내용을 저장하지 못했습니다.', variant: 'destructive' });
+            });
+        }, 500);
+    }, [presentation, selectedSlide]);
+
+    const onSceneCommand = useCallback((command: SceneCommand) => {
+        setScene((current) => {
+            if (!current) return current;
+            const next = applySceneCommand(current, command);
+            saveSceneDelayed(next);
+            return next;
+        });
+    }, [saveSceneDelayed]);
+
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -744,34 +449,26 @@ export default function EditorPage() {
                 // With an object selected, Ctrl+D means duplicate that object. It used
                 // to fall through and duplicate the entire slide, which is not undoable
                 // in one step and is never what the shortcut means elsewhere.
-                if (selectedHtmlTextIndex !== null) duplicateSelectedHtmlObject();
-                else if (selectedNativeObjectId) duplicateNativeObject();
+                if (selectedNativeObjectId) duplicateSelectedObject();
                 else if (selectedSlideId) handleDuplicateSlide();
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
-                // A selected PPTX object could only be removed from the side panel;
-                // the key everyone reaches for did nothing.
-                if (selectedNativeObjectId) deleteNativeObject();
-                else deleteSelectedHtmlObject();
-            } else if (selectedNativeObject && e.key.startsWith('Arrow')) {
+                if (selectedNativeObjectId) deleteSelectedObject();
+            } else if (selectedObject && e.key.startsWith('Arrow')) {
                 // Nudging is how you line objects up without retyping coordinates.
-                const edit = (selectedSlide?.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObjectId) || {};
                 const box = nudgeBox({
-                    left: edit.left ?? selectedNativeObject.left ?? 0,
-                    top: edit.top ?? selectedNativeObject.top ?? 0,
-                    width: edit.width ?? selectedNativeObject.width ?? 0,
-                    height: edit.height ?? selectedNativeObject.height ?? 0,
+                    left: selectedObject.x, top: selectedObject.y, width: selectedObject.width, height: selectedObject.height,
                 }, e.key, e.shiftKey);
                 if (box) {
                     e.preventDefault();
-                    updateNativeObject(selectedNativeObjectId!, { left: box.left, top: box.top });
+                    onSceneCommand({ objectId: selectedObject.id, patch: { x: box.left, y: box.top } });
                 }
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [canUndo, canRedo, undo, redo, selectedSlideId, selectedHtmlTextIndex, selectedSlide, selectedNativeObjectId, selectedNativeObject]);
+    }, [canUndo, canRedo, undo, redo, selectedSlideId, selectedNativeObjectId, selectedObject, onSceneCommand]);
 
     useEffect(() => {
         // Wait for hydration before checking auth
@@ -927,29 +624,6 @@ export default function EditorPage() {
         saveSchedulerRef.current!.schedule(slideId, updates);
     };
 
-    // Debounced scene save — same 500ms shape as `handleSaveSlideDelayed`, but
-    // posts the whole scene so the server can convert it to whichever legacy
-    // format (objectEdits or html) this slide's source actually needs.
-    const sceneSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const saveSceneDelayed = useCallback((nextScene: SlideScene) => {
-        if (!presentation || !selectedSlide) return;
-        if (sceneSaveTimerRef.current) clearTimeout(sceneSaveTimerRef.current);
-        sceneSaveTimerRef.current = setTimeout(() => {
-            slidesApi.saveScene(presentation.id, selectedSlide.id, nextScene).catch(() => {
-                toast({ title: '저장 실패', description: '편집 내용을 저장하지 못했습니다.', variant: 'destructive' });
-            });
-        }, 500);
-    }, [presentation, selectedSlide]);
-
-    const onSceneCommand = useCallback((command: SceneCommand) => {
-        setScene((current) => {
-            if (!current) return current;
-            const next = applySceneCommand(current, command);
-            saveSceneDelayed(next);
-            return next;
-        });
-    }, [saveSceneDelayed]);
-
     const commitScene = useCallback((mutate: (objects: SlideObject[]) => SlideObject[]) => {
         setScene((current) => {
             if (!current) return current;
@@ -975,6 +649,73 @@ export default function EditorPage() {
         insertSceneObject(copy);
         return copy.id;
     }, [scene, insertSceneObject]);
+
+    const insertSceneText = () => {
+        const id = `new-text-${crypto.randomUUID()}`;
+        insertSceneObject({
+            id, x: 180, y: 180, width: 640, height: 100, rotation: 0,
+            type: 'text', paragraphs: [{ runs: [{ text: '새 텍스트', fontSize: 24, color: '#1A1A1A' }], level: 0, align: 'left' }],
+        });
+        setSelectedNativeObjectId(id);
+        setRibbonTab('home');
+    };
+
+    const insertSceneList = () => {
+        const id = `new-text-${crypto.randomUUID()}`;
+        insertSceneObject({
+            id, x: 180, y: 180, width: 720, height: 160, rotation: 0,
+            type: 'text',
+            paragraphs: ['첫 번째 항목', '두 번째 항목', '세 번째 항목'].map((text) => ({
+                runs: [{ text, fontSize: 24, color: '#1A1A1A' }], level: 0, align: 'left' as const, bulleted: true,
+            })),
+        });
+        setSelectedNativeObjectId(id);
+    };
+
+    const insertSceneTable = (rows: number, columns: number) => {
+        const width = 1440;
+        const height = Math.min(700, 90 * rows);
+        const emptyCell = { paragraphs: [{ runs: [{ text: '' }], level: 0, align: 'left' as const }] };
+        const id = `new-table-${crypto.randomUUID()}`;
+        insertSceneObject({
+            id, x: 240, y: 300, width, height, rotation: 0,
+            type: 'table',
+            rowHeights: Array.from({ length: rows }, () => height / rows),
+            columnWidths: Array.from({ length: columns }, () => width / columns),
+            cells: Array.from({ length: rows }, () => Array.from({ length: columns }, () => ({ ...emptyCell }))),
+        });
+        setSelectedNativeObjectId(id);
+    };
+
+    const insertSceneShape = (kind: string, line = false) => {
+        const width = 420;
+        const height = line ? 80 : 220;
+        const id = `new-${line ? 'line' : 'shape'}-${crypto.randomUUID()}`;
+        insertSceneObject(line
+            ? { id, x: 180, y: 180, width, height, rotation: 0, type: 'line', lineStyle: kind, stroke: '#202124', strokeWidth: 2 }
+            : { id, x: 180, y: 180, width, height, rotation: 0, type: 'shape', shape: kind, fill: '#FFFFFF', stroke: '#202124', strokeWidth: 2 });
+        setSelectedNativeObjectId(id);
+    };
+
+    const insertSceneImage = (imageData: string) => {
+        const id = `new-image-${crypto.randomUUID()}`;
+        insertSceneObject({ id, x: 180, y: 180, width: 640, height: 360, rotation: 0, type: 'image', src: imageData });
+        setSelectedNativeObjectId(id);
+    };
+
+    const handleImageInsert = (file: File | undefined) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => insertSceneImage(reader.result as string);
+        reader.readAsDataURL(file);
+    };
+
+    const deleteSelectedObject = () => selectedNativeObjectId && deleteSceneObject(selectedNativeObjectId);
+    const duplicateSelectedObject = () => {
+        if (!selectedNativeObjectId) return;
+        const copyId = duplicateSceneObject(selectedNativeObjectId);
+        if (copyId) setSelectedNativeObjectId(copyId);
+    };
 
     const persistHistoryState = async () => {
         saveSchedulerRef.current?.cancelAll();
@@ -1168,59 +909,6 @@ export default function EditorPage() {
         }
     };
 
-    const insertHtmlObject = (mutate: (html: string) => string) => {
-        if (!selectedSlide?.content?.html) {
-            toast({ title: 'HTML 템플릿 슬라이드가 필요합니다', description: '현재 슬라이드는 편집 가능한 HTML 템플릿이 아닙니다.', variant: 'destructive' });
-            return;
-        }
-        const nextIndex = getHtmlTextFields(selectedSlide.content.html).length;
-        const content = { ...selectedSlide.content, html: mutate(selectedSlide.content.html) };
-        updateSlide(selectedSlide.id, { content });
-        handleSaveSlideDelayed(selectedSlide.id, { content });
-        setSelectedHtmlTextIndex(nextIndex);
-        setRibbonTab('home');
-    };
-
-    const handleImageInsert = (file: File | undefined) => {
-        if (!file || !file.type.startsWith('image/')) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const imageData = String(reader.result);
-            if (presentation?.template?.config?.source?.kind === 'pptx' && selectedSlide) {
-                const objectId = `new-image-${crypto.randomUUID()}`;
-                updateNativeObject(objectId, { kind: 'image', imageData, left: 180, top: 180, width: 640, height: 360 });
-                setSelectedNativeObjectId(objectId);
-                return;
-            }
-            insertHtmlObject((html) => addHtmlImage(html, imageData));
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const deleteSelectedHtmlObject = () => {
-        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
-        const content = { ...selectedSlide.content, html: deleteHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex) };
-        updateSlide(selectedSlide.id, { content });
-        handleSaveSlideDelayed(selectedSlide.id, { content });
-        setSelectedHtmlTextIndex(null);
-    };
-
-    const duplicateSelectedHtmlObject = () => {
-        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
-        const nextIndex = getHtmlTextFields(selectedSlide.content.html).length;
-        const content = { ...selectedSlide.content, html: duplicateHtmlObject(selectedSlide.content.html, selectedHtmlTextIndex) };
-        updateSlide(selectedSlide.id, { content });
-        handleSaveSlideDelayed(selectedSlide.id, { content });
-        setSelectedHtmlTextIndex(nextIndex);
-    };
-
-    const setSelectedHtmlList = (ordered: boolean) => {
-        if (!selectedSlide?.content?.html || selectedHtmlTextIndex === null) return;
-        const content = { ...selectedSlide.content, html: setHtmlList(selectedSlide.content.html, selectedHtmlTextIndex, ordered) };
-        updateSlide(selectedSlide.id, { content });
-        handleSaveSlideDelayed(selectedSlide.id, { content });
-    };
-
     const handleCancelAiChat = () => aiEditAbortRef.current?.abort();
 
     // Duplicate slide handler
@@ -1400,11 +1088,11 @@ export default function EditorPage() {
                         <Button aria-label="선택한 객체 복제" type="button" size="sm" variant="ghost" onClick={duplicateSelectedObject}><Copy className="mr-1 h-4 w-4" />복제</Button>
                         <Button aria-label="선택한 객체 삭제" type="button" size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={deleteSelectedObject}><Trash2 className="mr-1 h-4 w-4" />삭제</Button>
                     </> : <span className="text-xs text-muted-foreground">객체를 선택하면 글꼴, 목록, 정렬, 색상 서식을 적용할 수 있습니다.</span>) : <>
-                        <Button type="button" size="sm" variant="outline" onClick={() => presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeText() : insertHtmlObject(addHtmlText)}><Type className="mr-1 h-4 w-4" />텍스트</Button>
-                        <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showShapePicker} onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-card shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} onClick={() => setShapePickerGroup(index)} aria-current={shapePickerGroup === index} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-secondary text-foreground' : 'text-foreground hover:bg-secondary'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-secondary"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
-                        <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showLinePicker} onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-card p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(({ kind, label }) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { presentation?.template?.config?.source?.kind === 'pptx' ? insertNativeShape(kind, true) : insertHtmlObject((html) => addHtmlShape(html, kind)); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-secondary"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
-                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, false))}><List className="mr-1 h-4 w-4" />글머리</Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => insertHtmlObject((html) => addHtmlList(html, true))}><ListOrdered className="mr-1 h-4 w-4" />번호 목록</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={insertSceneText}><Type className="mr-1 h-4 w-4" />텍스트</Button>
+                        <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showShapePicker} onClick={() => { setShowShapePicker((open) => !open); setShowLinePicker(false); }}><Layout className="mr-1 h-4 w-4" />도형</Button>{showShapePicker && <div className="absolute left-0 top-10 z-50 flex w-[330px] overflow-hidden rounded border bg-card shadow-lg"><nav className="w-28 border-r p-1">{SHAPE_GROUPS.map(([group], index) => <button key={group} type="button" onMouseEnter={() => setShapePickerGroup(index)} onFocus={() => setShapePickerGroup(index)} onClick={() => setShapePickerGroup(index)} aria-current={shapePickerGroup === index} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ${shapePickerGroup === index ? 'bg-secondary text-foreground' : 'text-foreground hover:bg-secondary'}`}><span>{group}</span><span>›</span></button>)}</nav><div className="w-[202px] p-2"><div className="grid grid-cols-5 gap-1">{SHAPE_GROUPS[shapePickerGroup][1].map(([kind, label]) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { insertSceneShape(kind); setShowShapePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-secondary"><ShapePickerGlyph kind={kind} /></button>)}</div></div></div>}</div>
+                        <div className="relative" data-insert-picker><Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showLinePicker} onClick={() => { setShowLinePicker((open) => !open); setShowShapePicker(false); }}>선</Button>{showLinePicker && <div className="absolute left-0 top-10 z-50 w-36 rounded border bg-card p-2 shadow-lg"><div className="grid grid-cols-3 gap-1">{LINE_OPTIONS.map(({ kind, label }) => <button key={kind} type="button" aria-label={label} title={label} onClick={() => { insertSceneShape(kind, true); setShowLinePicker(false); }} className="flex h-8 items-center justify-center rounded hover:bg-secondary"><ShapePickerGlyph kind={kind} /></button>)}</div></div>}</div>
+                        <Button type="button" size="sm" variant="outline" onClick={insertSceneList}><List className="mr-1 h-4 w-4" />글머리</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={insertSceneList}><ListOrdered className="mr-1 h-4 w-4" />번호 목록</Button>
                         <div className="relative" data-insert-picker>
                             <Button type="button" size="sm" variant="outline" aria-haspopup="true" aria-expanded={showTablePicker} onClick={() => { setShowTablePicker((open) => !open); setShowShapePicker(false); setShowLinePicker(false); }}><Table2 className="mr-1 h-4 w-4" />표</Button>
                             {showTablePicker && <div className="absolute left-0 top-10 z-50 rounded border bg-card p-2 shadow-lg">
@@ -1423,8 +1111,7 @@ export default function EditorPage() {
                                             onPointerEnter={() => setTableGrid({ rows, columns })}
                                             onFocus={() => setTableGrid({ rows, columns })}
                                             onClick={() => {
-                                                if (presentation?.template?.config?.source?.kind === 'pptx') insertNativeTable(rows, columns);
-                                                else insertHtmlObject(addHtmlTable);
+                                                insertSceneTable(rows, columns);
                                                 setShowTablePicker(false);
                                                 setTableGrid(null);
                                             }}
@@ -1467,7 +1154,7 @@ export default function EditorPage() {
                                     previewUrl={thumbnails[slide.id]}
                                     onSelect={() => {
                                         setSelectedSlide(slide.id);
-                                        setSelectedHtmlTextIndex(null);
+                                        setSelectedNativeObjectId(null);
                                     }}
                                     onToggleCheck={() => setMultiSelectedSlides((prev) =>
                                         prev.includes(slide.id) ? prev.filter((id) => id !== slide.id) : [...prev, slide.id]
@@ -1490,23 +1177,15 @@ export default function EditorPage() {
                                 {selectedSlide ? (
                                     <EditableSlidePreview
                                         slide={selectedSlide}
-                                        template={presentation.template}
+                                        scene={scene}
+                                        sceneError={sceneError}
                                         previewUrl={previewUrl}
-                                        baseHtml={slideHtml[selectedSlide.id] ?? ''}
-                                        selectedHtmlTextIndex={selectedHtmlTextIndex}
-                                        onSelectHtmlText={setSelectedHtmlTextIndex}
-                                        nativeObjects={nativeObjects}
-                                        selectedNativeObjectId={selectedNativeObjectId}
-                                        onSelectNativeObject={setSelectedNativeObjectId}
+                                        selectedObjectId={selectedNativeObjectId}
+                                        onSelectObject={setSelectedNativeObjectId}
                                         onSelectionFormat={setCanvasFormat}
-                                        slideCanvasRef={slideCanvasRef}
+                                        onCommand={onSceneCommand}
+                                        sceneCanvasRef={sceneCanvasRef}
                                         onNavigate={navigateSlide}
-                                        onUpdate={(updates) => {
-                                            updateSlide(selectedSlide.id, updates);
-                                            if (updates.content) handleSaveSlideDelayed(selectedSlide.id, updates);
-                                        }}
-                                        onSave={() => handleSaveSlide(selectedSlide)}
-                                        htmlTextFormatCommand={htmlTextFormatCommand}
                                     />
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -1568,132 +1247,7 @@ export default function EditorPage() {
                             </div>
                         )}
                         {rightTab === 'edit' && (<div className="overflow-auto">
-                        {selectedSlide ? (nativeObjects.length ? (
-                            <div className="space-y-3">
-                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">원본 PPTX 객체를 선택해 텍스트, 표, 위치와 크기를 직접 수정합니다.</div>
-                                <select value={selectedNativeObjectId ?? ''} onChange={(event) => setSelectedNativeObjectId(event.target.value || null)} className="w-full rounded-lg border px-3 py-2 text-sm">
-                                    <option value="">수정할 PPTX 객체 선택</option>
-                                    {nativeObjects.filter((item: any) => item.kind === 'text' || item.kind === 'table' || item.kind === 'shape' || item.kind === 'image').map((item: any, index: number) => <option key={item.id} value={item.id}>{item.kind === 'table' ? '표' : item.kind === 'shape' ? '도형' : item.kind === 'image' ? '이미지' : '텍스트'} {index + 1}</option>)}
-                                </select>
-                                {selectedNativeObject ? <div className="space-y-3">
-                                    {(selectedNativeObject.kind === 'text' || selectedNativeObject.kind === 'table') && <p className="text-xs text-muted-foreground">슬라이드에서 더블클릭하면 직접 편집할 수 있습니다.</p>}
-                                    {selectedNativeObject.kind === 'text' && <div className="grid grid-cols-2 gap-2">
-                                        <label className="text-xs text-muted-foreground">글꼴<select value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontFamily ?? selectedNativeObject.fontFamily ?? ''} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontFamily: event.target.value })} className="mt-1 w-full rounded border px-2 py-1 text-sm">{fontChoicesWith(selectedNativeObject.fontFamily).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
-                                        <label className="text-xs text-muted-foreground">크기<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fontSize ?? selectedNativeObject.fontSize ?? 18} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fontSize: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
-                                        <label className="text-xs text-muted-foreground">색상<input type="color" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.color ?? selectedNativeObject.color ?? '#1A1A1A'} onChange={(event) => updateNativeObject(selectedNativeObject.id, { color: event.target.value })} className="mt-1 h-8 w-full rounded border p-1" /></label>
-                                        <div className="flex items-end gap-2"><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => updateNativeObject(selectedNativeObject.id, { bold: !((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.bold ?? selectedNativeObject.bold) })}><Bold className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => updateNativeObject(selectedNativeObject.id, { italic: !((selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.italic ?? selectedNativeObject.italic) })}><Italic className="h-4 w-4" /></Button></div>
-                                    </div>}
-                                    {selectedNativeObject.kind === 'shape' && <div className="grid grid-cols-2 gap-2">
-                                        <label className="text-xs text-muted-foreground">채우기<input type="color" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.fillColor ?? selectedNativeObject.fillColor ?? '#FFFFFF'} onChange={(event) => updateNativeObject(selectedNativeObject.id, { fillColor: event.target.value })} className="mt-1 h-8 w-full rounded border p-1" /></label>
-                                        <label className="text-xs text-muted-foreground">테두리<input type="color" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.lineColor ?? selectedNativeObject.lineColor ?? '#202124'} onChange={(event) => updateNativeObject(selectedNativeObject.id, { lineColor: event.target.value })} className="mt-1 h-8 w-full rounded border p-1" /></label>
-                                        <label className="text-xs text-muted-foreground">선 굵기<input type="number" min="0" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.lineWidth ?? selectedNativeObject.lineWidth ?? 1} onChange={(event) => updateNativeObject(selectedNativeObject.id, { lineWidth: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>
-                                    </div>}
-                                    {/* Overlapping objects are the norm on a slide, so being able to
-                                        reach the one underneath is basic, not advanced. */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => updateNativeObject(selectedNativeObject.id, { order: 'front' })}><BringToFront className="mr-1 h-4 w-4" /> 맨 앞으로</Button>
-                                        <Button type="button" variant="outline" size="sm" onClick={() => updateNativeObject(selectedNativeObject.id, { order: 'back' })}><SendToBack className="mr-1 h-4 w-4" /> 맨 뒤로</Button>
-                                    </div>
-                                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={duplicateNativeObject}><Copy className="mr-1 h-4 w-4" /> 복제 <span className="ml-1 text-xs opacity-70">Ctrl+D</span></Button>
-                                    <Button type="button" variant="destructive" size="sm" className="w-full" onClick={deleteNativeObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제 <span className="ml-1 text-xs opacity-70">Delete</span></Button>
-                                    <label className="block text-xs text-muted-foreground">회전
-                                        <span className="mt-1 flex items-center gap-2">
-                                            <input
-                                                type="range" min="0" max="359" step="1"
-                                                value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.rotation ?? 0}
-                                                onChange={(event) => updateNativeObject(selectedNativeObject.id, { rotation: Number(event.target.value) })}
-                                                className="flex-1"
-                                                aria-label="회전 각도"
-                                            />
-                                            <span className="w-10 text-right tabular-nums">{(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.rotation ?? 0}°</span>
-                                        </span>
-                                    </label>
-                                    <p className="text-xs text-muted-foreground">방향키로 1px, Shift+방향키로 10px 이동합니다.</p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {(['left', 'top', 'width', 'height'] as const).map((property) => <label key={property} className="text-xs text-muted-foreground">{{ left: 'X', top: 'Y', width: 'W', height: 'H' }[property]}<input type="number" value={(selectedSlide.content?.objectEdits || []).find((item: any) => item.objectId === selectedNativeObject.id)?.[property] ?? selectedNativeObject[property] ?? 0} onChange={(event) => updateNativeObject(selectedNativeObject.id, { [property]: Number(event.target.value) })} className="mt-1 w-full rounded border px-2 py-1 text-sm" /></label>)}
-                                    </div>
-                                </div> : <p className="text-sm text-muted-foreground">슬라이드 위의 텍스트나 표를 클릭하면 바로 편집할 수 있습니다.</p>}
-                            </div>
-                        ) : selectedSlide.content?.html ? (
-                            <div className="space-y-3">
-                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                                    텍스트를 직접 수정해도 템플릿의 레이아웃과 디자인은 유지됩니다.
-                            </div>
-                                <div className="space-y-3">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full"
-                                    onClick={() => {
-                                        const content = { ...selectedSlide.content, html: addHtmlText(selectedSlide.content.html) };
-                                        updateSlide(selectedSlide.id, { content });
-                                        handleSaveSlideDelayed(selectedSlide.id, { content });
-                                        setSelectedHtmlTextIndex(getHtmlTextFields(selectedSlide.content.html).length);
-                                    }}
-                                >
-                                    <Plus className="mr-1 h-4 w-4" /> 텍스트 추가
-                                </Button>
-                                <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => {
-                                    const content = { ...selectedSlide.content, html: addHtmlShape(selectedSlide.content.html) };
-                                    updateSlide(selectedSlide.id, { content }); handleSaveSlideDelayed(selectedSlide.id, { content });
-                                    setSelectedHtmlTextIndex(getHtmlTextFields(selectedSlide.content.html).length);
-                                }}><Layout className="mr-1 h-4 w-4" /> 도형 추가</Button>
-                                <select
-                                    value={selectedHtmlTextIndex ?? ''}
-                                    onChange={(event) => setSelectedHtmlTextIndex(event.target.value === '' ? null : Number(event.target.value))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm"
-                                >
-                                    <option value="">편집할 텍스트 선택</option>
-                                    {getHtmlTextFields(selectedSlide.content.html).map((item, index) => (
-                                        <option key={index} value={index}>{item.generated ? 'AI 텍스트' : item.positionable ? '텍스트' : '표 셀'} {index + 1}: {item.text.slice(0, 28)}</option>
-                                    ))}
-                                </select>
-                                {selectedHtmlTextIndex === null ? (
-                                    <p className="text-sm text-muted-foreground">AI 텍스트와 템플릿 텍스트를 선택해 내용을 수정할 수 있습니다.</p>
-                                ) : getHtmlTextFields(selectedSlide.content.html).map((item, index) => index === selectedHtmlTextIndex ? (
-                                    <div key={index}>
-                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">텍스트 {index + 1}</label>
-                                        <textarea
-                                            value={item.text}
-                                            rows={Math.min(5, Math.max(2, item.text.split('\n').length))}
-                                            onChange={(event) => {
-                                                const content = { ...selectedSlide.content, html: updateHtmlText(selectedSlide.content.html, index, { text: event.target.value }) };
-                                                updateSlide(selectedSlide.id, { content });
-                                                handleSaveSlideDelayed(selectedSlide.id, { content });
-                                            }}
-                                            className="w-full resize-y rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                        />
-                                        <div className="mt-2 grid grid-cols-2 gap-2">
-                                            {(['fontFamily', 'fontSize', 'color', 'backgroundColor', 'borderColor', 'borderWidth'] as const).map((property) => (
-                                                <label key={property} className="text-xs text-muted-foreground">{property}
-                                                    <input type={property.includes('Color') || property === 'color' ? 'color' : property === 'fontFamily' ? 'text' : 'number'} value={property.includes('Color') || property === 'color' ? item[property] : property === 'fontFamily' ? item[property] : parseFloat(item[property]) || 0} onChange={(event) => { const content = { ...selectedSlide.content, html: updateHtmlObject(selectedSlide.content.html, index, { [property]: event.target.value }) }; updateSlide(selectedSlide.id, { content }); handleSaveSlideDelayed(selectedSlide.id, { content }); }} className="mt-1 w-full rounded border px-2 py-1 text-sm" />
-                                                </label>
-                                            ))}
-                                        </div>
-                                        {item.positionable && <div className="mt-2 grid grid-cols-2 gap-2">
-                                            {(['left', 'top', 'width', 'height'] as const).map((property) => (
-                                                <label key={property} className="text-xs text-muted-foreground">
-                                                    {{ left: 'X', top: 'Y', width: 'W', height: 'H' }[property]}
-                                                    <input
-                                                        type="number"
-                                                        value={parseFloat(item[property]) || 0}
-                                                        onChange={(event) => {
-                                                            const content = { ...selectedSlide.content, html: updateHtmlText(selectedSlide.content.html, index, { [property]: event.target.value }) };
-                                                            updateSlide(selectedSlide.id, { content });
-                                                            handleSaveSlideDelayed(selectedSlide.id, { content });
-                                                        }}
-                                                        className="mt-1 w-full rounded border px-2 py-1 text-sm"
-                                                    />
-                                                </label>
-                                            ))}
-                                        </div>}
-                                        <Button type="button" variant="destructive" size="sm" className="mt-3 w-full" onClick={deleteSelectedHtmlObject}><Trash2 className="mr-1 h-4 w-4" /> 삭제</Button>
-                                    </div>
-                                ) : null)}
-                                </div>
-                            </div>
-                        ) : (
+                        {selectedSlide ? (
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-foreground mb-1">타입</label>
@@ -1788,7 +1342,6 @@ export default function EditorPage() {
                                     </div>
                                 )}
                             </div>
-                        )
                         ) : (
                             <p className="text-sm text-muted-foreground">슬라이드를 선택하면 속성을 편집할 수 있습니다.</p>
                         )}
@@ -1860,433 +1413,52 @@ export default function EditorPage() {
 // Editable Slide Preview Component
 interface EditableSlidePreviewProps {
     slide: any;
-    template?: any;
+    scene: SlideScene | null;
+    sceneError: boolean;
     previewUrl?: string | null;
-    /** The slide's own markup. Empty means fall back to the server-rendered PNG. */
-    baseHtml?: string;
-    selectedHtmlTextIndex: number | null;
-    onSelectHtmlText: (index: number | null) => void;
-    nativeObjects: any[];
-    selectedNativeObjectId: string | null;
-    onSelectNativeObject: (id: string | null) => void;
-    onSelectionFormat: (format: SlideSelectionFormat | null) => void;
+    selectedObjectId: string | null;
+    onSelectObject: (id: string | null) => void;
+    onSelectionFormat: (format: SceneSelectionFormat | null) => void;
+    onCommand: (command: SceneCommand) => void;
     /** Lets the toolbar (rendered outside this component) drive character-level
      *  formatting on whatever the canvas currently has selected. */
-    slideCanvasRef: React.RefObject<SlideCanvasHandle | null>;
+    sceneCanvasRef: React.RefObject<SceneCanvasHandle | null>;
     onNavigate: (direction: -1 | 1) => void;
-    onUpdate: (updates: Partial<any>) => void;
-    onSave: () => void;
-    htmlTextFormatCommand: { id: number; updates: Record<string, string> } | null;
 }
 
-function EditableSlidePreview({ slide, template, previewUrl, baseHtml, selectedHtmlTextIndex, onSelectHtmlText, nativeObjects, selectedNativeObjectId, onSelectNativeObject, onSelectionFormat, slideCanvasRef, onNavigate, onUpdate, onSave, htmlTextFormatCommand }: EditableSlidePreviewProps) {
-    const content = slide.content || {};
-    const heading = content.heading || slide.title || '';
-    const subheading = content.subheading || '';
-    const body = content.body || '';
-    const bullets = content.bullets || [];
-    const previewStyle = getTemplatePreviewStyle(template);
-    const htmlTextFields = typeof content.html === 'string' ? getHtmlTextFields(content.html) : [];
-    const htmlSelectionAreas = typeof content.html === 'string' ? getHtmlSelectionAreas(content.html) : [];
-    const [inlineTextIndex, setInlineTextIndex] = useState<number | null>(null);
-    const htmlFrameRef = useRef<HTMLIFrameElement>(null);
-    const htmlCanvasRef = useRef<HTMLDivElement>(null);
-    const latestContentRef = useRef(content);
-    const latestOnUpdateRef = useRef(onUpdate);
-    const latestOnSelectRef = useRef(onSelectHtmlText);
-    const lastFrameHtmlRef = useRef<string | null>(null);
-    const [frameHtml, setFrameHtml] = useState(() => typeof content.html === 'string' ? editorFrameHtml(content.html) : '');
-    const [frameScale, setFrameScale] = useState(1);
-
-    useEffect(() => { latestContentRef.current = content; latestOnUpdateRef.current = onUpdate; latestOnSelectRef.current = onSelectHtmlText; }, [content, onUpdate, onSelectHtmlText]);
-    useEffect(() => {
-        if (typeof content.html === 'string' && content.html !== lastFrameHtmlRef.current) setFrameHtml(editorFrameHtml(content.html));
-    }, [slide.id, content.html]);
-    useEffect(() => {
-        if (!htmlTextFormatCommand) return;
-        htmlFrameRef.current?.contentDocument?.dispatchEvent(new CustomEvent('taeslide-format', { detail: htmlTextFormatCommand.updates }));
-    }, [htmlTextFormatCommand]);
-    useEffect(() => {
-        const canvas = htmlCanvasRef.current;
-        if (!canvas || !content.html) return;
-        const resize = () => setFrameScale(Math.min(canvas.clientWidth / 1920, canvas.clientHeight / 1080));
-        resize();
-        const observer = new ResizeObserver(resize);
-        observer.observe(canvas);
-        return () => observer.disconnect();
-    }, [content.html]);
-
-    const startSlideSwipe = (event: any) => {
-        if ((event.target as HTMLElement).closest('[data-editable-object], [data-object-id], [data-object="true"]')) return;
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const stop = (endEvent: PointerEvent) => {
-            const dx = endEvent.clientX - startX;
-            const dy = endEvent.clientY - startY;
-            if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy)) onNavigate(dx < 0 ? 1 : -1);
-            window.removeEventListener('pointerup', stop);
-        };
-        window.addEventListener('pointerup', stop, { once: true });
+function EditableSlidePreview({
+    slide, scene, sceneError, previewUrl, selectedObjectId, onSelectObject, onSelectionFormat, onCommand, sceneCanvasRef, onNavigate,
+}: EditableSlidePreviewProps) {
+    const [startX, setStartX] = useState<number | null>(null);
+    const startSlideSwipe = (event: React.PointerEvent) => setStartX(event.clientX);
+    const endSlideSwipe = (event: React.PointerEvent) => {
+        if (startX === null) return;
+        const delta = event.clientX - startX;
+        setStartX(null);
+        if (Math.abs(delta) > 80) onNavigate(delta > 0 ? -1 : 1);
     };
 
-    const startHtmlFrameEditing = () => {
-        const document = htmlFrameRef.current?.contentDocument;
-        if (!document) return;
-        document.body.contentEditable = 'true';
-        document.body.spellcheck = false;
-        document.body.setAttribute('data-taeslide-editing-surface', 'true');
-        let selectedElement: HTMLElement | null = null;
-        const editableSelector = 'th,td,h1,h2,h3,h4,h5,h6,p,li,span';
-        const targetFor = (node: EventTarget | null): HTMLElement | null => {
-            const candidate = node as Node | null;
-            let element = candidate?.nodeType === 1 ? candidate as HTMLElement : candidate?.nodeType === 3 ? candidate.parentElement : null;
-            if (!element) return null;
-            const indexed = element.closest<HTMLElement>('[data-taeslide-editor-index]');
-            if (indexed) return indexed;
-            const cell = element.closest<HTMLElement>('th,td');
-            if (cell) return cell;
-            while (element && element !== document.body) {
-                if (element.matches(editableSelector) || (!element.querySelector(editableSelector) && !!element.textContent?.trim())) return element;
-                element = element.parentElement;
-            }
-            return null;
-        };
-        const persist = () => {
-            const copy = document.documentElement.cloneNode(true) as HTMLElement;
-            copy.querySelectorAll('[data-taeslide-selected], [data-taeslide-editing], [data-taeslide-editor-index]').forEach((element) => {
-                element.removeAttribute('data-taeslide-selected'); element.removeAttribute('data-taeslide-editing');
-                element.removeAttribute('data-taeslide-editor-index');
-                (element as HTMLElement).contentEditable = 'inherit';
-            });
-            const html = `<!doctype html>${copy.outerHTML}`;
-            lastFrameHtmlRef.current = html;
-            latestOnUpdateRef.current({ content: { ...latestContentRef.current, html } });
-        };
-        let savedRange: Range | null = null;
-        const formatSelection = (updates: Record<string, string>) => {
-            const selection = document.getSelection();
-            if (!selection) return;
-            const range = savedRange && !savedRange.collapsed ? savedRange : (() => { if (!selectedElement) return null; const whole = document.createRange(); whole.selectNodeContents(selectedElement); return whole; })();
-            if (!range) return;
-            selection.removeAllRanges(); selection.addRange(range);
-            if (updates.listStyleType) { document.execCommand(updates.listStyleType === 'decimal' ? 'insertOrderedList' : 'insertUnorderedList'); persist(); return; }
-            if (updates.indent) { document.execCommand(updates.indent === 'increase' ? 'indent' : 'outdent'); persist(); return; }
-            const span = document.createElement('span');
-            Object.assign(span.style, updates);
-            if (updates.fontSize) span.style.fontSize = `${Math.max(1, Number(updates.fontSize) || 24)}px`;
-            try { range.surroundContents(span); } catch { const fragment = range.extractContents(); span.append(fragment); range.insertNode(span); }
-            const formatted = document.createRange(); formatted.selectNodeContents(span); selection.removeAllRanges(); selection.addRange(formatted); savedRange = formatted;
-            persist();
-        };
-        const select = (element: HTMLElement | null) => {
-            document.querySelectorAll('[data-taeslide-selected]').forEach((item) => item.removeAttribute('data-taeslide-selected'));
-            element?.setAttribute('data-taeslide-selected', 'true');
-            selectedElement = element;
-            const index = Number(element?.dataset.taeslideEditorIndex);
-            latestOnSelectRef.current(Number.isInteger(index) ? index : null);
-        };
-        const styles = document.createElement('style');
-        styles.textContent = '[data-taeslide-selected="true"]{outline:2px solid #7c3aed!important;outline-offset:2px;box-shadow:0 0 0 2px rgba(124,58,237,.28)!important}[data-taeslide-selected="true"][data-object-type="shape"], [data-taeslide-selected="true"][data-object-type="image"]{cursor:move!important}[data-taeslide-editing="true"]{cursor:text!important;caret-color:#111827}';
-        document.head.append(styles);
-        if (selectedHtmlTextIndex !== null) {
-            select(document.querySelector<HTMLElement>(`[data-taeslide-editor-index="${selectedHtmlTextIndex}"]`));
-        }
-        document.addEventListener('pointerdown', (event) => {
-            const element = targetFor(event.target);
-            select(element);
-            if (!event.altKey || !element || element.dataset.object !== 'true') return;
-            event.preventDefault();
-            const startX = event.clientX;
-            const startY = event.clientY;
-            const left = parseFloat(element.style.left) || 0;
-            const top = parseFloat(element.style.top) || 0;
-            const width = element.offsetWidth;
-            const height = element.offsetHeight;
-            const move = (moveEvent: PointerEvent) => {
-                const dx = moveEvent.clientX - startX;
-                const dy = moveEvent.clientY - startY;
-                if (moveEvent.shiftKey) {
-                    element.style.width = `${Math.max(24, width + dx)}px`;
-                    element.style.height = `${Math.max(24, height + dy)}px`;
-                } else {
-                    element.style.left = `${left + dx}px`;
-                    element.style.top = `${top + dy}px`;
-                }
-            };
-            const stop = () => { document.removeEventListener('pointermove', move); persist(); };
-            document.addEventListener('pointermove', move);
-            document.addEventListener('pointerup', stop, { once: true });
-        });
-        document.addEventListener('dblclick', (event) => {
-            const element = targetFor(event.target);
-            if (!element) return;
-            event.preventDefault();
-            select(element);
-            element.contentEditable = 'true';
-            element.setAttribute('data-taeslide-editing', 'true');
-            element.focus();
-        });
-        document.addEventListener('input', persist);
-        document.addEventListener('focusout', (event) => {
-            const element = event.target as HTMLElement;
-            if (element?.getAttribute('contenteditable') === 'true') {
-                element.contentEditable = 'inherit'; element.removeAttribute('data-taeslide-editing'); persist();
-            }
-        });
-        document.addEventListener('selectionchange', () => {
-            const selection = document.getSelection();
-            if (selection?.rangeCount) savedRange = selection.getRangeAt(0).cloneRange();
-            const element = targetFor(selection?.anchorNode ?? null);
-            select(element);
-            if (element) { const style = document.defaultView?.getComputedStyle(element); window.parent.postMessage({ type: 'taeslide-selection-style', slideId: slide.id, style: { fontFamily: style?.fontFamily || '', fontSize: style?.fontSize || '', color: style?.color || '', fontWeight: style?.fontWeight || '', fontStyle: style?.fontStyle || '' } }, window.location.origin); }
-        });
-        document.addEventListener('taeslide-format', ((event: CustomEvent<Record<string, string>>) => formatSelection(event.detail)) as EventListener);
-        document.addEventListener('keydown', (event) => {
-            if ((event.key === 'Delete' || event.key === 'Backspace') && selectedElement?.dataset.objectType && ['shape', 'image'].includes(selectedElement.dataset.objectType)) {
-                event.preventDefault();
-                selectedElement.remove();
-                selectedElement = null;
-                persist();
-                return;
-            }
-            if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) {
-                event.preventDefault();
-                document.execCommand(event.key.toLowerCase() === 'b' ? 'bold' : event.key.toLowerCase() === 'i' ? 'italic' : 'underline');
-                persist();
-                return;
-            }
-            if (event.key === 'Tab' && selectedElement?.closest('li')) { event.preventDefault(); document.execCommand(event.shiftKey ? 'outdent' : 'indent'); persist(); return; }
-            if (event.key !== 'Escape') return;
-            const element = targetFor(event.target);
-            if (element?.getAttribute('contenteditable') === 'true') { element.contentEditable = 'inherit'; element.blur(); }
-        });
-    };
-
-    if (content.html && !nativeObjects.length) {
+    if (scene) {
         return (
-            <div ref={htmlCanvasRef} className="relative h-full w-full overflow-hidden bg-white" data-html-canvas onPointerDown={startSlideSwipe}>
-                <iframe
-                    ref={htmlFrameRef}
-                    data-html-editor-frame
-                    title={slide.title || '슬라이드 편집 캔버스'}
-                    srcDoc={frameHtml}
-                    onLoad={startHtmlFrameEditing}
-                    className="absolute left-0 top-0 border-0 bg-card"
-                    style={{ width: 1920, height: 1080, transform: `scale(${frameScale})`, transformOrigin: 'top left' }}
-                />
-            </div>
-        );
-    }
-
-
-    const updateNativeObjectContent = (objectId: string, updates: Record<string, any>) => {
-        const objectEdits = [...(content.objectEdits || [])];
-        const index = objectEdits.findIndex((item: any) => item.objectId === objectId);
-        if (index >= 0) objectEdits[index] = { ...objectEdits[index], ...updates };
-        else objectEdits.push({ objectId, slide: content.templateIndex ?? slide.order ?? 0, ...updates });
-        onUpdate({ content: { ...content, objectEdits } });
-    };
-
-    // The slide renders itself. Nothing is painted underneath it, so the deck's
-    // own background, table fills and borders stay visible while a caret sits in
-    // the text — the reason the old textarea had to cover them with white.
-    if (baseHtml) {
-        return (
-            <div className="relative h-full w-full touch-pan-y" onPointerDown={startSlideSwipe}>
-                <SlideCanvas
-                    ref={slideCanvasRef}
-                    baseHtml={baseHtml}
-                    objectEdits={content.objectEdits || []}
-                    selectedObjectId={selectedNativeObjectId}
-                    onSelectObject={onSelectNativeObject}
+            <div className="relative h-full w-full touch-pan-y" onPointerDown={startSlideSwipe} onPointerUp={endSlideSwipe}>
+                <SceneCanvas
+                    ref={sceneCanvasRef}
+                    scene={scene}
+                    selectedObjectId={selectedObjectId}
+                    onSelectObject={onSelectObject}
                     onSelectionFormat={onSelectionFormat}
-                    onChangeParagraphs={(objectId, paragraphs) => updateNativeObjectContent(objectId, { paragraphs, text: undefined })}
-                    onChangeCells={(objectId, cells) => updateNativeObjectContent(objectId, { cells })}
-                    onTransform={(objectId, box) => updateNativeObjectContent(objectId, box)}
+                    onCommand={onCommand}
                 />
             </div>
         );
     }
-    if (previewUrl) {
+    if (sceneError && previewUrl) {
         return <img src={previewUrl} alt={`${slide.title || '슬라이드'} 미리보기`} className="h-full w-full object-contain" />;
     }
-
-    if (content.html && !nativeObjects.length) {
-        return <div className="flex h-full items-center justify-center bg-secondary text-sm text-muted-foreground">템플릿 미리보기 불러오는 중…</div>;
+    if (sceneError) {
+        return <div className="flex h-full items-center justify-center bg-secondary text-sm text-muted-foreground">이 슬라이드는 편집할 수 없습니다. 미리보기만 표시됩니다.</div>;
     }
-
-    const handleHeadingChange = (newHeading: string) => {
-        onUpdate({
-            title: newHeading,
-            content: { ...content, heading: newHeading }
-        });
-    };
-
-    const handleSubheadingChange = (newSubheading: string) => {
-        onUpdate({
-            content: { ...content, subheading: newSubheading }
-        });
-    };
-
-    const handleBodyChange = (newBody: string) => {
-        onUpdate({
-            content: { ...content, body: newBody }
-        });
-    };
-
-    const handleBulletChange = (index: number, newText: string) => {
-        const newBullets = [...bullets];
-        if (typeof bullets[index] === 'string') {
-            newBullets[index] = newText;
-        } else {
-            newBullets[index] = { ...bullets[index], text: newText };
-        }
-        onUpdate({
-            content: { ...content, bullets: newBullets }
-        });
-    };
-
-    const handleAddBullet = () => {
-        const newBullets = [...bullets, '새 항목'];
-        onUpdate({
-            content: { ...content, bullets: newBullets }
-        });
-    };
-
-    const handleRemoveBullet = (index: number) => {
-        const newBullets = bullets.filter((_: any, i: number) => i !== index);
-        onUpdate({
-            content: { ...content, bullets: newBullets }
-        });
-    };
-
-    // Common editable input styles
-    const editableStyle = "bg-transparent border-none outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 rounded px-2 py-1 w-full";
-
-    // A PPTX slide is drawn by the renderer, which takes about a second. Falling through
-    // to the generic type-based editor below flashed a completely different fake slide in
-    // the meantime, so say what is happening instead.
-    if (nativeObjects.length || template?.config?.source?.kind === 'pptx') {
-        return (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-secondary" role="status" aria-live="polite">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">슬라이드를 그리고 있습니다…</p>
-            </div>
-        );
-    }
-
-    // Render based on slide type
-    switch (slide.type) {
-        case 'TITLE':
-            return (
-                <div className="relative h-full overflow-hidden flex flex-col items-center justify-center p-12 text-center" style={previewStyle}>
-                    <input
-                        type="text"
-                        value={heading}
-                        onChange={(e) => handleHeadingChange(e.target.value)}
-                        onBlur={onSave}
-                        placeholder="제목을 입력하세요"
-                        className={`${editableStyle} text-4xl font-bold text-foreground mb-4 text-center`}
-                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                    />
-                    <input
-                        type="text"
-                        value={subheading}
-                        onChange={(e) => handleSubheadingChange(e.target.value)}
-                        onBlur={onSave}
-                        placeholder="부제목을 입력하세요"
-                        className={`${editableStyle} text-xl text-muted-foreground text-center`}
-                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                    />
-                </div>
-            );
-
-        case 'SECTION_HEADER':
-            return (
-                <div className="relative h-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800 p-12" style={previewStyle}>
-                    <input
-                        type="text"
-                        value={heading}
-                        onChange={(e) => handleHeadingChange(e.target.value)}
-                        onBlur={onSave}
-                        placeholder="섹션 제목을 입력하세요"
-                        className={`${editableStyle} text-3xl font-bold text-white text-center bg-card/10`}
-                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                    />
-                </div>
-            );
-
-        case 'QUOTE':
-            return (
-                <div className="relative h-full overflow-hidden flex flex-col items-center justify-center p-12" style={previewStyle}>
-                    <textarea
-                        value={body || heading}
-                        onChange={(e) => handleBodyChange(e.target.value)}
-                        onBlur={onSave}
-                        placeholder="인용문을 입력하세요"
-                        rows={4}
-                        className={`${editableStyle} text-2xl italic text-foreground text-center max-w-2xl resize-none`}
-                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                    />
-                </div>
-            );
-
-        case 'BULLET_LIST':
-        case 'CONTENT':
-        default:
-            return (
-                <div className="relative h-full overflow-hidden p-8" style={previewStyle}>
-                    <input
-                        type="text"
-                        value={heading}
-                        onChange={(e) => handleHeadingChange(e.target.value)}
-                        onBlur={onSave}
-                        placeholder="제목을 입력하세요"
-                        className={`${editableStyle} text-2xl font-bold text-foreground mb-6`}
-                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                    />
-                    <textarea
-                        value={body}
-                        onChange={(e) => handleBodyChange(e.target.value)}
-                        onBlur={onSave}
-                        placeholder="본문 내용을 입력하세요 (선택사항)"
-                        rows={2}
-                        className={`${editableStyle} text-muted-foreground mb-4 resize-none`}
-                        style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                    />
-                    <ul className="space-y-2">
-                        {bullets.map((bullet: any, index: number) => (
-                            <li key={index} className="flex items-start gap-2 group">
-                                <span className="text-purple-600 font-bold mt-2">•</span>
-                                <input
-                                    type="text"
-                                    value={typeof bullet === 'string' ? bullet : bullet.text}
-                                    onChange={(e) => handleBulletChange(index, e.target.value)}
-                                    onBlur={onSave}
-                                    placeholder="항목 내용"
-                                    className={`${editableStyle} text-foreground flex-1`}
-                                    style={{ color: previewStyle.color, fontFamily: previewStyle.fontFamily }}
-                                />
-                                <button
-                                    onClick={() => handleRemoveBullet(index)}
-                                    className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 p-1 transition-opacity"
-                                    title="항목 삭제"
-                                >
-                                    ×
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                    <button
-                        onClick={handleAddBullet}
-                        className="mt-4 text-purple-600 hover:text-purple-800 text-sm flex items-center gap-1"
-                    >
-                        <span>+</span>
-                        <span>항목 추가</span>
-                    </button>
-                </div>
-            );
-    }
+    return <div className="flex h-full items-center justify-center bg-secondary text-sm text-muted-foreground">불러오는 중…</div>;
 }
 
 // Read-only Slide Preview Component (for thumbnails, etc.)
