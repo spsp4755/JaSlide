@@ -13,6 +13,7 @@ importing them is worth the coupling to a private module; getting that math
 subtly wrong twice is not.
 """
 
+import copy
 from io import BytesIO
 
 from pptx import Presentation
@@ -169,3 +170,107 @@ def pptx_to_scene(content: bytes) -> dict:
         slides.append({"width": CANVAS_WIDTH, "height": CANVAS_HEIGHT, "objects": objects})
 
     return {"slides": slides}
+
+
+def _apply_edit_fields(object_: dict, edit: dict) -> None:
+    """An existing scene object's fields, patched from one legacy `objectEdits`
+    entry — everything `_apply_native_edit` (pptx_generator.py) reads."""
+    for key, target in (("left", "x"), ("top", "y"), ("width", "width"), ("height", "height")):
+        if isinstance(edit.get(key), (int, float)):
+            object_[target] = edit[key]
+    if isinstance(edit.get("rotation"), (int, float)):
+        object_["rotation"] = edit["rotation"]
+    if object_["type"] == "text" and isinstance(edit.get("paragraphs"), list):
+        object_["paragraphs"] = edit["paragraphs"]
+    elif object_["type"] == "table" and isinstance(edit.get("cells"), list):
+        object_["cells"] = edit["cells"]
+    elif object_["type"] in ("shape", "line"):
+        if isinstance(edit.get("fillColor"), str):
+            object_["fill"] = edit["fillColor"]
+        if isinstance(edit.get("lineColor"), str):
+            object_["stroke"] = edit["lineColor"]
+        if isinstance(edit.get("lineWidth"), (int, float)):
+            object_["strokeWidth"] = edit["lineWidth"]
+
+
+def _new_object_from_edit(object_id: str, edit: dict) -> dict | None:
+    """A brand-new scene object for an `objectEdits` entry with no shape of its
+    own in the source file yet — the mirror of `_inserted_object_edit` in
+    `scene_to_pptx.py`. No `sourceRef`, same as every editor-inserted object."""
+    base = {
+        "id": object_id,
+        "x": edit.get("left", 180), "y": edit.get("top", 180),
+        "width": edit.get("width", 640), "height": edit.get("height", 100),
+        "rotation": edit.get("rotation", 0),
+    }
+    if isinstance(edit.get("addText"), str):
+        paragraphs = edit.get("paragraphs") or [{
+            "runs": [{"text": edit.get("text", edit["addText"])}], "level": 0, "align": "left",
+        }]
+        return {**base, "type": "text", "paragraphs": paragraphs}
+    if isinstance(edit.get("addTable"), dict):
+        rows = max(1, int(edit["addTable"].get("rows", 3) or 3))
+        columns = max(1, int(edit["addTable"].get("columns", 3) or 3))
+        empty_cell = {"paragraphs": [{"runs": [{"text": ""}], "level": 0, "align": "left"}]}
+        cells = edit.get("cells") or [[dict(empty_cell) for _ in range(columns)] for _ in range(rows)]
+        return {
+            **base, "type": "table",
+            "rowHeights": [base["height"] / rows] * rows,
+            "columnWidths": [base["width"] / columns] * columns,
+            "cells": cells,
+        }
+    if isinstance(edit.get("addShape"), str):
+        return {
+            **base, "type": "shape", "shape": edit["addShape"],
+            "fill": edit.get("fillColor", "#FFFFFF"), "stroke": edit.get("lineColor", "#202124"),
+            "strokeWidth": edit.get("lineWidth", 2),
+        }
+    if isinstance(edit.get("addLine"), str):
+        return {
+            **base, "type": "line", "lineStyle": edit["addLine"],
+            "stroke": edit.get("lineColor", "#202124"), "strokeWidth": edit.get("lineWidth", 2),
+        }
+    if isinstance(edit.get("imageData"), str):
+        return {**base, "type": "image", "src": edit["imageData"]}
+    return None
+
+
+def apply_edits_to_scene(base_scene: dict, edits: list[dict]) -> dict:
+    """Replay stored legacy `objectEdits` onto a freshly-imported `SlideScene`,
+    producing the "current, already-edited" scene the editor should open
+    with. The mirror of `scene_to_edits` in `scene_to_pptx.py` — both key
+    objects by the same PPTX shape id, so this only needs pure data
+    transforms, never a real PPTX render+reparse round trip."""
+    objects = {object_["id"]: dict(object_) for object_ in base_scene["objects"]}
+    order = [object_["id"] for object_ in base_scene["objects"]]
+    for edit in edits:
+        if not isinstance(edit, dict):
+            continue
+        object_id = edit.get("objectId")
+        if not isinstance(object_id, str):
+            continue
+        if edit.get("delete") is True:
+            objects.pop(object_id, None)
+            if object_id in order:
+                order.remove(object_id)
+            continue
+        duplicate_of = edit.get("duplicate")
+        if isinstance(duplicate_of, str):
+            source = objects.get(duplicate_of)
+            if source is None:
+                continue
+            clone = copy.deepcopy(source)
+            clone["id"] = object_id
+            clone.pop("sourceRef", None)
+            objects[object_id] = clone
+            order.append(object_id)
+            _apply_edit_fields(objects[object_id], edit)
+            continue
+        if object_id not in objects:
+            inserted = _new_object_from_edit(object_id, edit)
+            if inserted is not None:
+                objects[object_id] = inserted
+                order.append(object_id)
+            continue
+        _apply_edit_fields(objects[object_id], edit)
+    return {**base_scene, "objects": [objects[object_id] for object_id in order if object_id in objects]}

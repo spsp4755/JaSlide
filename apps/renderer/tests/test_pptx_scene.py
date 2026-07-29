@@ -5,7 +5,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
 from pptx.util import Inches, Pt
 
-from apps.renderer.src.services.pptx_scene import pptx_to_scene
+from apps.renderer.src.services.pptx_scene import apply_edits_to_scene, pptx_to_scene
 
 
 def _deck_bytes(build) -> bytes:
@@ -102,3 +102,62 @@ def test_scene_canvas_size_matches_the_editor_stage():
 
     assert scene["width"] == 1920
     assert scene["height"] == 1080
+
+
+def test_apply_edits_to_scene_moves_an_existing_object():
+    def build(slide):
+        slide.shapes.add_textbox(Inches(1), Inches(1), Inches(2), Inches(1)).text_frame.paragraphs[0].add_run().text = "x"
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    shape_id = scene["objects"][0]["id"]
+
+    edited = apply_edits_to_scene(scene, [{"objectId": shape_id, "left": 300, "top": 300, "width": 200, "height": 50}])
+
+    assert (edited["objects"][0]["x"], edited["objects"][0]["y"]) == (300, 300)
+    assert (edited["objects"][0]["width"], edited["objects"][0]["height"]) == (200, 50)
+
+
+def test_apply_edits_to_scene_inserts_a_new_shape_with_no_source_shape():
+    scene = pptx_to_scene(_deck_bytes(lambda slide: None))["slides"][0]
+
+    edited = apply_edits_to_scene(scene, [{
+        "objectId": "new-shape-1", "left": 10, "top": 20, "width": 100, "height": 50,
+        "addShape": "roundRect", "fillColor": "#FF0000", "lineColor": "#000000", "lineWidth": 2,
+    }])
+
+    assert len(edited["objects"]) == 1
+    inserted = edited["objects"][0]
+    assert inserted == {
+        "id": "new-shape-1", "x": 10, "y": 20, "width": 100, "height": 50, "rotation": 0,
+        "type": "shape", "shape": "roundRect", "fill": "#FF0000", "stroke": "#000000", "strokeWidth": 2,
+    }
+
+
+def test_apply_edits_to_scene_deletes_an_object():
+    def build(slide):
+        slide.shapes.add_textbox(Inches(1), Inches(1), Inches(2), Inches(1)).text_frame.paragraphs[0].add_run().text = "x"
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    shape_id = scene["objects"][0]["id"]
+
+    edited = apply_edits_to_scene(scene, [{"objectId": shape_id, "delete": True}])
+
+    assert edited["objects"] == []
+
+
+def test_apply_edits_to_scene_duplicates_an_existing_object():
+    def build(slide):
+        shape = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(1), Inches(1), Inches(2), Inches(1))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(0x00, 0xFF, 0x00)
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    original_id = scene["objects"][0]["id"]
+
+    edited = apply_edits_to_scene(scene, [{"objectId": "copy-1", "duplicate": original_id, "left": 500, "top": 500}])
+
+    assert len(edited["objects"]) == 2
+    copy = next(item for item in edited["objects"] if item["id"] == "copy-1")
+    assert copy["fill"] == "#00FF00"
+    assert (copy["x"], copy["y"]) == (500, 500)
+    assert "sourceRef" not in copy
