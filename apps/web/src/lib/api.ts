@@ -73,6 +73,10 @@ export const slidesApi = {
         api.post(`/slides/${slideId}/duplicate`),
     duplicateWithPresentation: (presentationId: string, slideId: string) =>
         api.post(`/presentations/${presentationId}/slides/${slideId}/duplicate`),
+    getScene: (presentationId: string, slideId: string) =>
+        api.get(`/presentations/${presentationId}/slides/${slideId}/scene`),
+    saveScene: (presentationId: string, slideId: string, scene: any) =>
+        api.patch(`/presentations/${presentationId}/slides/${slideId}/scene`, { scene }),
 };
 
 

@@ -17,6 +17,7 @@ import { SaveStatusIndicator } from '@/components/editor/save-status-indicator';
 import { SlideThumbnail } from '@/components/editor/slide-thumbnail';
 import { SlideTemplatesDialog } from '@/components/editor/slide-templates-dialog';
 import { SlideCanvas, type SlideCanvasHandle, type SlideSelectionFormat } from '@/components/editor/slide-canvas';
+import { applySceneCommand, type SlideScene, type SlideObject, type SceneCommand } from '@jaslide/shared';
 import { DECK_FONTS } from '@/lib/deck-fonts';
 import { createSlideSaveScheduler } from '@/lib/slide-save-scheduler';
 import { SHAPE_GROUPS, LINE_OPTIONS, glyphPath, isStrokeOnly, shapeSvgMarkup } from '@/lib/shape-glyphs';
@@ -444,6 +445,11 @@ export default function EditorPage() {
     // by slide id and cached: it never changes for a given slide, and a PPTX
     // template's inlined images make it expensive to refetch.
     const [slideHtml, setSlideHtml] = useState<Record<string, string>>({});
+    // The current slide's editable scene — fetched on demand per slide (same
+    // fetch-per-slide shape as `slideHtml` above), null while loading or when
+    // the slide has nothing scene-derivable to show yet.
+    const [scene, setScene] = useState<SlideScene | null>(null);
+    const [sceneError, setSceneError] = useState(false);
     // What the canvas has selected, and how it is formatted. Drives the toolbar.
     const [canvasFormat, setCanvasFormat] = useState<SlideSelectionFormat | null>(null);
     const [fontSizeDraft, setFontSizeDraft] = useState('');
@@ -574,6 +580,16 @@ export default function EditorPage() {
             });
         return () => { cancelled = true; };
     }, [presentation, selectedSlide, slideHtml]);
+    useEffect(() => {
+        if (!presentation || !selectedSlide) { setScene(null); setSceneError(false); return; }
+        let cancelled = false;
+        setScene(null);
+        setSceneError(false);
+        slidesApi.getScene(presentation.id, selectedSlide.id)
+            .then(({ data }) => { if (!cancelled) setScene(data.scene); })
+            .catch(() => { if (!cancelled) setSceneError(true); });
+        return () => { cancelled = true; };
+    }, [presentation, selectedSlide]);
     useEffect(() => {
         const receiveSelectionStyle = (event: MessageEvent) => {
             if (event.data?.type === 'taeslide-selection-style' && event.data.slideId === selectedSlideId) setHtmlSelectionStyle(event.data.style);
@@ -910,6 +926,55 @@ export default function EditorPage() {
     const handleSaveSlideDelayed = (slideId: string, updates: Partial<any>) => {
         saveSchedulerRef.current!.schedule(slideId, updates);
     };
+
+    // Debounced scene save — same 500ms shape as `handleSaveSlideDelayed`, but
+    // posts the whole scene so the server can convert it to whichever legacy
+    // format (objectEdits or html) this slide's source actually needs.
+    const sceneSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const saveSceneDelayed = useCallback((nextScene: SlideScene) => {
+        if (!presentation || !selectedSlide) return;
+        if (sceneSaveTimerRef.current) clearTimeout(sceneSaveTimerRef.current);
+        sceneSaveTimerRef.current = setTimeout(() => {
+            slidesApi.saveScene(presentation.id, selectedSlide.id, nextScene).catch(() => {
+                toast({ title: '저장 실패', description: '편집 내용을 저장하지 못했습니다.', variant: 'destructive' });
+            });
+        }, 500);
+    }, [presentation, selectedSlide]);
+
+    const onSceneCommand = useCallback((command: SceneCommand) => {
+        setScene((current) => {
+            if (!current) return current;
+            const next = applySceneCommand(current, command);
+            saveSceneDelayed(next);
+            return next;
+        });
+    }, [saveSceneDelayed]);
+
+    const commitScene = useCallback((mutate: (objects: SlideObject[]) => SlideObject[]) => {
+        setScene((current) => {
+            if (!current) return current;
+            const next = { ...current, objects: mutate(current.objects) };
+            saveSceneDelayed(next);
+            return next;
+        });
+    }, [saveSceneDelayed]);
+
+    const insertSceneObject = useCallback((object: SlideObject) => {
+        commitScene((objects) => [...objects, object]);
+    }, [commitScene]);
+
+    const deleteSceneObject = useCallback((objectId: string) => {
+        commitScene((objects) => objects.filter((item) => item.id !== objectId));
+    }, [commitScene]);
+
+    const duplicateSceneObject = useCallback((objectId: string): string | null => {
+        const source = scene?.objects.find((item) => item.id === objectId);
+        if (!source) return null;
+        const { sourceRef, ...rest } = source as SlideObject & { sourceRef?: unknown };
+        const copy = { ...rest, id: `copy-${crypto.randomUUID()}`, x: source.x + 32, y: source.y + 32 } as SlideObject;
+        insertSceneObject(copy);
+        return copy.id;
+    }, [scene, insertSceneObject]);
 
     const persistHistoryState = async () => {
         saveSchedulerRef.current?.cancelAll();
