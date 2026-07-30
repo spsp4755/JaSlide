@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,7 +22,11 @@ func Open(parent context.Context, cfg config.Config) (*Store, error) {
 	ctx, cancel := context.WithTimeout(parent, dependencyTimeout)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	databaseURL, err := postgresConnectionURL(cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("configure postgres: %w", err)
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("configure postgres: %w", err)
 	}
@@ -61,4 +66,18 @@ func (store *Store) Ready() error {
 func (store *Store) Close() error {
 	store.pool.Close()
 	return store.redis.Close()
+}
+
+func postgresConnectionURL(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	if schema := query.Get("schema"); schema != "" {
+		query.Del("schema")
+		query.Set("search_path", schema)
+		parsed.RawQuery = query.Encode()
+	}
+	return parsed.String(), nil
 }

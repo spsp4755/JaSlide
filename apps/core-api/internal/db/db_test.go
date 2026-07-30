@@ -3,12 +3,34 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
 )
+
+func TestPostgresURLConvertsPrismaSchemaToSearchPath(t *testing.T) {
+	converted, err := postgresConnectionURL("postgresql://jaslide:secret@localhost:5432/jaslide?schema=tenant_a&sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := url.Parse(converted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parsed.Query().Get("schema"); got != "" {
+		t.Fatalf("schema query = %q, want removed", got)
+	}
+	if got := parsed.Query().Get("search_path"); got != "tenant_a" {
+		t.Fatalf("search_path query = %q, want tenant_a", got)
+	}
+	if got := parsed.Query().Get("sslmode"); got != "disable" {
+		t.Fatalf("sslmode query = %q, want preserved", got)
+	}
+}
 
 func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 	databaseURL := os.Getenv("JASLIDE_TEST_DATABASE_URL")
@@ -17,7 +39,8 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 		t.Skip("set JASLIDE_TEST_DATABASE_URL and JASLIDE_TEST_REDIS_URL to run integration test")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	store, err := Open(ctx, config.Config{DatabaseURL: databaseURL, RedisURL: redisURL})
 	if err != nil {
 		t.Fatal(err)
@@ -43,11 +66,8 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 			VALUES ($1, $2, $3, NOW())`, row.id, row.email, row.name); err != nil {
 			t.Fatal(err)
 		}
+		registerRowCleanup(t, store, `DELETE FROM "User" WHERE "id" = $1`, row.id)
 	}
-	t.Cleanup(func() {
-		_, _ = store.pool.Exec(context.Background(), `DELETE FROM "Presentation" WHERE "id" = ANY($1)`, []string{olderID, newerID, otherID})
-		_, _ = store.pool.Exec(context.Background(), `DELETE FROM "User" WHERE "id" = ANY($1)`, []string{userID, otherUserID})
-	})
 
 	for _, row := range []struct {
 		id, title, userID string
@@ -64,10 +84,18 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 			row.id, row.title, row.userID, row.updatedAt); err != nil {
 			t.Fatal(err)
 		}
+		registerRowCleanup(t, store, `DELETE FROM "Presentation" WHERE "id" = $1`, row.id)
 	}
 
 	if err := store.Ready(); err != nil {
 		t.Fatalf("Ready() error = %v", err)
+	}
+	var searchPath string
+	if err := store.pool.QueryRow(ctx, `SHOW search_path`).Scan(&searchPath); err != nil {
+		t.Fatal(err)
+	}
+	if searchPath != "public" {
+		t.Fatalf("search_path = %q, want public from Prisma schema query", searchPath)
 	}
 
 	byEmail, err := store.FindUserByEmail(ctx, email)
@@ -104,4 +132,15 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 	if presentation.UserID != userID || presentation.Title != "Older deck" || presentation.SourceType != "TEXT" {
 		t.Fatalf("GetPresentation() = %#v", presentation)
 	}
+}
+
+func registerRowCleanup(t *testing.T, store *Store, query, id string) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := store.pool.Exec(ctx, query, id); err != nil {
+			t.Errorf("cleanup %s: %v", id, err)
+		}
+	})
 }

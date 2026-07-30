@@ -7,8 +7,8 @@ on:
     branches: [main, develop]
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '8'
+  NODE_VERSION: '22.13.0'
+  PNPM_VERSION: '11.7.0'
 
 jobs:
   lint:
@@ -56,7 +56,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: pnpm --filter @jaslide/api db:generate
 
       - name: Build all packages
         run: pnpm build
@@ -113,21 +113,34 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/core-api/go.mod
+          cache-dependency-path: apps/core-api/go.sum
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: pnpm --filter @jaslide/api db:generate
 
       - name: Run database migrations
-        run: pnpm db:migrate
+        run: pnpm --filter @jaslide/api exec prisma migrate deploy
         env:
-          DATABASE_URL: postgresql://jaslide:jaslide@localhost:5432/jaslide_test
+          DATABASE_URL: postgresql://jaslide:jaslide@localhost:5432/jaslide_test?schema=public
+
+      - name: Test Go API against Prisma schema
+        working-directory: apps/core-api
+        run: go test -count=1 ./...
+        env:
+          JASLIDE_TEST_DATABASE_URL: postgresql://jaslide:jaslide@localhost:5432/jaslide_test?schema=public
+          JASLIDE_TEST_REDIS_URL: redis://localhost:6379
 
       - name: Run tests
         run: pnpm test
         env:
-          DATABASE_URL: postgresql://jaslide:jaslide@localhost:5432/jaslide_test
+          DATABASE_URL: postgresql://jaslide:jaslide@localhost:5432/jaslide_test?schema=public
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret
 

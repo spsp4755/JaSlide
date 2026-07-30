@@ -37,22 +37,32 @@ func main() {
 		Handler:           httpserver.New(dependencyProbe{config: config, store: store, client: &http.Client{Timeout: 2 * time.Second}}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	go func() {
-		log.Printf("core API listening on %s", config.Address)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
-		}
-	}()
 
 	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	<-signalContext.Done()
+	log.Printf("core API listening on %s", config.Address)
+	select {
+	case <-signalContext.Done():
+	case err := <-serve(server):
+		if err != nil && err != http.ErrServerClosed {
+			log.Printf("server stopped: %v", err)
+		}
+		return
+	}
 
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownContext); err != nil {
 		log.Printf("server shutdown: %v", err)
 	}
+}
+
+func serve(server *http.Server) <-chan error {
+	result := make(chan error, 1)
+	go func() {
+		result <- server.ListenAndServe()
+	}()
+	return result
 }
 
 type dependencyProbe struct {
