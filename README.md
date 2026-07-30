@@ -16,11 +16,14 @@
 ```powershell
 Copy-Item .env.example .env
 # .env의 POSTGRES_PASSWORD, JWT_SECRET, OPENAI_BASE_URL, OPENAI_MODEL을 설정
-docker compose --env-file .env build
-docker compose --env-file .env up -d
+docker compose --file docker-compose.yml --env-file .env build
+docker compose --file docker-compose.yml --env-file .env up -d
 ```
 
-웹은 `http://localhost:3000`, API 상태 확인은 `http://localhost:4000/api/health`입니다.
+웹은 `http://localhost:3000`, API 상태 확인은
+`http://localhost:3000/api/health`입니다. API, renderer, 데이터 저장소의
+host 포트가 필요한 로컬 진단은 `docker-compose.diagnostics.yml`을 명시적으로
+추가합니다.
 
 ## 사내 LLM 설정
 

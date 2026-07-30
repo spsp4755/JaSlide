@@ -17,8 +17,9 @@ renderer, PostgreSQL, Redis입니다. NestJS와 Next.js 서버는 실행하지 �
 이미지를 만듭니다.
 
 ```bash
-JASLIDE_VERSION=v0.6.1 docker compose --env-file .env build
-JASLIDE_VERSION=v0.6.1 docker compose --env-file .env up -d --no-build --pull never
+JASLIDE_VERSION=v0.6.1 docker compose --file docker-compose.yml --env-file .env build
+JASLIDE_VERSION=v0.6.1 docker compose --file docker-compose.yml --env-file .env \
+  up -d --no-build --pull never
 BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 ```
 
@@ -26,7 +27,13 @@ BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 업로드 경로는 계속 `/app/apps/api/uploads`입니다. 새 PostgreSQL volume에는
 현재 스키마가 최초 initdb 때 적용되고, 기존 PostgreSQL volume은 변경하지
 않습니다. renderer와 API를 직접 공개해야 하는 진단 환경은
-`docker-compose.override.yml`의 로컬 포트만 사용하십시오.
+명시적인 진단 파일만 추가해 실행하십시오. 파일을 지정하지 않은 자동 override는
+운영 명령에서 사용하지 않습니다.
+
+```bash
+docker compose --file docker-compose.yml \
+  --file docker-compose.diagnostics.yml --env-file .env up -d
+```
 
 ## 폐쇄망 Compose
 

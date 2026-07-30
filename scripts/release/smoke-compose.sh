@@ -4,11 +4,21 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 compose_file="${COMPOSE_FILE:-$repo_root/docker-compose.offline.yml}"
 env_file="${ENV_FILE:-$repo_root/.env}"
-project_name="${COMPOSE_PROJECT_NAME:-jaslide-smoke}"
 base_url="${BASE_URL:-http://127.0.0.1:${WEB_PORT:-3000}}"
 timeout_seconds="${SMOKE_TIMEOUT_SECONDS:-180}"
 check_only=0
 keep_running="${KEEP_RUNNING:-0}"
+
+if [[ -n "${COMPOSE_PROJECT_NAME+x}" ]]; then
+  echo "COMPOSE_PROJECT_NAME is not accepted by the destructive smoke test" >&2
+  exit 2
+fi
+
+project_name="${SMOKE_PROJECT_NAME:-jaslide-smoke-$(date -u +%Y%m%d%H%M%S)-$$}"
+if [[ ! "$project_name" =~ ^jaslide-smoke-[a-z0-9][a-z0-9_-]*$ ]]; then
+  echo "SMOKE_PROJECT_NAME must begin with jaslide-smoke- and contain only lowercase letters, digits, underscores, or hyphens" >&2
+  exit 2
+fi
 
 case "${1:-}" in
   --check-only) check_only=1 ;;

@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fixture_dir="$(mktemp -d)"
 port_file="$fixture_dir/port"
 server_log="$fixture_dir/server.log"
+docker_log="$fixture_dir/docker.log"
 
 cleanup() {
   if [[ -n "${server_pid:-}" ]]; then
@@ -14,6 +15,25 @@ cleanup() {
   rm -rf "$fixture_dir"
 }
 trap cleanup EXIT
+
+mkdir "$fixture_dir/bin"
+cat >"$fixture_dir/bin/docker" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$DOCKER_LOG"
+SH
+chmod +x "$fixture_dir/bin/docker"
+
+if PATH="$fixture_dir/bin:$PATH" DOCKER_LOG="$docker_log" \
+  COMPOSE_PROJECT_NAME=jaslide \
+  ENV_FILE="$fixture_dir/missing.env" \
+  "$repo_root/scripts/release/smoke-compose.sh" >/dev/null 2>&1; then
+  echo "smoke accepted an ambient Compose project name" >&2
+  exit 1
+fi
+if [[ -s "$docker_log" ]]; then
+  echo "smoke touched Docker while rejecting an ambient Compose project name" >&2
+  exit 1
+fi
 
 touch "$fixture_dir/ready"
 
