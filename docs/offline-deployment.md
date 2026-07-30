@@ -13,36 +13,36 @@ Python package는 `requirements.lock`의 SHA-256으로 검증되며 Chromium 122
 system library는 고정된 Debian snapshot에서만 설치됩니다.
 
 ```bash
-./scripts/release/build-amd64-images.sh v0.7.0
+./scripts/release/build-amd64-images.sh v0.7.1
 ```
 
 script는 아래 여섯 image가 모두 `linux/amd64`인지 검사하고 하나의 gzip
 archive와 SHA-256 파일을 생성합니다.
 
-- `jaslide/core-api:v0.7.0`
-- `jaslide/migrate:v0.7.0`
-- `jaslide/web:v0.7.0`
-- `jaslide/renderer:v0.7.0`
-- `jaslide/postgres:v0.7.0`
-- `jaslide/redis:v0.7.0`
+- `jaslide/core-api:v0.7.1`
+- `jaslide/migrate:v0.7.1`
+- `jaslide/web:v0.7.1`
+- `jaslide/renderer:v0.7.1`
+- `jaslide/postgres:v0.7.1`
+- `jaslide/redis:v0.7.1`
 
 ## 2. 반입 및 무결성 확인
 
 ```bash
-sha256sum -c jaslide-v0.7.0-linux-amd64-images.tar.gz.sha256
+sha256sum -c jaslide-v0.7.1-linux-amd64-images.tar.gz.sha256
 ```
 
 Kubernetes는 모든 worker node에서 직접 import합니다.
 
 ```bash
-sudo ctr -n k8s.io images import jaslide-v0.7.0-linux-amd64-images.tar.gz
+sudo ctr -n k8s.io images import jaslide-v0.7.1-linux-amd64-images.tar.gz
 sudo ctr -n k8s.io images ls | grep jaslide
 ```
 
 Docker Compose는 Docker engine에 한 번만 load합니다.
 
 ```bash
-docker load -i jaslide-v0.7.0-linux-amd64-images.tar.gz
+docker load -i jaslide-v0.7.1-linux-amd64-images.tar.gz
 ```
 
 ## 3. 외부 registry 없이 실행
@@ -52,7 +52,7 @@ OpenAI-compatible LLM 값을 설정합니다. HTTPS 운영은
 `NODE_ENV=production`, 로컬 HTTP 검증은 `NODE_ENV=development`를 사용합니다.
 
 ```bash
-export JASLIDE_VERSION=v0.7.0
+export JASLIDE_VERSION=v0.7.1
 docker compose --project-name jaslide --env-file .env \
   --file docker-compose.offline.yml up -d --no-build --pull never
 BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
@@ -82,7 +82,7 @@ logs migrate`로 원인을 확인하고 DB 백업을 복원하거나 migration �
 docker run --rm --network jaslide_default \
   -e DATABASE_URL="postgresql://<user>:<password>@postgres:5432/<db>" \
   -e JASLIDE_CONFIRM_RESET="wipe all users and templates" \
-  jaslide/core-api:v0.7.0 /app/seed
+  jaslide/core-api:v0.7.1 /app/seed
 ```
 
 - `JASLIDE_CONFIRM_RESET`은 정확히 위 문자열이어야 실행되며, 그 외에는
