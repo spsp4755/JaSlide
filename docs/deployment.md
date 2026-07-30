@@ -24,9 +24,21 @@ BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 ```
 
 `postgres_data`, `redis_data`, `assets_data` named volume은 재배포에도 유지됩니다.
-업로드 경로는 계속 `/app/apps/api/uploads`입니다. 새 PostgreSQL volume에는
-현재 스키마가 최초 initdb 때 적용되고, 기존 PostgreSQL volume은 변경하지
-않습니다. renderer와 API를 직접 공개해야 하는 진단 환경은
+업로드 경로는 계속 `/app/apps/api/uploads`입니다. API가 시작되기 전에 전용
+`jaslide/migrate` 컨테이너가 트랜잭션과 advisory lock 안에서 migration을 한 번
+실행합니다. 빈 DB는 전체 스키마를 만들고, 기존 Prisma DB는 migration 이름과
+SHA-256이 일치하는 완료 이력을 `_jaslide_schema_migrations`로 승계한 뒤 남은
+migration만 적용합니다. 같은 버전의 재실행은 모두 skip합니다.
+
+미완료/알 수 없는 migration, checksum 불일치, migration ledger가 없는 비어 있지
+않은 스키마는 API 시작 전에 명확히 실패하며 DB 변경은 rollback됩니다. 배포 전에
+`postgres_data`를 백업하고 실패 원인은 다음 명령으로 확인합니다.
+
+```bash
+docker compose --file docker-compose.yml --env-file .env logs migrate
+```
+
+renderer와 API를 직접 공개해야 하는 진단 환경은
 명시적인 진단 파일만 추가해 실행하십시오. 파일을 지정하지 않은 자동 override는
 운영 명령에서 사용하지 않습니다.
 
@@ -84,6 +96,7 @@ curl --fail https://jaslide.internal/api/health/ready
 curl --fail https://jaslide.internal/login
 ```
 
-manifest의 다섯 image는 `imagePullPolicy: Never`이므로 worker에 image가 없으면
+API Pod의 `migrate` init container가 동일한 사전 점검과 migration을 통과해야
+API가 시작됩니다. manifest의 여섯 image는 `imagePullPolicy: Never`이므로 worker에 image가 없으면
 외부 registry 접근 없이 실패합니다. Registry를 사용할 때만 image 경로를
 바꾸고 `imagePullPolicy: IfNotPresent`와 `imagePullSecrets`를 추가합니다.

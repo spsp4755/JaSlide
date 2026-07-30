@@ -44,6 +44,17 @@ services:
       retries: 12
       start_period: 30s
 
+  migrate:
+    image: jaslide/migrate:${JASLIDE_VERSION:-v0.6.1}
+    platform: linux/amd64
+    pull_policy: never
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     image: jaslide/core-api:${JASLIDE_VERSION:-v0.6.1}
     platform: linux/amd64
@@ -72,6 +83,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       renderer:

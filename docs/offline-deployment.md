@@ -13,10 +13,11 @@ linux/amd64 image archive만 반입합니다.
 ./scripts/release/build-amd64-images.sh v0.6.1
 ```
 
-script는 아래 다섯 image가 모두 `linux/amd64`인지 검사하고 하나의 gzip
+script는 아래 여섯 image가 모두 `linux/amd64`인지 검사하고 하나의 gzip
 archive와 SHA-256 파일을 생성합니다.
 
 - `jaslide/core-api:v0.6.1`
+- `jaslide/migrate:v0.6.1`
 - `jaslide/web:v0.6.1`
 - `jaslide/renderer:v0.6.1`
 - `jaslide/postgres:v0.6.1`
@@ -59,10 +60,17 @@ BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 origin proxy로만 접근합니다. 사내 Keycloak/LLM endpoint는 폐쇄망 내부에서
 계속 접근 가능해야 합니다.
 
+`migrate`는 PostgreSQL healthcheck 다음에 한 번 실행되고 성공해야 API가
+시작됩니다. 새 DB bootstrap과 기존 Prisma migration 승계가 모두 같은 image에
+포함되어 있으므로 폐쇄망에서 npm/pnpm이나 NestJS runtime을 사용하지 않습니다.
+실패하면 `docker compose --project-name jaslide --file docker-compose.offline.yml
+logs migrate`로 원인을 확인하고 DB 백업을 복원하거나 migration 이력을
+정리한 뒤 다시 실행합니다.
+
 ## 4. 점검표
 
 - archive SHA-256이 외부망 준비 환경의 값과 일치한다.
-- 다섯 image가 모두 `linux/amd64`이며 올바른 release tag를 가진다.
+- 여섯 image가 모두 `linux/amd64`이며 올바른 release tag를 가진다.
 - `/login`이 React entry document를 반환한다.
 - `/api/health/ready`가 `200 {"status":"ok"}`를 반환한다.
 - 기존 `postgres_data`, `redis_data`, `assets_data` volume의 백업이 있다.

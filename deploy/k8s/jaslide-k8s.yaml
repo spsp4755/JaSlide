@@ -60,6 +60,12 @@ spec:
     metadata:
       labels: { app: jaslide-api }
     spec:
+      initContainers:
+        - name: migrate
+          image: jaslide/migrate:v0.6.1
+          imagePullPolicy: Never
+          envFrom:
+            - secretRef: { name: jaslide-secrets }
       containers:
         - name: api
           image: jaslide/core-api:v0.6.1

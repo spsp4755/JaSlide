@@ -18,4 +18,3 @@ DROP TABLE "PricingPlan";
 
 -- DropEnum
 DROP TYPE "CreditTransactionType";
-

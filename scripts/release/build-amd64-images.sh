@@ -29,6 +29,7 @@ build_image() {
 }
 
 build_image core-api docker/core-api.Dockerfile
+build_image migrate docker/migrate.Dockerfile
 build_image web docker/web.Dockerfile --build-arg "VITE_API_URL=${web_api_url}"
 build_image renderer docker/renderer.Dockerfile
 build_image postgres docker/postgres.Dockerfile
@@ -36,6 +37,7 @@ build_image redis docker/redis.Dockerfile
 
 images=(
   "jaslide/core-api:${release_version}"
+  "jaslide/migrate:${release_version}"
   "jaslide/web:${release_version}"
   "jaslide/renderer:${release_version}"
   "jaslide/postgres:${release_version}"
