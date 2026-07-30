@@ -1,5 +1,6 @@
 import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom';
 import { RequireAdmin, RequireAuth } from '@/components/auth-guards';
+import { CommandPalette } from '@/components/command-palette';
 
 const page = (load: () => Promise<{ default: React.ComponentType }>) => async () => ({
     Component: (await load()).default,
@@ -13,9 +14,18 @@ function RouteLoading() {
     );
 }
 
+function RootLayout() {
+    return (
+        <>
+            <CommandPalette />
+            <Outlet />
+        </>
+    );
+}
+
 export const appRoutes: RouteObject[] = [
     {
-        element: <Outlet />,
+        element: <RootLayout />,
         HydrateFallback: RouteLoading,
         children: [
             { index: true, id: 'root', lazy: page(() => import('@/app/page')) },

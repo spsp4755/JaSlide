@@ -9,7 +9,7 @@ import {
     matchRoutes,
     RouterProvider,
 } from 'react-router-dom';
-import { authApi } from '../src/lib/api';
+import { authApi, presentationsApi } from '../src/lib/api';
 import { Providers } from '../src/components/providers';
 import { AuthBootstrap } from '../src/components/providers/auth-bootstrap';
 import { appRoutes } from '../src/router';
@@ -188,6 +188,58 @@ describe('SPA routes', () => {
         ['/admin/alerts', 'admin-alerts'],
     ])('preserves %s', (path, id) => {
         expect(routeId(path)).toBe(id);
+    });
+});
+
+describe('Command palette', () => {
+    beforeEach(() => {
+        useAuthStore.setState({
+            user: regularUser,
+            isAuthenticated: true,
+            hasHydrated: true,
+            authGeneration: 0,
+        });
+    });
+
+    afterEach(() => {
+        cleanup();
+        vi.restoreAllMocks();
+        window.localStorage.clear();
+    });
+
+    it('stays closed until Ctrl+K is pressed, then jumps to a matched nav item on Enter', async () => {
+        // A fresh render remounts AuthBootstrap, which fires its own /auth/me check;
+        // left unmocked it eventually rejects and clears the beforeEach's authenticated
+        // state out from under a slower test.
+        vi.spyOn(authApi, 'me').mockResolvedValue({ data: regularUser } as never);
+        vi.spyOn(presentationsApi, 'list').mockResolvedValue({ data: { data: [] } } as never);
+        const router = renderRoute('/dashboard', true);
+        await screen.findByText('dashboard-screen');
+
+        expect(screen.queryByLabelText('빠른 이동 검색')).toBeNull();
+
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        const input = await screen.findByLabelText('빠른 이동 검색');
+        fireEvent.change(input, { target: { value: '설정' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => expect(router.state.location.pathname).toBe('/settings'));
+        expect(screen.queryByLabelText('빠른 이동 검색')).toBeNull();
+    });
+
+    it('lists a matching presentation title fetched when the palette opens', async () => {
+        vi.spyOn(authApi, 'me').mockResolvedValue({ data: regularUser } as never);
+        vi.spyOn(presentationsApi, 'list').mockResolvedValue({
+            data: { data: [{ id: 'deck-9', title: '분기 실적 보고' }] },
+        } as never);
+        renderRoute('/dashboard', true);
+        await screen.findByText('dashboard-screen');
+
+        fireEvent.keyDown(window, { key: 'k', metaKey: true });
+        const input = await screen.findByLabelText('빠른 이동 검색');
+        fireEvent.change(input, { target: { value: '실적' } });
+
+        expect(await screen.findByText('분기 실적 보고')).toBeTruthy();
     });
 });
 
