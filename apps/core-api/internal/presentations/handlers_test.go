@@ -101,6 +101,24 @@ func TestEndpointInventoryIncludesEveryNestPresentationSlideAndAssetRoute(t *tes
 	}
 }
 
+func TestGlobalSlideDuplicateAliasRoute(t *testing.T) {
+	router := chi.NewRouter()
+	router.Mount("/slides", presentations.NewSlideHandlers(nil, nil))
+	var routes []string
+	if err := chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if method != http.MethodOptions {
+			routes = append(routes, method+" "+route)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"POST /slides/{slideId}/duplicate"}
+	if fmt.Sprint(routes) != fmt.Sprint(want) {
+		t.Fatalf("routes = %v, want %v", routes, want)
+	}
+}
+
 func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 	databaseURL := os.Getenv("JASLIDE_TEST_DATABASE_URL")
 	redisURL := os.Getenv("JASLIDE_TEST_REDIS_URL")

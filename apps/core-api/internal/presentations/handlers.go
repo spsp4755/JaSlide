@@ -44,6 +44,14 @@ func NewHandlers(service *Service, authService *auth.Service) http.Handler {
 	return router
 }
 
+func NewSlideHandlers(service *Service, authService *auth.Service) http.Handler {
+	handler := &handlers{service: service}
+	router := chi.NewRouter()
+	router.Use(auth.RequireUser(authService))
+	router.Post("/{slideId}/duplicate", handler.duplicateSlide)
+	return router
+}
+
 func (handler *handlers) createPresentation(writer http.ResponseWriter, request *http.Request) {
 	var input struct {
 		Title, Description, TemplateID *string

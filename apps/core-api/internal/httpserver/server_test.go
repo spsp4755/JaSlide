@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -83,5 +84,24 @@ func TestHealthReadyReturnsServiceUnavailableWhenDependencyIsUnavailable(t *test
 	}
 	if body := response.Body.String(); body != "{\"status\":\"unavailable\"}\n" {
 		t.Fatalf("body = %q, want unavailable response", body)
+	}
+}
+
+func TestHealthBaseAndMetricsRoutes(t *testing.T) {
+	server := New(nil)
+	for _, target := range []string{"/api/health", "/api/health/metrics"} {
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", target, response.Code, http.StatusOK)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatalf("GET %s body: %v", target, err)
+		}
+		if body["status"] == nil || body["uptime"] == nil {
+			t.Fatalf("GET %s body = %#v, want status and uptime", target, body)
+		}
 	}
 }

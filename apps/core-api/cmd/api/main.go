@@ -28,6 +28,7 @@ import (
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/renderer"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/skills"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/templates"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/userfeatures"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/versions"
 )
 
@@ -77,9 +78,9 @@ func run() error {
 	go generationService.Run(signalContext)
 
 	apiRoutes := chi.NewRouter()
-	apiRoutes.Mount("/presentations", presentations.NewHandlers(
-		presentations.NewService(store, cfg.RendererURL, cfg.LocalStoragePath, client), authService,
-	))
+	presentationService := presentations.NewService(store, cfg.RendererURL, cfg.LocalStoragePath, client)
+	apiRoutes.Mount("/presentations", presentations.NewHandlers(presentationService, authService))
+	apiRoutes.Mount("/slides", presentations.NewSlideHandlers(presentationService, authService))
 	apiRoutes.Mount("/assets", assets.NewHandlers(assets.NewService(store, cfg.LocalStoragePath), authService))
 	apiRoutes.Mount("/templates", templates.NewHandlers(templateService))
 	apiRoutes.Mount("/skills", skills.NewHandlers(store, rendererClient, cfg.LocalStoragePath, authService))
@@ -88,6 +89,7 @@ func run() error {
 	comments.RegisterRoutes(apiRoutes, store, authService)
 	profile.RegisterRoutes(apiRoutes, store, authService)
 	versions.RegisterRoutes(apiRoutes, store, authService)
+	userfeatures.RegisterRoutes(apiRoutes, store, authService)
 	apiRoutes.Mount("/admin", admin.NewHandlers(
 		store, authService, generationQueue, cfg.RendererURL, client,
 		templates.NewAdminHandlers(templateService, authService), llmPolicy, generationService,

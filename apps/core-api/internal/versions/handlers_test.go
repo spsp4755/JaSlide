@@ -35,6 +35,8 @@ func TestActiveVersionCommentAndProfileRoutes(t *testing.T) {
 		"GET /presentations/{presentationId}/versions",
 		"GET /slides/{slideId}/comments",
 		"GET /users/me",
+		"GET /users/me/presentations",
+		"GET /users/{id}",
 		"GET /versions/{id}",
 		"GET /versions/{id1}/compare/{id2}",
 		"PATCH /comments/{id}",
