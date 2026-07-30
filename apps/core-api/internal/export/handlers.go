@@ -1,6 +1,7 @@
 package export
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -72,15 +73,19 @@ func (handler *handlers) render(
 		return
 	}
 	defer stream.Body.Close()
+	kind := strings.TrimPrefix(extension, ".")
+	raw, err := readValidatedStream(stream, kind)
+	if err != nil {
+		writeJSONError(writer, http.StatusBadGateway, "Presentation renderer returned an invalid file")
+		return
+	}
 	writer.Header().Set("Content-Type", contentType)
 	writer.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
 		"filename": presentation["title"].(string) + extension,
 	}))
-	if stream.ContentLength >= 0 {
-		writer.Header().Set("Content-Length", strconv.FormatInt(stream.ContentLength, 10))
-	}
+	writer.Header().Set("Content-Length", strconv.Itoa(len(raw)))
 	writer.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(writer, stream.Body)
+	_, _ = writer.Write(raw)
 }
 
 func (handler *handlers) preview(writer http.ResponseWriter, request *http.Request) {
@@ -103,9 +108,51 @@ func (handler *handlers) preview(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 	defer stream.Body.Close()
+	raw, err := readValidatedStream(stream, "png")
+	if err != nil {
+		writeJSONError(writer, http.StatusBadGateway, "Presentation renderer returned an invalid preview")
+		return
+	}
 	writer.Header().Set("Content-Type", "image/png")
+	writer.Header().Set("Content-Length", strconv.Itoa(len(raw)))
 	writer.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(writer, stream.Body)
+	_, _ = writer.Write(raw)
+}
+
+const maxRenderedFileBytes = 256 << 20
+
+func readValidatedStream(stream renderer.Stream, kind string) ([]byte, error) {
+	expectedType := map[string]string{
+		"pptx": renderer.PPTXContentType,
+		"pdf":  renderer.PDFContentType,
+		"png":  "image/png",
+	}[kind]
+	actualType, _, err := mime.ParseMediaType(stream.ContentType)
+	if err != nil || actualType != expectedType {
+		return nil, errors.New("renderer returned an unexpected content type")
+	}
+	raw, err := io.ReadAll(io.LimitReader(stream.Body, maxRenderedFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 || len(raw) > maxRenderedFileBytes {
+		return nil, errors.New("renderer file has an invalid size")
+	}
+	valid := false
+	switch kind {
+	case "pptx":
+		valid = bytes.HasPrefix(raw, []byte{'P', 'K', 3, 4}) ||
+			bytes.HasPrefix(raw, []byte{'P', 'K', 5, 6}) ||
+			bytes.HasPrefix(raw, []byte{'P', 'K', 7, 8})
+	case "pdf":
+		valid = bytes.HasPrefix(raw, []byte("%PDF-"))
+	case "png":
+		valid = bytes.HasPrefix(raw, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	}
+	if !valid {
+		return nil, errors.New("renderer file signature is invalid")
+	}
+	return raw, nil
 }
 
 func (handler *handlers) googleSlides(writer http.ResponseWriter, request *http.Request) {

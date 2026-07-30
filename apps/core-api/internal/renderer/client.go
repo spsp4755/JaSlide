@@ -30,6 +30,10 @@ type Stream struct {
 	ContentLength int64
 }
 
+func PublicError(error) string {
+	return "Renderer request failed"
+}
+
 func New(baseURL string, client *http.Client) *Client {
 	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: client}
 }

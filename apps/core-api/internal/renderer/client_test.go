@@ -3,6 +3,7 @@ package renderer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +75,15 @@ func TestClientStreamsPPTXAndPDF(t *testing.T) {
 		}
 		if stream.ContentType != test.contentType || strings.TrimSpace(string(raw)) != test.body {
 			t.Fatalf("%s stream = %q %q", test.path, stream.ContentType, raw)
+		}
+	}
+}
+
+func TestPublicErrorNeverContainsRendererAddressOrResponseBody(t *testing.T) {
+	message := PublicError(fmt.Errorf(`renderer status 500 from http://renderer.internal:8000: dial tcp 10.0.0.8:8000 secret-token`))
+	for _, secret := range []string{"renderer.internal", "10.0.0.8", "secret-token", "8000"} {
+		if strings.Contains(message, secret) {
+			t.Fatalf("public renderer error leaked %q: %s", secret, message)
 		}
 	}
 }

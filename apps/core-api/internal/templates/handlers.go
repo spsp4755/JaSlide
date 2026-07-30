@@ -19,7 +19,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/contentsecurity"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpjson"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/renderer"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/storagepath"
 )
@@ -79,8 +81,14 @@ func (service *Service) listPublic(writer http.ResponseWriter, request *http.Req
 }
 
 func (service *Service) getPublic(writer http.ResponseWriter, request *http.Request) {
-	writeRawQuery(writer, service.db.Pool().QueryRow(request.Context(),
-		`SELECT to_jsonb(t) FROM "Template" t WHERE "id"=$1`, chi.URLParam(request, "id")), http.StatusOK)
+	var raw, config json.RawMessage
+	err := service.db.Pool().QueryRow(request.Context(),
+		`SELECT to_jsonb(t),"config" FROM "Template" t WHERE "id"=$1 AND "isPublic"`, chi.URLParam(request, "id"),
+	).Scan(&raw, &config)
+	if err == nil {
+		raw, err = templateWithSanitizedConfig(raw, config)
+	}
+	writeRaw(writer, raw, http.StatusOK, err)
 }
 
 func (service *Service) listAdmin(writer http.ResponseWriter, request *http.Request) {
@@ -116,6 +124,9 @@ func (service *Service) listAdmin(writer http.ResponseWriter, request *http.Requ
 		(SELECT COUNT(*) FROM "Template" t WHERE ($1='' OR t."category"::text=$1)
 			AND ($2::boolean IS NULL OR t."isPublic"=$2))
 		FROM selected`, category, publicFilter, (page-1)*limit, limit).Scan(&raw, &total)
+	if err == nil {
+		raw, err = sanitizeTemplatePage(raw)
+	}
 	writePage(writer, raw, total, page, limit, err)
 }
 
@@ -164,7 +175,12 @@ func (service *Service) updateAdmin(writer http.ResponseWriter, request *http.Re
 			return
 		}
 		if name == "config" {
-			args = append(args, string(value))
+			clean, err := contentsecurity.SanitizeTemplateConfig(value)
+			if err != nil {
+				writeError(writer, http.StatusBadRequest, err.Error())
+				return
+			}
+			args = append(args, string(clean))
 		} else {
 			args = append(args, decoded)
 		}
@@ -340,6 +356,11 @@ func (service *Service) reextractPPTX(writer http.ResponseWriter, request *http.
 	newSource["storageKey"] = key
 	newFields["source"], newFields["pptxTemplate"] = newSource, oldFields["pptxTemplate"]
 	raw, _ := json.Marshal(newFields)
+	raw, err = contentsecurity.SanitizeTemplateConfig(raw)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
 	writeRawQuery(writer, service.db.Pool().QueryRow(request.Context(),
 		`UPDATE "Template" SET "config"=$2,"updatedAt"=NOW() WHERE "id"=$1 RETURNING to_jsonb("Template")`,
 		id, raw), http.StatusCreated)
@@ -474,6 +495,10 @@ func (service *Service) createTemplate(ctx context.Context, input templateInput)
 	if !categories[category] {
 		return nil, errors.New("invalid template category")
 	}
+	input.Config, err = contentsecurity.SanitizeTemplateConfig(input.Config)
+	if err != nil {
+		return nil, err
+	}
 	var raw json.RawMessage
 	err = service.db.Pool().QueryRow(ctx, `
 		INSERT INTO "Template"
@@ -581,6 +606,47 @@ func templateStorageKey(raw json.RawMessage) string {
 	return ""
 }
 
+func templateWithSanitizedConfig(raw, config json.RawMessage) (json.RawMessage, error) {
+	clean, err := contentsecurity.SanitizeTemplateConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]any
+	var cleanConfig any
+	if json.Unmarshal(raw, &object) != nil || json.Unmarshal(clean, &cleanConfig) != nil {
+		return nil, errors.New("invalid template record")
+	}
+	object["config"] = cleanConfig
+	return json.Marshal(object)
+}
+
+func sanitizeTemplatePage(raw json.RawMessage) (json.RawMessage, error) {
+	var templates []map[string]any
+	if err := json.Unmarshal(raw, &templates); err != nil {
+		return nil, err
+	}
+	for _, template := range templates {
+		config, ok := template["config"]
+		if !ok {
+			continue
+		}
+		configRaw, err := json.Marshal(config)
+		if err != nil {
+			return nil, err
+		}
+		clean, err := contentsecurity.SanitizeTemplateConfig(configRaw)
+		if err != nil {
+			return nil, err
+		}
+		var cleanConfig any
+		if err := json.Unmarshal(clean, &cleanConfig); err != nil {
+			return nil, err
+		}
+		template["config"] = cleanConfig
+	}
+	return json.Marshal(templates)
+}
+
 func rawObject(raw json.RawMessage) map[string]any {
 	result := map[string]any{}
 	_ = json.Unmarshal(raw, &result)
@@ -637,9 +703,7 @@ func pagination(request *http.Request) (int, int) {
 }
 
 func decodeJSON(writer http.ResponseWriter, request *http.Request, value any) error {
-	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 20<<20))
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(value)
+	return httpjson.Decode(request, writer, 20<<20, value)
 }
 
 func writeRawQuery(writer http.ResponseWriter, row pgx.Row, status int) {
@@ -676,7 +740,7 @@ func writeRendererError(writer http.ResponseWriter, err error) {
 	if strings.Contains(err.Error(), "status 4") {
 		status = http.StatusBadRequest
 	}
-	writeError(writer, status, err.Error())
+	writeError(writer, status, renderer.PublicError(err))
 }
 
 func writeDatabaseError(writer http.ResponseWriter, err error) {

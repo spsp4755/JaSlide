@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpjson"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/renderer"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/storagepath"
 )
@@ -332,9 +333,7 @@ func unique(values []string) []string {
 }
 
 func decode(writer http.ResponseWriter, request *http.Request, target any) error {
-	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 2<<20))
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(target)
+	return httpjson.Decode(request, writer, 2<<20, target)
 }
 
 func writeRaw(writer http.ResponseWriter, raw json.RawMessage, status int, err error) {
@@ -352,7 +351,7 @@ func writeRendererError(writer http.ResponseWriter, err error) {
 	if strings.Contains(err.Error(), "status 4") {
 		status = http.StatusBadRequest
 	}
-	writeError(writer, status, err.Error())
+	writeError(writer, status, renderer.PublicError(err))
 }
 
 func writeError(writer http.ResponseWriter, status int, message string) {
