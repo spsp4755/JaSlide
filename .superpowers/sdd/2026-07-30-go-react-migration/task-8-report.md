@@ -39,3 +39,13 @@
   path and completed ten uniquely ordered slides with titles and content.
 - The ten-slide job reported progress at 45, 60, 75, and 100 percent before
   completing. Both generated presentations were retrievable through the API.
+
+## P1-5 Progress, Cancellation, and Restart Recovery
+
+- A running ten-slide LM Studio job was cancelled at 35 percent. It remained
+  `CANCELLED` after the in-flight request stopped, created no slides, and moved
+  its presentation to `FAILED`.
+- A separate job was interrupted by stopping the API at
+  `GENERATING_CONTENT`/30 percent. After the API restarted, durable recovery
+  requeued it, progress advanced to 55 percent, and the job completed at 100
+  percent with all four slides.
