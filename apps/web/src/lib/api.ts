@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+export const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
 
 export const assetUrl = (url: string) => {
     if (!url.startsWith('/') || !apiBaseUrl.startsWith('http')) return url;

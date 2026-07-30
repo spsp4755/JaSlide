@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
+import Link, { useRouter } from '@/lib/router';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { BookOpen, FileText, Grid2X2, Home, Image, Menu, MessageSquareText, MoreHorizontal, Plus, Presentation, Sparkles, UserRound } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 

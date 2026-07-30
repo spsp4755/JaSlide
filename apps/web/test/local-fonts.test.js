@@ -3,12 +3,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-test('layout uses bundled Korean fonts instead of Google Fonts', () => {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'layout.tsx'), 'utf8');
+test('Vite bundles the same local Korean fonts without a network font service', () => {
+    const web = path.join(__dirname, '..');
+    const css = fs.readFileSync(path.join(web, 'src', 'app', 'globals.css'), 'utf8');
+    const layout = fs.readFileSync(path.join(web, 'src', 'app', 'layout.tsx'), 'utf8');
 
-    assert.doesNotMatch(source, /next\/font\/google/);
-    assert.match(source, /next\/font\/local/);
-    assert.match(source, /NotoSansKR-Regular\.otf/);
+    assert.doesNotMatch(layout, /next\/font/);
+    assert.match(css, /NotoSansKR-Regular\.otf/);
+    assert.match(css, /NotoSansKR-Bold\.otf/);
+    assert.match(css, /--font-sans:\s*'TaeSlide Sans'/);
 });
 
 test('the slide canvas can draw the fonts the renderer resolves to', () => {

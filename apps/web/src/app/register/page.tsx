@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import Link, { useRouter } from '@/lib/router';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 

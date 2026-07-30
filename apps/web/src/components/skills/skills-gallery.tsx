@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/lib/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FileUp, LayoutTemplate, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { skillsApi } from '@/lib/api';

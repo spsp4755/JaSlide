@@ -14,8 +14,8 @@ function sourceFiles(directory) {
     });
 }
 
-// A `@/` import with no file behind it builds fine under `next dev` but fails
-// `next build`, so it only surfaces when the Docker image is built.
+// A broken `@/` import can be missed during incremental development but fails
+// the production Vite build, so verify every alias import directly.
 test('every @/ import resolves to a file that exists', () => {
     const missing = [];
     for (const file of sourceFiles(SRC)) {

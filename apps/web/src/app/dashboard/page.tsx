@@ -1,8 +1,7 @@
 'use client';
 
 import { Suspense, useState, useCallback, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Link, { useRouter, useSearchParams } from '@/lib/router';
 import { useDropzone } from 'react-dropzone';
 import { AppShell } from '@/components/layout/app-shell';
 import { Button as AstryxButton } from '@astryxdesign/core';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/lib/router';
 import { useAuthStore } from '@/stores/auth-store';
 
 // ponytail: marketing landing removed — root goes straight to login (or home when signed in)

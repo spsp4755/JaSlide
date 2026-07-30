@@ -62,16 +62,14 @@ services:
     volumes:
       - assets_data:/app/apps/api/uploads
 
-  # Next.js Web
+  # Vite React SPA
   web:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: jaslide-web
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     ports:
       - "3000:3000"
     depends_on:

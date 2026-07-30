@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/lib/router';
 
 // Next's built-in 404 is English and offers no way back, which strands a visitor
 // who mistypes a URL or follows a link to a deleted deck.

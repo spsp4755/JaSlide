@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import Link, { usePathname, useRouter } from '@/lib/router';
 import { useAuthStore, isAdminRole } from '@/stores/auth-store';
 import { authApi } from '@/lib/api';
 import { Plus, Home, FolderOpen, Settings, Shield, LogOut, Sparkles, BookOpen } from 'lucide-react';

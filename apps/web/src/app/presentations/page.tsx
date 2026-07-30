@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link, { useRouter } from '@/lib/router';
 import { Button } from '@/components/ui/button';
 import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';

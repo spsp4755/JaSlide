@@ -60,7 +60,7 @@ cd apps/api
 ./node_modules/.bin/prisma generate --schema prisma/schema.prisma
 ./node_modules/.bin/nest build
 cd ../web
-./node_modules/.bin/next build
+pnpm build
 ```
 
 ## 4. 배포 전 점검

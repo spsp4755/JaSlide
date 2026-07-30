@@ -1,8 +1,8 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import Link, { usePathname } from '@/lib/router';
 import {
     Users,
     Building2,
@@ -39,7 +39,7 @@ const menuItems = [
     { href: '/admin/alerts', label: '알림 관리', icon: Bell },
 ];
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default function AdminLayout() {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(false);
 
@@ -97,7 +97,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </aside>
 
             {/* Main content */}
-            <main className="flex-1 overflow-auto">{children}</main>
+            <main className="flex-1 overflow-auto"><Outlet /></main>
         </div>
     );
 }

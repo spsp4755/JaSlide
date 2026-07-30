@@ -2,13 +2,13 @@
 set -euo pipefail
 
 release_version="${1:-v0.6.1}"
-web_api_url="${NEXT_PUBLIC_API_URL:-/api}"
+web_api_url="${VITE_API_URL:-/api}"
 output_dir="${OUTPUT_DIR:-dist/release}"
 
 mkdir -p "$output_dir"
 
 docker buildx build --platform linux/amd64 --load -f docker/api.Dockerfile -t "jaslide/api:${release_version}" .
-docker buildx build --platform linux/amd64 --load -f docker/web.Dockerfile -t "jaslide/web:${release_version}" --build-arg "NEXT_PUBLIC_API_URL=${web_api_url}" .
+docker buildx build --platform linux/amd64 --load -f docker/web.Dockerfile -t "jaslide/web:${release_version}" --build-arg "VITE_API_URL=${web_api_url}" .
 docker buildx build --platform linux/amd64 --load -f docker/renderer.Dockerfile -t "jaslide/renderer:${release_version}" .
 docker buildx build --platform linux/amd64 --load -f docker/postgres.Dockerfile -t "jaslide/postgres:${release_version}" .
 docker buildx build --platform linux/amd64 --load -f docker/redis.Dockerfile -t "jaslide/redis:${release_version}" .

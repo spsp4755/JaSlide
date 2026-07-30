@@ -6,7 +6,7 @@ import { assetUrl } from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { Search, Image, File, Video, Music, Trash2, Download, Filter } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface Asset {
     id: string;

@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { authApi } from '@/lib/api';
+import Link, { useRouter } from '@/lib/router';
+import { apiBaseUrl, authApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Reasons the API bounces a browser back here from an SSO round trip.
@@ -93,7 +92,7 @@ export default function LoginPage() {
 
                 <button
                     type="button"
-                    onClick={() => window.location.assign(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/auth/keycloak`)}
+                    onClick={() => window.location.assign(`${apiBaseUrl}/auth/keycloak`)}
                     className="w-full mt-3 py-3.5 rounded-xl border border-border bg-card text-foreground font-medium hover:bg-secondary transition-colors"
                 >
                     사내 SSO로 로그인

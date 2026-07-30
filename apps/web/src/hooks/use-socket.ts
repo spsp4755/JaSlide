@@ -25,7 +25,8 @@ export function useSocket(options: UseSocketOptions) {
         if (!presentationId) return;
 
         // Connect to WebSocket server
-        const socket = io(`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000'}/presentations`, {
+        const apiOrigin = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '') || window.location.origin;
+        const socket = io(`${apiOrigin}/presentations`, {
             transports: ['websocket', 'polling'],
         });
 

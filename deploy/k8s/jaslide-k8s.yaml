@@ -36,7 +36,6 @@ data:
   NODE_ENV: production                           # API 세션 쿠키에 Secure 속성을 붙이는 데 필요
   REDIS_URL: redis://jaslide-redis:6379
   RENDERER_URL: http://jaslide-renderer:8000
-  API_INTERNAL_URL: http://jaslide-api:4000      # web 컨테이너 자체가 만드는 /api 요청(서버 컴포넌트 등)이 쓰는 내부 주소
   LOCAL_STORAGE_PATH: /app/apps/api/uploads
   CORS_ORIGIN: https://jaslide.internal          # 브라우저 접속 URL
   OPENAI_BASE_URL: http://CHANGE_ME:11434/v1     # 사내 Ollama/vLLM 엔드포인트
@@ -101,7 +100,7 @@ spec:
   selector: { app: jaslide-api }
   ports: [{ port: 4000, targetPort: 4000 }]
 ---
-# Next.js Web (기본값 /api는 동일 Ingress 경로를 사용하므로 브라우저 도메인 변경 시 재빌드 불필요)
+# Vite React SPA (정적 파일과 브라우저 라우팅 fallback 제공)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -120,8 +119,6 @@ spec:
           image: jaslide/web:v0.6.1
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 3000 }]
-          envFrom:
-            - configMapRef: { name: jaslide-config }   # API_INTERNAL_URL — SSR/서버 컴포넌트가 만드는 /api 요청용
           readinessProbe:
             httpGet: { path: /login, port: 3000 }
             initialDelaySeconds: 5
@@ -282,6 +279,10 @@ spec:
       http:
         paths:
           - path: /api
+            pathType: Prefix
+            backend:
+              service: { name: jaslide-api, port: { number: 4000 } }
+          - path: /socket.io
             pathType: Prefix
             backend:
               service: { name: jaslide-api, port: { number: 4000 } }

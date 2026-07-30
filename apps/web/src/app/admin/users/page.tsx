@@ -5,7 +5,7 @@ import { adminFetch } from '@/lib/admin-fetch';
 import { useEffect, useState } from 'react';
 import { Plus, Search, Filter, MoreVertical, RefreshCw } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface User {
     id: string;

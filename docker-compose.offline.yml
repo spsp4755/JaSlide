@@ -47,8 +47,6 @@ services:
 
   web:
     image: jaslide/web:offline
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     ports:
       - "3000:3000"
     depends_on:

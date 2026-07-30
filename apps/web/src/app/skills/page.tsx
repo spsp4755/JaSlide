@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/lib/router';
 import { SkillsGallery } from '@/components/skills/skills-gallery';
 import { AppShell } from '@/components/layout/app-shell';
 import { useAuthStore } from '@/stores/auth-store';

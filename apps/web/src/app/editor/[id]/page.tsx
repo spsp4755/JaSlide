@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import Link, { useParams, useRouter } from '@/lib/router';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Button } from '@/components/ui/button';
