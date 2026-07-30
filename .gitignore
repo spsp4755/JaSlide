@@ -7,6 +7,7 @@ dist
 .next
 out
 build
+apps/core-api/api.exe
 
 # Cache
 .turbo
