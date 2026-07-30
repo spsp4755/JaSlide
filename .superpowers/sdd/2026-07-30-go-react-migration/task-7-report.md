@@ -19,22 +19,22 @@
 ## Release Packaging
 
 - Base images are version-and-digest pinned.
-- `build-amd64-images.sh` builds all five images with `--platform linux/amd64`,
+- `build-amd64-images.sh` builds all six images with `--platform linux/amd64`,
   verifies each loaded image platform, and disables provenance metadata.
 - Docker archive entry order, timestamps, and ownership are normalized before
   `gzip -n`; the checksum file uses an archive basename so it remains portable.
-- Two clean archive generations from the same tree and tag produced the same
-  SHA-256:
-  `8d2bbf4e5e4f695199b0a2c73803d25972f4960c2fad1183bd818087f0c295bc`.
+- The archive generated from commit `67ea0b1` passed its portable checksum:
+  `c52081fbb39c2b584f5aae52c3fee49199a467b7531674aec4ec2a96a18202c6`.
 
 ## Runtime Verification
 
 - Built and loaded:
-  - `jaslide/core-api:task7-smoke` — `linux/amd64`
-  - `jaslide/web:task7-smoke` — `linux/amd64`
-  - `jaslide/renderer:task7-smoke` — `linux/amd64`
-  - `jaslide/postgres:task7-smoke` — `linux/amd64`
-  - `jaslide/redis:task7-smoke` — `linux/amd64`
+  - `jaslide/core-api:v0.6.1` — `linux/amd64`
+  - `jaslide/migrate:v0.6.1` — `linux/amd64`
+  - `jaslide/web:v0.6.1` — `linux/amd64`
+  - `jaslide/renderer:v0.6.1` — `linux/amd64`
+  - `jaslide/postgres:v0.6.1` — `linux/amd64`
+  - `jaslide/redis:v0.6.1` — `linux/amd64`
 - The normalized release archive passed `sha256sum -c` and `docker load`.
 - Fresh offline Compose started with `--no-build --pull never`.
 - `/login`, `/editor/deck-123`, and `/api/health/ready` returned 200.
