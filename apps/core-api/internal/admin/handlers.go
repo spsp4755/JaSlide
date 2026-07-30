@@ -702,14 +702,40 @@ func redactModel(row map[string]any) {
 }
 
 func (h *Handlers) forceStopJobs(w http.ResponseWriter, r *http.Request) {
-	tag, err := h.pool.Exec(r.Context(), `
-		UPDATE "GenerationJob" SET status='CANCELLED',"completedAt"=now(),"updatedAt"=now()
-		WHERE status IN ('PROCESSING','GENERATING_OUTLINE','GENERATING_CONTENT','APPLYING_DESIGN','RENDERING')`)
+	rows, err := h.pool.Query(r.Context(), `
+		WITH cancelled AS (
+			UPDATE "GenerationJob" SET status='CANCELLED',"completedAt"=now(),"updatedAt"=now()
+			WHERE status IN ('PROCESSING','GENERATING_OUTLINE','GENERATING_CONTENT','APPLYING_DESIGN','RENDERING')
+			RETURNING id,"presentationId"
+		), presentations AS (
+			UPDATE "Presentation" SET status='FAILED',"updatedAt"=now()
+			WHERE id IN (SELECT "presentationId" FROM cancelled WHERE "presentationId" IS NOT NULL)
+		)
+		SELECT id FROM cancelled`)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, forceStopContract(tag.RowsAffected()))
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			writeError(w, err)
+			return
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, err)
+		return
+	}
+	if h.canceller != nil {
+		for _, id := range ids {
+			h.canceller.CancelLive(id)
+		}
+	}
+	writeJSON(w, http.StatusOK, forceStopContract(int64(len(ids))))
 }
 
 func (h *Handlers) listOrganizations(w http.ResponseWriter, r *http.Request) {
