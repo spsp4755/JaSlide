@@ -20,3 +20,13 @@
   `AUDITOR`) were preserved.
 - A final live login still requires the deployment site's Keycloak issuer and
   client credentials.
+
+## P1-3 Template Imports
+
+- `박태지_0723_업무보고_AI엔지니어링.pptx` imported through the administrator
+  API with all three source slides and the 426,018-byte source file preserved.
+- `ai-safety-red-team-report.zip` imported with all 17 HTML slides and the
+  3,470,960-byte source archive preserved.
+- Both records stored the expected `pptx` or `html_zip` source kind and storage
+  key, produced valid JSON, and were available from the public template API.
+- The isolated containers, network, and volumes were removed after verification.
