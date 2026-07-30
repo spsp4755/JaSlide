@@ -75,3 +75,16 @@ Cookie handling, same-origin `/api` routing, and unauthenticated redirect behavi
 - All 27 hard-refresh paths still returned the SPA entry document.
 - Browser QA opened `/editor/deck-123` against an upstream returning 401 and
   observed `/login`, the complete login form, and no browser console warnings or errors.
+
+### Authentication Race Follow-up
+
+- Added an authentication generation counter. A bootstrap response is applied only
+  when the generation captured before `GET /auth/me` is still current.
+- A successful login or logout changes the generation and aborts the in-flight
+  bootstrap request. Its late success or 401 result is then ignored.
+- The `/auth/me` request opts out of the generic 401-clears-session interceptor;
+  bootstrap performs the generation-checked state transition itself.
+- Added a regression test that holds `/auth/me`, completes login successfully,
+  releases the older request as 401, and verifies the newly logged-in user remains.
+- Final verification: 99 existing tests and 35 rendered router/auth tests passed;
+  TypeScript and the Vite production build passed with 2,557 transformed modules.

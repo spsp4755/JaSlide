@@ -9,11 +9,17 @@ export function AuthBootstrap({ children }: { children: ReactNode }) {
         if (started.current) return;
         started.current = true;
 
+        const generation = useAuthStore.getState().authGeneration;
+        const controller = new AbortController();
+        const unsubscribe = useAuthStore.subscribe((state) => {
+            if (state.authGeneration !== generation) controller.abort();
+        });
+
         void authApi
-            .me()
-            .then(({ data }) => useAuthStore.getState().setAuth(data))
-            .catch(() => useAuthStore.getState().clearAuth())
-            .finally(() => useAuthStore.getState().setHasHydrated(true));
+            .me(controller.signal)
+            .then(({ data }) => useAuthStore.getState().completeBootstrap(data, generation))
+            .catch(() => useAuthStore.getState().completeBootstrap(null, generation))
+            .finally(unsubscribe);
     }, []);
 
     return children;

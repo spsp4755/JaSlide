@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     createMemoryRouter,
@@ -11,6 +11,7 @@ import {
 } from 'react-router-dom';
 import { authApi } from '../src/lib/api';
 import { Providers } from '../src/components/providers';
+import { AuthBootstrap } from '../src/components/providers/auth-bootstrap';
 import { appRoutes } from '../src/router';
 import { useAuthStore } from '../src/stores/auth-store';
 
@@ -49,12 +50,24 @@ function renderRoute(path: string, withProviders = false) {
     return router;
 }
 
+function LoginHarness() {
+    const setAuth = useAuthStore((state) => state.setAuth);
+
+    const login = async () => {
+        const response = await authApi.login({ email: 'user@example.com', password: 'password' });
+        setAuth(response.data.user);
+    };
+
+    return <button onClick={() => void login()}>complete-login</button>;
+}
+
 describe('SPA routes', () => {
     beforeEach(() => {
         useAuthStore.setState({
             user: null,
             isAuthenticated: false,
             hasHydrated: true,
+            authGeneration: 0,
         });
     });
 
@@ -117,6 +130,33 @@ describe('SPA routes', () => {
         expect(await screen.findByText('login-screen')).toBeTruthy();
         await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
         expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    });
+
+    it('does not let a delayed bootstrap 401 clear a newer successful login', async () => {
+        useAuthStore.setState({ user: null, isAuthenticated: false, hasHydrated: false });
+        let rejectMe!: (reason: unknown) => void;
+        const pendingMe = new Promise<never>((_, reject) => {
+            rejectMe = reject;
+        });
+        vi.spyOn(authApi, 'me').mockReturnValue(pendingMe);
+        vi.spyOn(authApi, 'login').mockResolvedValue({ data: { user: regularUser } } as never);
+
+        render(
+            <AuthBootstrap>
+                <LoginHarness />
+            </AuthBootstrap>
+        );
+        fireEvent.click(screen.getByText('complete-login'));
+        await waitFor(() => expect(useAuthStore.getState().user).toEqual(regularUser));
+
+        await act(async () => {
+            rejectMe({ response: { status: 401 } });
+            await pendingMe.catch(() => undefined);
+            await Promise.resolve();
+        });
+
+        expect(useAuthStore.getState().user).toEqual(regularUser);
+        expect(useAuthStore.getState().isAuthenticated).toBe(true);
     });
 
     it.each([

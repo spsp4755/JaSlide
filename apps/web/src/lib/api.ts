@@ -25,10 +25,9 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         const request = error.config as AuthRequestConfig | undefined;
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 && !request?.skipAuthRedirect) {
             useAuthStore.getState().clearAuth();
             if (
-                !request?.skipAuthRedirect &&
                 typeof window !== 'undefined' &&
                 window.location.pathname !== '/login'
             ) {
@@ -46,7 +45,8 @@ export const authApi = {
     register: (data: { email: string; password: string; name?: string }) =>
         api.post('/auth/register', data),
     logout: () => api.post('/auth/logout'),
-    me: () => api.get('/auth/me', { skipAuthRedirect: true } as AuthRequestConfig),
+    me: (signal?: AbortSignal) =>
+        api.get('/auth/me', { skipAuthRedirect: true, signal } as AuthRequestConfig),
 };
 
 // Presentations
