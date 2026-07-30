@@ -46,6 +46,17 @@
 - The disposable smoke containers, data volumes, and network were removed after
   verification; existing JaSlide containers and volumes were not touched.
 
+### P0-2 Fresh Database Acceptance
+
+- A new isolated Compose project started from empty PostgreSQL, Redis, and
+  uploads volumes with `--no-build --pull never`.
+- The migration container exited successfully with `applied=6 adopted=0
+  skipped=0`; PostgreSQL contained 41 public tables and six JaSlide migration
+  ledger rows.
+- `/login` and `/api/health/ready` returned 200. A new local user registration
+  returned 201 and the user row was present in PostgreSQL.
+- The isolated containers, network, and volumes were removed after the checks.
+
 ## Automated Verification
 
 - `go test ./...` — passed.
