@@ -16,6 +16,23 @@ renderer, PostgreSQL, Redis입니다. NestJS와 Next.js 서버는 실행하지 �
 인터넷이 되는 빌드 환경에서 고정된 base image와 lockfile로 linux/amd64
 이미지를 만듭니다.
 
+renderer는 다음 네 입력을 함께 고정합니다.
+
+- Python 3.11 base image는 platform image digest로 고정
+- `apps/renderer/requirements.lock`의 전체 전이 의존성은 버전과 SHA-256으로
+  고정하고 `pip --require-hashes`로 설치
+- Playwright 1.61.0의 Chromium 1228, headless shell 1228, ffmpeg 1011은
+  linux/amd64 Playwright image digest에서 복사
+- LibreOffice, 글꼴, Chromium system library는 Debian
+  `20250721T000000Z` snapshot에서 설치
+
+따라서 폐쇄망에서는 pip, Playwright browser download, APT를 실행하지 않고
+완성된 renderer image만 반입합니다. 의존성을 갱신할 때는 `pyproject.toml`을
+수정한 뒤 Dockerfile과 같은 Python digest에서 `pip-compile
+--generate-hashes --strip-extras --output-file=requirements.lock
+pyproject.toml`을 실행하고 image 안의 `pip check`와 Chromium launch를 다시
+검증합니다.
+
 ```bash
 JASLIDE_VERSION=v0.6.1 docker compose --file docker-compose.yml --env-file .env build
 JASLIDE_VERSION=v0.6.1 docker compose --file docker-compose.yml --env-file .env \

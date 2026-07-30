@@ -5,18 +5,18 @@ description = "PPTX/PDF rendering service for JaSlide"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "python-pptx>=0.6.21",
-    "pydantic>=2.5.0",
-    "python-multipart>=0.0.6",
-    "playwright>=1.52.0",
+    "fastapi==0.141.1",
+    "uvicorn==0.52.0",
+    "python-pptx==1.0.2",
+    "pydantic==2.13.4",
+    "python-multipart==0.0.32",
+    "playwright==1.61.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "httpx>=0.25.0",
+    "pytest==8.4.2",
+    "httpx==0.28.1",
 ]
 
 [tool.pytest.ini_options]

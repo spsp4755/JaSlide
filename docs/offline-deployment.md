@@ -7,7 +7,10 @@ linux/amd64 image archive만 반입합니다.
 ## 1. 외부망 준비
 
 신뢰하는 commit에서 다음 명령을 실행합니다. base image는 digest로 고정되어
-있고 Go/Vite/Python 의존성은 lockfile 또는 checksum으로 고정됩니다.
+있고 Go/Vite/Python 의존성은 lockfile 또는 checksum으로 고정됩니다. renderer의
+Python package는 `requirements.lock`의 SHA-256으로 검증되며 Chromium 1228은
+고정된 linux/amd64 Playwright image digest에서 복사됩니다. LibreOffice와 browser
+system library는 고정된 Debian snapshot에서만 설치됩니다.
 
 ```bash
 ./scripts/release/build-amd64-images.sh v0.6.1
