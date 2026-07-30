@@ -49,3 +49,33 @@
   `GENERATING_CONTENT`/30 percent. After the API restarted, durable recovery
   requeued it, progress advanced to 55 percent, and the job completed at 100
   percent with all four slides.
+
+## P1-6 Manual Edit, Save, and Refresh of Generated Content
+
+- Found and fixed a real gap while verifying: `content.scene` (written by
+  `GetScene`/`SaveScene` for a generated slide with no PPTX/HTML source) was
+  never read by PPTX export, which kept regenerating the slide from
+  `content.heading`/`bullets` and silently discarding any manual edit. Fixed
+  in `apps/renderer/src/generators/pptx_generator.py` (`_add_scene_slide`,
+  reusing `scene_to_pptx.scene_to_edits`), with a new failing-then-passing
+  test in `test_pptx_generator.py`. Commit `bbd2d91`.
+- Live verification on an isolated Postgres + Redis + freshly built renderer
+  image (Go API run locally against them): created a presentation with a
+  generic (no template) `CONTENT` slide from `heading`/`bullets`; `GET scene`
+  returned the synthesized title+bullets scene; `PATCH scene` with a manual
+  text edit returned 200; a second `GET scene` (refresh) returned exactly the
+  manual edit, not the regenerated layout — confirming the "refresh" step
+  round-trips through the database, not client state.
+- All 144 other renderer tests and the full Go test suite continued to pass;
+  the only pre-existing failures are this Windows dev machine lacking
+  `pdfunite`/`fc-list` (Linux-only tools the renderer image ships).
+
+## P1-7 PPTX and PDF Export
+
+- Same live stack: exported the edited slide as PPTX (`editable: true`) — a
+  valid `PK\x03\x04` (Office Open XML) file whose `slide1.xml` contains the
+  manually edited run text verbatim, not the regenerated heading/bullets.
+- Exported the same presentation as PDF — a valid one-page `%PDF-1.6` file
+  produced through the renderer's PPTX-to-PDF (LibreOffice) path.
+- Isolated containers, network, and the verification-only renderer image were
+  removed after verification.
