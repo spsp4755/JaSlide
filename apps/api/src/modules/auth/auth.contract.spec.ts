@@ -1,4 +1,9 @@
-import { INestApplication, UnauthorizedException } from '@nestjs/common';
+import {
+    ConflictException,
+    INestApplication,
+    UnauthorizedException,
+    ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AuthController } from './auth.controller';
@@ -45,6 +50,12 @@ describe('HTTP authentication contract', () => {
             .compile();
         app = module.createNestApplication();
         app.setGlobalPrefix('api');
+        app.useGlobalPipes(new ValidationPipe({
+            whitelist: true,
+            forbidNonWhitelisted: true,
+            transform: true,
+            transformOptions: { enableImplicitConversion: true },
+        }));
         await app.init();
     });
 
@@ -98,5 +109,85 @@ describe('HTTP authentication contract', () => {
             .expect(200);
 
         expect(response.body).toEqual(principal);
+    });
+
+    it('returns 201, user JSON, and the same session cookie on registration', async () => {
+        authService.register.mockResolvedValue({ user, accessToken: 'registered-token' });
+
+        const response = await request(app.getHttpServer())
+            .post('/api/auth/register')
+            .send({ email: user.email, password: 'password123', name: user.name })
+            .expect(201);
+
+        expect(response.body).toEqual({ user });
+        expect(response.headers['set-cookie']).toEqual([
+            'jaslide_session=registered-token; Path=/; HttpOnly; SameSite=Lax',
+        ]);
+    });
+
+    it('keeps the existing duplicate-registration conflict', async () => {
+        authService.register.mockRejectedValue(
+            new ConflictException('User with this email already exists'),
+        );
+
+        const response = await request(app.getHttpServer())
+            .post('/api/auth/register')
+            .send({ email: user.email, password: 'password123', name: user.name })
+            .expect(409);
+
+        expect(response.body).toEqual({
+            message: 'User with this email already exists',
+            error: 'Conflict',
+            statusCode: 409,
+        });
+    });
+
+    it.each([
+        [
+            'missing password',
+            { email: user.email },
+            ['password should not be empty', 'password must be a string'],
+        ],
+        [
+            'empty password',
+            { email: user.email, password: '' },
+            ['password should not be empty'],
+        ],
+        [
+            'unknown property',
+            { email: user.email, password: 'password123', extra: true },
+            ['property extra should not exist'],
+        ],
+    ])('rejects %s using the global validation contract', async (_name, body, messages) => {
+        const response = await request(app.getHttpServer())
+            .post('/api/auth/login')
+            .send(body)
+            .expect(400);
+
+        expect(response.body).toEqual({
+            message: messages,
+            error: 'Bad Request',
+            statusCode: 400,
+        });
+        expect(authService.login).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['malformed JSON', '{"email":"test@example.com"'],
+        [
+            'multiple JSON values',
+            '{"email":"test@example.com","password":"password123"}{"email":"other@example.com","password":"password123"}',
+        ],
+    ])('rejects %s before authentication', async (_name, body) => {
+        const response = await request(app.getHttpServer())
+            .post('/api/auth/login')
+            .set('Content-Type', 'application/json')
+            .send(body)
+            .expect(400);
+
+        expect(response.body.error).toBe('Bad Request');
+        expect(response.body.statusCode).toBe(400);
+        expect(typeof response.body.message).toBe('string');
+        expect(authService.login).not.toHaveBeenCalled();
     });
 });

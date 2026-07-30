@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,4 +60,34 @@ func TestLoadRejectsInvalidJWTLifetime(t *testing.T) {
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() accepted invalid JWT_EXPIRES_IN")
 	}
+}
+
+func TestLoadRequiresLongJWTSecretInProduction(t *testing.T) {
+	setValidProductionEnvironment(t)
+	t.Setenv("JWT_SECRET", strings.Repeat("a", 31))
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "at least 32 bytes") {
+		t.Fatalf("Load() error = %v, want minimum JWT secret length error", err)
+	}
+}
+
+func TestLoadAccepts32ByteJWTSecretInProduction(t *testing.T) {
+	setValidProductionEnvironment(t)
+	t.Setenv("JWT_SECRET", strings.Repeat("a", 32))
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func setValidProductionEnvironment(t *testing.T) {
+	t.Helper()
+	t.Setenv("NODE_ENV", "production")
+	t.Setenv("DATABASE_URL", "postgresql://postgres:secret@database:5432/jaslide")
+	t.Setenv("REDIS_URL", "redis://redis:6379")
+	t.Setenv("JWT_SECRET", strings.Repeat("a", 32))
+	t.Setenv("RENDERER_URL", "http://renderer:8000")
+	t.Setenv("PUBLIC_ORIGIN", "https://slides.internal")
+	t.Setenv("CORS_ORIGIN", "")
 }

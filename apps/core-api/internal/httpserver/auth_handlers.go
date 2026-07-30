@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/mail"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 )
 
 type AuthOptions struct {
@@ -35,6 +38,7 @@ func NewAuthHandlers(service *auth.Service, keycloak KeycloakProvider, options A
 	handlers := &authHandlers{service: service, keycloak: keycloak, options: options}
 	router := chi.NewRouter()
 	router.Post("/login", handlers.login)
+	router.Post("/register", handlers.register)
 	router.Post("/logout", handlers.logout)
 	router.With(auth.RequireUser(service)).Get("/me", handlers.me)
 	router.Get("/keycloak", handlers.startKeycloak)
@@ -120,17 +124,27 @@ func (handlers *authHandlers) frontendURL() string {
 
 func (handlers *authHandlers) login(writer http.ResponseWriter, request *http.Request) {
 	var input struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email    string  `json:"email"`
+		Password *string `json:"password"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&input) != nil || !validEmail(input.Email) {
-		writeAPIError(writer, http.StatusBadRequest, "Bad Request", "Bad Request")
+	if err := decodeJSON(writer, request, &input); err != nil {
+		handlers.badJSON(writer, err)
+		return
+	}
+	if !validEmail(input.Email) {
+		writeValidationError(writer, []string{"email must be an email"})
+		return
+	}
+	if input.Password == nil {
+		writeValidationError(writer, []string{"password should not be empty", "password must be a string"})
+		return
+	}
+	if *input.Password == "" {
+		writeValidationError(writer, []string{"password should not be empty"})
 		return
 	}
 
-	principal, token, err := handlers.service.Login(request.Context(), input.Email, input.Password, auth.LoginMetadata{
+	principal, token, err := handlers.service.Login(request.Context(), input.Email, *input.Password, auth.LoginMetadata{
 		IPAddress: clientIP(request),
 		UserAgent: request.UserAgent(),
 	})
@@ -148,6 +162,47 @@ func (handlers *authHandlers) login(writer http.ResponseWriter, request *http.Re
 
 	http.SetCookie(writer, handlers.cookie("jaslide_session", token, "/"))
 	writeJSON(writer, http.StatusOK, struct {
+		User loginResponseUser `json:"user"`
+	}{User: loginUser(principal)})
+}
+
+func (handlers *authHandlers) register(writer http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Email    string  `json:"email"`
+		Password *string `json:"password"`
+		Name     *string `json:"name"`
+	}
+	if err := decodeJSON(writer, request, &input); err != nil {
+		handlers.badJSON(writer, err)
+		return
+	}
+	if !validEmail(input.Email) {
+		writeValidationError(writer, []string{"email must be an email"})
+		return
+	}
+	if input.Password == nil {
+		writeValidationError(writer, []string{
+			"password must be longer than or equal to 8 characters", "password must be a string",
+		})
+		return
+	}
+	if len(*input.Password) < 8 {
+		writeValidationError(writer, []string{"password must be longer than or equal to 8 characters"})
+		return
+	}
+	principal, token, err := handlers.service.Register(
+		request.Context(), input.Email, *input.Password, input.Name,
+	)
+	if err != nil {
+		if errors.Is(err, db.ErrUserExists) {
+			writeAPIError(writer, http.StatusConflict, "User with this email already exists", "Conflict")
+			return
+		}
+		writeAPIError(writer, http.StatusInternalServerError, "Internal server error", "Internal Server Error")
+		return
+	}
+	http.SetCookie(writer, handlers.cookie("jaslide_session", token, "/"))
+	writeJSON(writer, http.StatusCreated, struct {
 		User loginResponseUser `json:"user"`
 	}{User: loginUser(principal)})
 }
@@ -209,4 +264,42 @@ func writeJSON(writer http.ResponseWriter, status int, value any) {
 
 func writeAPIError(writer http.ResponseWriter, status int, message, kind string) {
 	writeJSON(writer, status, map[string]any{"message": message, "error": kind, "statusCode": status})
+}
+
+func writeValidationError(writer http.ResponseWriter, messages []string) {
+	writeJSON(writer, http.StatusBadRequest, map[string]any{
+		"message": messages, "error": "Bad Request", "statusCode": http.StatusBadRequest,
+	})
+}
+
+func decodeJSON(writer http.ResponseWriter, request *http.Request, target any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func (handlers *authHandlers) badJSON(writer http.ResponseWriter, err error) {
+	if strings.HasPrefix(err.Error(), "json: unknown field ") {
+		field := strings.Trim(err.Error()[len("json: unknown field "):], `"`)
+		writeValidationError(writer, []string{"property " + field + " should not exist"})
+		return
+	}
+	message := "Bad Request"
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		message = "Unexpected end of JSON input"
+	} else if err.Error() == "multiple JSON values" {
+		message = "Unexpected non-whitespace character after JSON"
+	} else {
+		message = fmt.Sprintf("Invalid JSON: %v", err)
+	}
+	writeAPIError(writer, http.StatusBadRequest, message, "Bad Request")
 }

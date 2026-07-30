@@ -17,11 +17,13 @@ import (
 )
 
 type authStore struct {
-	users        map[string]db.User
-	loginFailed  int
-	loginOK      int
-	keycloakUser *db.User
-	keycloakRole string
+	users                map[string]db.User
+	loginFailed          int
+	loginOK              int
+	keycloakUser         *db.User
+	keycloakRole         string
+	createError          error
+	blockSuccessfulLogin bool
 }
 
 func (store *authStore) FindUserByEmail(_ context.Context, email string) (db.User, error) {
@@ -46,9 +48,12 @@ func (store *authStore) RecordFailedLogin(_ context.Context, _ string, _ time.Ti
 	return nil
 }
 
-func (store *authStore) RecordSuccessfulLogin(_ context.Context, _ string, _ time.Time) error {
+func (store *authStore) RecordSuccessfulLogin(_ context.Context, _ string, _ int, _ time.Time) (bool, error) {
+	if store.blockSuccessfulLogin {
+		return false, nil
+	}
 	store.loginOK++
-	return nil
+	return true, nil
 }
 
 func (store *authStore) RecordLoginAttempt(context.Context, string, bool, *string, string, string, string) error {
@@ -60,7 +65,22 @@ func (store *authStore) ResolveKeycloakUser(_ context.Context, _, _, _ string, _
 	if store.keycloakUser == nil {
 		return db.User{}, errors.New("not configured")
 	}
-	return *store.keycloakUser, nil
+	user := *store.keycloakUser
+	user.Role = role
+	store.keycloakUser = &user
+	return user, nil
+}
+
+func (store *authStore) CreateLocalUser(_ context.Context, email string, name *string, password string) (db.User, error) {
+	if store.createError != nil {
+		return db.User{}, store.createError
+	}
+	user := db.User{
+		ID: "registered-123", Email: email, Name: name, Password: &password,
+		Role: "USER", Status: "ACTIVE",
+	}
+	store.users[email] = user
+	return user, nil
 }
 
 func TestLocalLoginPreservesHTTPContract(t *testing.T) {
@@ -133,6 +153,106 @@ func TestLocalLoginRejectsBadPassword(t *testing.T) {
 	})
 	if store.loginFailed != 1 {
 		t.Fatalf("failed-login updates = %d, want 1", store.loginFailed)
+	}
+}
+
+func TestConcurrentLockoutPreventsSuccessfulSession(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passwordHash := string(hash)
+	store := &authStore{
+		users: map[string]db.User{
+			"test@example.com": {
+				ID: "user-123", Email: "test@example.com", Password: &passwordHash,
+				Role: "USER", Status: "ACTIVE", FailedLoginAttempts: 4,
+			},
+		},
+		blockSuccessfulLogin: true,
+	}
+	handler := testAuthHandler(t, store, time.Hour)
+
+	response := serveJSON(handler, http.MethodPost, "/api/auth/login",
+		`{"email":"test@example.com","password":"correct-password"}`)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401; body=%s", response.Code, response.Body.String())
+	}
+	if len(response.Result().Cookies()) != 0 {
+		t.Fatal("session cookie was issued after a concurrent lockout")
+	}
+}
+
+func TestRegisterPreservesHTTPContract(t *testing.T) {
+	store := &authStore{users: map[string]db.User{}}
+	handler := testAuthHandler(t, store, time.Hour)
+
+	response := serveJSON(handler, http.MethodPost, "/api/auth/register",
+		`{"email":"new@example.com","password":"password123","name":"New User"}`)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", response.Code, response.Body.String())
+	}
+	if got := response.Body.String(); got != `{"user":{"id":"registered-123","email":"new@example.com","name":"New User","role":"USER"}}`+"\n" {
+		t.Fatalf("body = %s", got)
+	}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "jaslide_session" ||
+		cookies[0].Value == "" || !cookies[0].HttpOnly {
+		t.Fatalf("registration cookie = %#v", cookies)
+	}
+	if stored := store.users["new@example.com"]; stored.Password == nil ||
+		bcrypt.CompareHashAndPassword([]byte(*stored.Password), []byte("password123")) != nil {
+		t.Fatal("registered password was not stored as a compatible bcrypt hash")
+	}
+}
+
+func TestRegisterRejectsDuplicateEmail(t *testing.T) {
+	store := &authStore{users: map[string]db.User{
+		"existing@example.com": {ID: "existing", Email: "existing@example.com"},
+	}}
+	handler := testAuthHandler(t, store, time.Hour)
+
+	response := serveJSON(handler, http.MethodPost, "/api/auth/register",
+		`{"email":"existing@example.com","password":"password123"}`)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", response.Code)
+	}
+	assertJSON(t, response.Body.Bytes(), map[string]any{
+		"message": "User with this email already exists", "error": "Conflict", "statusCode": float64(409),
+	})
+}
+
+func TestLoginRejectsInvalidBodiesBeforeAuthentication(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"missing password", `{"email":"test@example.com"}`},
+		{"empty password", `{"email":"test@example.com","password":""}`},
+		{"unknown property", `{"email":"test@example.com","password":"password123","extra":true}`},
+		{"malformed JSON", `{"email":"test@example.com"`},
+		{"multiple JSON values", `{"email":"test@example.com","password":"password123"}{"email":"other@example.com"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := &authStore{users: map[string]db.User{}}
+			handler := testAuthHandler(t, store, time.Hour)
+			response := serveJSON(handler, http.MethodPost, "/api/auth/login", test.body)
+
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", response.Code, response.Body.String())
+			}
+			var body map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body["error"] != "Bad Request" || body["statusCode"] != float64(400) {
+				t.Fatalf("body = %#v", body)
+			}
+		})
 	}
 }
 
@@ -362,6 +482,37 @@ func TestKeycloakCallbackCreatesSessionAndRedirectsAdmin(t *testing.T) {
 	}
 	if store.keycloakRole != "ADMIN" {
 		t.Fatalf("new Keycloak user role = %q, want ADMIN", store.keycloakRole)
+	}
+}
+
+func TestKeycloakLoginSynchronizesRolePromotionAndRevocation(t *testing.T) {
+	user := db.User{
+		ID: "keycloak-user", Email: "user@example.com", Role: "USER", Status: "ACTIVE",
+	}
+	store := &authStore{users: map[string]db.User{}, keycloakUser: &user}
+	sessions, err := auth.NewSessions("test-secret-at-least-32-characters", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := auth.NewService(store, sessions)
+	identity := auth.KeycloakIdentity{
+		Issuer: "https://keycloak.example/realms/company", Subject: "subject-123",
+		Email: "user@example.com", Roles: []string{"jaslide-admin"},
+	}
+
+	promoted, _, err := service.LoginWithKeycloak(
+		context.Background(), identity, []string{"jaslide-admin"},
+	)
+	if err != nil || promoted.Role != "ADMIN" {
+		t.Fatalf("promoted principal = %#v, %v", promoted, err)
+	}
+
+	identity.Roles = []string{"employee"}
+	revoked, _, err := service.LoginWithKeycloak(
+		context.Background(), identity, []string{"jaslide-admin"},
+	)
+	if err != nil || revoked.Role != "USER" {
+		t.Fatalf("revoked principal = %#v, %v", revoked, err)
 	}
 }
 

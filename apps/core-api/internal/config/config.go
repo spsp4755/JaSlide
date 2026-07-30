@@ -69,6 +69,9 @@ func Load() (Config, error) {
 				return Config{}, fmt.Errorf("%s is required in production", name)
 			}
 		}
+		if len([]byte(config.JWTSecret)) < 32 {
+			return Config{}, fmt.Errorf("JWT_SECRET must be at least 32 bytes in production")
+		}
 		if err := validateURLScheme("DATABASE_URL", config.DatabaseURL, "postgres", "postgresql"); err != nil {
 			return Config{}, err
 		}

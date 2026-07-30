@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -116,13 +117,28 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 	if err := store.RecordFailedLogin(ctx, userID, time.Now().Add(15*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSuccessfulLogin(ctx, userID, time.Now()); err != nil {
+	if updated, err := store.RecordSuccessfulLogin(ctx, userID, 1, time.Now()); err != nil || !updated {
 		t.Fatal(err)
 	}
 	if err := store.RecordLoginAttempt(ctx, email, true, &userID, "127.0.0.1", "go-test", ""); err != nil {
 		t.Fatal(err)
 	}
 	registerRowCleanup(t, store, `DELETE FROM "LoginLog" WHERE "email" = $1`, email)
+
+	if _, err := store.pool.Exec(ctx, `
+		UPDATE "User" SET "failedLoginAttempts" = 4, "lockedUntil" = NULL WHERE "id" = $1`, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordFailedLogin(ctx, userID, time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if updated, err := store.RecordSuccessfulLogin(ctx, userID, 4, time.Now()); err != nil || updated {
+		t.Fatalf("concurrent successful login update = %v, %v; want false, nil", updated, err)
+	}
+	lockedUser, err := store.FindUserByID(ctx, userID)
+	if err != nil || lockedUser.FailedLoginAttempts != 5 || lockedUser.LockedUntil == nil {
+		t.Fatalf("concurrent lockout user = %#v, %v", lockedUser, err)
+	}
 
 	keycloakEmail := fmt.Sprintf("go-keycloak-%d@example.com", suffix)
 	keycloakUser, err := store.ResolveKeycloakUser(
@@ -140,8 +156,29 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 		ctx, "https://keycloak.example/realms/company", "subject-123",
 		keycloakEmail, nil, nil, "USER",
 	)
-	if err != nil || linkedAgain.ID != keycloakUser.ID || linkedAgain.Role != "ADMIN" {
+	if err != nil || linkedAgain.ID != keycloakUser.ID || linkedAgain.Role != "USER" {
 		t.Fatalf("linked ResolveKeycloakUser() = %#v, %v", linkedAgain, err)
+	}
+	promotedAgain, err := store.ResolveKeycloakUser(
+		ctx, "https://keycloak.example/realms/company", "subject-123",
+		keycloakEmail, nil, nil, "ADMIN",
+	)
+	if err != nil || promotedAgain.ID != keycloakUser.ID || promotedAgain.Role != "ADMIN" {
+		t.Fatalf("promoted ResolveKeycloakUser() = %#v, %v", promotedAgain, err)
+	}
+
+	localEmail := fmt.Sprintf("go-register-%d@example.com", suffix)
+	passwordHash := "$2a$10$RK29UA5QXRUEuLcP1OcN.eKIcGTrTVE1w.g1RkIskCMZxRTq7iNf."
+	localUser, err := store.CreateLocalUser(ctx, localEmail, nil, passwordHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerRowCleanup(t, store, `DELETE FROM "User" WHERE "id" = $1`, localUser.ID)
+	if localUser.Email != localEmail || localUser.Password == nil || *localUser.Password != passwordHash {
+		t.Fatalf("CreateLocalUser() = %#v", localUser)
+	}
+	if _, err := store.CreateLocalUser(ctx, localEmail, nil, passwordHash); !errors.Is(err, ErrUserExists) {
+		t.Fatalf("duplicate CreateLocalUser() error = %v", err)
 	}
 
 	page, err := store.ListPresentations(ctx, userID, 1, 1)

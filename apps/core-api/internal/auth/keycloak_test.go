@@ -126,6 +126,107 @@ func TestKeycloakExchangeVerifiesIDTokenAndExtractsRoles(t *testing.T) {
 	}
 }
 
+func TestKeycloakRejectsInvalidIDTokens(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(jwt.MapClaims)
+		none   bool
+	}{
+		{
+			name: "wrong issuer",
+			mutate: func(claims jwt.MapClaims) {
+				claims["iss"] = "https://attacker.example/realms/company"
+			},
+		},
+		{
+			name: "wrong audience",
+			mutate: func(claims jwt.MapClaims) {
+				claims["aud"] = "another-client"
+			},
+		},
+		{
+			name: "expired",
+			mutate: func(claims jwt.MapClaims) {
+				claims["exp"] = time.Now().Add(-time.Minute).Unix()
+			},
+		},
+		{name: "unsigned", none: true},
+		{
+			name: "unverified email",
+			mutate: func(claims jwt.MapClaims) {
+				claims["email_verified"] = false
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var issuer string
+			const clientID = "jaslide-web"
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				switch request.URL.Path {
+				case "/.well-known/openid-configuration":
+					_ = json.NewEncoder(writer).Encode(map[string]string{
+						"issuer": issuer, "authorization_endpoint": issuer + "/authorize",
+						"token_endpoint": issuer + "/token", "jwks_uri": issuer + "/jwks",
+					})
+				case "/jwks":
+					_ = json.NewEncoder(writer).Encode(map[string]any{
+						"keys": []any{rsaJWK(&key.PublicKey, "test-key")},
+					})
+				case "/token":
+					claims := jwt.MapClaims{
+						"iss": issuer, "aud": clientID, "sub": "subject-123",
+						"email": "user@example.com", "email_verified": true,
+						"nonce": "expected-nonce", "iat": time.Now().Unix(),
+						"exp": time.Now().Add(time.Minute).Unix(),
+					}
+					if test.mutate != nil {
+						test.mutate(claims)
+					}
+					var signed string
+					if test.none {
+						token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
+						signed, err = token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+					} else {
+						token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+						token.Header["kid"] = "test-key"
+						signed, err = token.SignedString(key)
+					}
+					if err != nil {
+						http.Error(writer, err.Error(), http.StatusInternalServerError)
+						return
+					}
+					writer.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(writer).Encode(map[string]any{
+						"access_token": "access", "token_type": "Bearer",
+						"expires_in": 300, "id_token": signed,
+					})
+				default:
+					http.NotFound(writer, request)
+				}
+			}))
+			defer server.Close()
+			issuer = server.URL
+
+			keycloak, err := NewKeycloak(KeycloakConfig{
+				Issuer: issuer, ClientID: clientID,
+				RedirectURI: "https://jaslide.example/api/auth/keycloak/callback",
+			}, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := keycloak.Exchange(
+				context.Background(), "authorization-code", "verifier", "expected-nonce",
+			); err == nil {
+				t.Fatalf("Exchange() accepted %s ID token", test.name)
+			}
+		})
+	}
+}
+
 func TestKeycloakRejectsMismatchedState(t *testing.T) {
 	if ValidateState("expected-state", "wrong-state") == nil {
 		t.Fatal("ValidateState() accepted mismatched state")

@@ -2,17 +2,18 @@
 
 ## Status
 
-Implemented local password login, JWT session cookies, `/me`, logout, role
-middleware, and Keycloak authorization-code login for the Go API.
+Implemented local registration and password login, JWT session cookies, `/me`,
+logout, role middleware, and Keycloak authorization-code login for the Go API.
 
-Commit: `feat(go-api): add local and Keycloak authentication` (SHA is reported
-by the task runner after commit).
+Initial commit: `905ab1e56f97a2e4645297af3dac984cf8751f90`
+(`feat(go-api): add local and Keycloak authentication`).
 
 ## Changed files
 
 - `apps/api/src/modules/auth/auth.contract.spec.ts`
-  - Captures the existing NestJS login body, invalid-login error, logout
-    behavior, cookie name/flags, and `/me` body at the HTTP boundary.
+  - Captures the existing NestJS register/login bodies, validation and conflict
+    errors, logout behavior, cookie name/flags, and `/me` body at the HTTP
+    boundary using the production global validation pipe.
 - `apps/core-api/internal/auth/{password,session,keycloak,middleware}.go`
   - Reuses existing bcrypt hashes.
   - Issues and verifies the existing `jaslide_session` HS256 JWT.
@@ -22,30 +23,36 @@ by the task runner after commit).
     authorization-code exchange, issuer/JWKS/audience/expiry/nonce and
     `email_verified` validation, and realm/client role extraction.
 - `apps/core-api/internal/httpserver/auth_handlers.go`
-  - Adds `/api/auth/login`, `/logout`, `/me`, `/keycloak`, and
+  - Adds `/api/auth/register`, `/login`, `/logout`, `/me`, `/keycloak`, and
     `/keycloak/callback`.
   - Preserves the `jaslide_session` HttpOnly, SameSite=Lax, Path=/ session
     cookie; production cookies are Secure.
 - `apps/core-api/internal/db/users.go`
-  - Adds login lockout/reset/audit persistence and atomic Keycloak
-    account lookup/link/create behavior against the existing Prisma tables.
+  - Adds registration, login lockout/reset/audit persistence, and atomic
+    Keycloak account lookup/link/create behavior against the existing Prisma
+    tables.
+  - A successful login clears failures only when the failure count read during
+    password verification still matches and no concurrent lock is active.
+  - Keycloak roles are synchronized on every login, including admin promotion
+    and revocation for linked and existing-email users.
 - `apps/core-api/internal/config/config.go`
   - Adds Nest-compatible `JWT_EXPIRES_IN` defaults plus Keycloak/frontend
-    settings.
+    settings and requires a JWT secret of at least 32 bytes in production.
 - `apps/core-api/cmd/api/main.go`
   - Wires authentication into the running Go server.
-- Go and Nest contract tests listed in the diff.
 
 ## Verification
 
-- `go test ./...` — passed.
-- `go vet ./...` — passed.
-- `go build ./cmd/api` — passed.
-- `pnpm exec jest --runInBand src/modules/auth/auth.contract.spec.ts`
-  — 4/4 passed.
+- `go test -count=1 ./...` passed (fresh, all packages).
+- `go vet ./...` passed.
+- `go build ./cmd/api` passed.
+- `pnpm --filter @jaslide/api test -- --runInBand auth.contract.spec.ts`
+  passed (11/11).
 - Prisma/PostgreSQL/Redis integration:
   `go test ./internal/db -run TestStoreReadsCurrentPrismaTables -count=1`
-  — passed against the running local containers.
+  passed against the running local containers, including conditional lockout,
+  local registration, duplicate registration, and Keycloak role
+  promotion/revocation.
 - Live Go API smoke on port 4200 with the seeded local admin:
   login 200, `/me` 200, ADMIN role, HttpOnly `jaslide_session`, Path=/.
 
@@ -53,11 +60,12 @@ by the task runner after commit).
 
 - Session verification restricts accepted JWTs to HS256 and requires expiry.
 - Keycloak ID tokens are verified with the discovered issuer/JWKS and client
-  audience; unsigned, wrong-nonce, unverified-email, expired, or mismatched
-  tokens are rejected.
-- Login lockout is updated atomically in SQL at five failed attempts.
-- Keycloak provider identity is authoritative after linking; a linked identity
-  cannot change to another email.
+  audience. Direct tests reject wrong issuer, wrong audience, expiration,
+  unsigned tokens, unverified email, and wrong nonce.
+- Login lockout is updated atomically in SQL at five failed attempts, and a
+  stale successful login cannot clear a concurrent lockout.
+- Keycloak provider identity and mapped role are authoritative after linking; a
+  linked identity cannot change to another email.
 - No access or ID token is returned to the browser JSON response.
 
 ## Concerns and follow-up
@@ -73,6 +81,8 @@ by the task runner after commit).
 - `go test -race ./...` was unavailable because this Windows Go environment has
   CGO disabled. Normal tests, vet, build, integration tests, and live smoke
   passed.
-- Task 3's endpoint list does not include the legacy `/api/auth/register` or
-  Google OAuth endpoints. They must be migrated or deliberately removed before
-  NestJS is deleted; the current React client still calls `register`.
+- The React client uses local registration and Keycloak, but has no call or
+  link to `/api/auth/google` or `/api/auth/google/callback`. The Nest Google
+  routes and optional strategy remain untouched. Before NestJS is deleted,
+  external clients must be inventoried and Google OAuth either ported or
+  explicitly deprecated; it is not silently removed by this task.

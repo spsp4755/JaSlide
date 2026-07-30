@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+var ErrUserExists = errors.New("user already exists")
 
 type User struct {
 	ID                  string
@@ -57,6 +60,26 @@ func scanUser(row pgx.Row) (User, error) {
 	return user, err
 }
 
+func (store *Store) CreateLocalUser(ctx context.Context, email string, name *string, password string) (User, error) {
+	id, err := randomID()
+	if err != nil {
+		return User{}, err
+	}
+	user, err := scanUser(store.pool.QueryRow(ctx, `
+		INSERT INTO "User" ("id", "email", "name", "password", "updatedAt")
+		VALUES ($1, $2, $3, $4, NOW())
+		RETURNING "id", "email", "name", "image", "password", "role"::text,
+			"status"::text, "preferences", "mfaEnabled", "mfaSecret",
+			"failedLoginAttempts", "lockedUntil", "organizationId",
+			"lastLoginAt", "createdAt", "updatedAt"`,
+		id, email, name, password))
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+		return User{}, ErrUserExists
+	}
+	return user, err
+}
+
 func (store *Store) RecordFailedLogin(ctx context.Context, userID string, lockedUntil time.Time) error {
 	_, err := store.pool.Exec(ctx, `
 		UPDATE "User"
@@ -70,13 +93,21 @@ func (store *Store) RecordFailedLogin(ctx context.Context, userID string, locked
 	return err
 }
 
-func (store *Store) RecordSuccessfulLogin(ctx context.Context, userID string, loggedInAt time.Time) error {
-	_, err := store.pool.Exec(ctx, `
+func (store *Store) RecordSuccessfulLogin(
+	ctx context.Context,
+	userID string,
+	expectedFailedAttempts int,
+	loggedInAt time.Time,
+) (bool, error) {
+	result, err := store.pool.Exec(ctx, `
 		UPDATE "User"
 		SET "failedLoginAttempts" = 0, "lockedUntil" = NULL,
-			"lastLoginAt" = $2, "updatedAt" = NOW()
-		WHERE "id" = $1`, userID, loggedInAt)
-	return err
+			"lastLoginAt" = $3, "updatedAt" = NOW()
+		WHERE "id" = $1
+			AND "failedLoginAttempts" = $2
+			AND ("lockedUntil" IS NULL OR "lockedUntil" <= $3)`,
+		userID, expectedFailedAttempts, loggedInAt)
+	return result.RowsAffected() == 1, err
 }
 
 func (store *Store) RecordLoginAttempt(
@@ -116,6 +147,10 @@ func (store *Store) ResolveKeycloakUser(
 		if user.Email != email {
 			return User{}, errors.New("Keycloak account email does not match linked user")
 		}
+		user, err = scanUser(transaction.QueryRow(ctx, updateUserRoleQuery, user.ID, newRole))
+		if err != nil {
+			return User{}, err
+		}
 		return user, transaction.Commit(ctx)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -139,6 +174,12 @@ func (store *Store) ResolveKeycloakUser(
 	}
 	if err != nil {
 		return User{}, err
+	}
+	if user.Role != newRole {
+		user, err = scanUser(transaction.QueryRow(ctx, updateUserRoleQuery, user.ID, newRole))
+		if err != nil {
+			return User{}, err
+		}
 	}
 
 	accountID, err := randomID()
@@ -165,6 +206,15 @@ const linkedKeycloakUserQuery = `
 	FROM "Account" a
 	JOIN "User" u ON u."id" = a."userId"
 	WHERE a."provider" = 'keycloak' AND a."providerAccountId" = $1`
+
+const updateUserRoleQuery = `
+	UPDATE "User"
+	SET "role" = $2::"UserRole", "updatedAt" = NOW()
+	WHERE "id" = $1
+	RETURNING "id", "email", "name", "image", "password", "role"::text,
+		"status"::text, "preferences", "mfaEnabled", "mfaSecret",
+		"failedLoginAttempts", "lockedUntil", "organizationId",
+		"lastLoginAt", "createdAt", "updatedAt"`
 
 func randomID() (string, error) {
 	value := make([]byte, 18)

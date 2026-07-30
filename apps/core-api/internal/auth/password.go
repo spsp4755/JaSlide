@@ -19,9 +19,27 @@ type Repository interface {
 	FindUserByEmail(context.Context, string) (db.User, error)
 	FindUserByID(context.Context, string) (db.User, error)
 	RecordFailedLogin(context.Context, string, time.Time) error
-	RecordSuccessfulLogin(context.Context, string, time.Time) error
+	RecordSuccessfulLogin(context.Context, string, int, time.Time) (bool, error)
 	RecordLoginAttempt(context.Context, string, bool, *string, string, string, string) error
 	ResolveKeycloakUser(context.Context, string, string, string, *string, *string, string) (db.User, error)
+	CreateLocalUser(context.Context, string, *string, string) (db.User, error)
+}
+
+func (service *Service) Register(ctx context.Context, email, password string, name *string) (Principal, string, error) {
+	if _, err := service.store.FindUserByEmail(ctx, email); err == nil {
+		return Principal{}, "", db.ErrUserExists
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		return Principal{}, "", err
+	}
+	user, err := service.store.CreateLocalUser(ctx, email, name, string(passwordHash))
+	if err != nil {
+		return Principal{}, "", err
+	}
+	principal := principalFromUser(user)
+	token, err := service.sessions.Issue(principal)
+	return principal, token, err
 }
 
 type Service struct {
@@ -57,8 +75,13 @@ func (service *Service) Login(ctx context.Context, email, password string, metad
 	}
 
 	now := time.Now()
-	if err := service.store.RecordSuccessfulLogin(ctx, user.ID, now); err != nil {
+	updated, err := service.store.RecordSuccessfulLogin(ctx, user.ID, user.FailedLoginAttempts, now)
+	if err != nil {
 		return Principal{}, "", err
+	}
+	if !updated {
+		_ = service.store.RecordLoginAttempt(ctx, email, false, &user.ID, metadata.IPAddress, metadata.UserAgent, "Account is locked")
+		return Principal{}, "", ErrAccountLocked
 	}
 	_ = service.store.RecordLoginAttempt(ctx, email, true, &user.ID, metadata.IPAddress, metadata.UserAgent, "")
 
