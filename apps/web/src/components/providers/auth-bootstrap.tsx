@@ -9,17 +9,15 @@ export function AuthBootstrap({ children }: { children: ReactNode }) {
         if (started.current) return;
         started.current = true;
 
+        // completeBootstrap already drops a stale response by comparing generation
+        // numbers, so this never needs to physically cancel the in-flight request —
+        // aborting it while a real submit (e.g. login) is also in flight risked the
+        // browser tearing down a connection the other request was about to reuse.
         const generation = useAuthStore.getState().authGeneration;
-        const controller = new AbortController();
-        const unsubscribe = useAuthStore.subscribe((state) => {
-            if (state.authGeneration !== generation) controller.abort();
-        });
-
         void authApi
-            .me(controller.signal)
+            .me()
             .then(({ data }) => useAuthStore.getState().completeBootstrap(data, generation))
-            .catch(() => useAuthStore.getState().completeBootstrap(null, generation))
-            .finally(unsubscribe);
+            .catch(() => useAuthStore.getState().completeBootstrap(null, generation));
     }, []);
 
     return children;
