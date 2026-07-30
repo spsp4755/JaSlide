@@ -55,7 +55,7 @@ func run() error {
 		}
 	}()
 
-	authRoutes, authService, err := buildAuthRuntime(cfg, store)
+	authRoutes, authService, keycloakRegistry, err := buildAuthRuntime(cfg, store)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func run() error {
 	userfeatures.RegisterRoutes(apiRoutes, store, authService)
 	apiRoutes.Mount("/admin", admin.NewHandlers(
 		store, authService, generationQueue, cfg.RendererURL, client,
-		templates.NewAdminHandlers(templateService, authService), llmPolicy, generationService,
+		templates.NewAdminHandlers(templateService, authService), llmPolicy, generationService, keycloakRegistry,
 	))
 	server := &http.Server{
 		Addr: cfg.Address,
@@ -110,31 +110,67 @@ func run() error {
 }
 
 func buildAuthRoutes(cfg config.Config, store auth.Repository) (http.Handler, error) {
-	routes, _, err := buildAuthRuntime(cfg, store)
+	routes, _, _, err := buildAuthRuntime(cfg, store)
 	return routes, err
 }
 
-func buildAuthRuntime(cfg config.Config, store auth.Repository) (http.Handler, *auth.Service, error) {
+// buildAuthRuntime wires up Keycloak from environment config, then lets a
+// saved admin-UI configuration (if any) override individual fields. The
+// returned *auth.KeycloakRegistry is handed to the admin package too, so a
+// settings update there can hot-swap what buildAuthRuntime built here without
+// a process restart.
+func buildAuthRuntime(cfg config.Config, store auth.Repository) (http.Handler, *auth.Service, *auth.KeycloakRegistry, error) {
 	sessions, err := auth.NewSessions(cfg.JWTSecret, cfg.JWTLifetime)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	var keycloak *auth.Keycloak
-	if cfg.KeycloakIssuer != "" && cfg.KeycloakClientID != "" && cfg.KeycloakRedirectURI != "" {
-		keycloak, err = auth.NewKeycloak(auth.KeycloakConfig{
-			Issuer: cfg.KeycloakIssuer, ClientID: cfg.KeycloakClientID,
-			ClientSecret: cfg.KeycloakClientSecret, RedirectURI: cfg.KeycloakRedirectURI,
-		}, &http.Client{Timeout: 10 * time.Second})
-		if err != nil {
-			return nil, nil, err
+	keycloakConfig := auth.KeycloakConfig{
+		Issuer: cfg.KeycloakIssuer, ClientID: cfg.KeycloakClientID,
+		ClientSecret: cfg.KeycloakClientSecret, RedirectURI: cfg.KeycloakRedirectURI,
+	}
+	adminRoles := cfg.KeycloakAdminRoles
+	if concreteStore, ok := store.(*db.Store); ok {
+		if saved, err := concreteStore.GetKeycloakSettings(context.Background()); err == nil {
+			if saved.Issuer != "" {
+				keycloakConfig.Issuer = saved.Issuer
+			}
+			if saved.ClientID != "" {
+				keycloakConfig.ClientID = saved.ClientID
+			}
+			if saved.ClientSecret != "" {
+				keycloakConfig.ClientSecret = saved.ClientSecret
+			}
+			if saved.RedirectURI != "" {
+				keycloakConfig.RedirectURI = saved.RedirectURI
+			}
+			if saved.AdminRoles != "" {
+				adminRoles = splitRoles(saved.AdminRoles)
+			}
 		}
 	}
+	var keycloak *auth.Keycloak
+	if keycloakConfig.Issuer != "" && keycloakConfig.ClientID != "" && keycloakConfig.RedirectURI != "" {
+		keycloak, err = auth.NewKeycloak(keycloakConfig, &http.Client{Timeout: 10 * time.Second})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	registry := auth.NewKeycloakRegistry(keycloak, adminRoles)
 	service := auth.NewService(store, sessions)
-	return httpserver.NewAuthHandlers(service, keycloak, httpserver.AuthOptions{
-		SecureCookies:      strings.EqualFold(cfg.Environment, "production"),
-		FrontendURL:        cfg.FrontendURL,
-		KeycloakAdminRoles: cfg.KeycloakAdminRoles,
-	}), service, nil
+	return httpserver.NewAuthHandlers(service, registry, httpserver.AuthOptions{
+		SecureCookies: strings.EqualFold(cfg.Environment, "production"),
+		FrontendURL:   cfg.FrontendURL,
+	}), service, registry, nil
+}
+
+func splitRoles(value string) []string {
+	var roles []string
+	for _, role := range strings.Split(value, ",") {
+		if role = strings.TrimSpace(role); role != "" {
+			roles = append(roles, role)
+		}
+	}
+	return roles
 }
 
 func runServer(signalContext context.Context, server *http.Server) error {

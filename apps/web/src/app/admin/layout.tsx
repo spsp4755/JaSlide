@@ -20,6 +20,7 @@ import {
     LayoutDashboard,
     ChevronLeft,
     ChevronRight,
+    ShieldCheck,
 } from 'lucide-react';
 
 const menuItems = [
@@ -29,6 +30,7 @@ const menuItems = [
     { href: '/admin/roles', label: '권한 관리', icon: Shield },
     { href: '/admin/templates', label: '템플릿 관리', icon: FileText },
     { href: '/admin/models', label: '모델 설정', icon: Cpu },
+    { href: '/admin/settings/keycloak', label: 'Keycloak/SSO 설정', icon: ShieldCheck },
     { href: '/admin/prompts', label: '프롬프트 관리', icon: MessageSquare },
     { href: '/admin/assets', label: '에셋 라이브러리', icon: Image },
     { href: '/admin/jobs', label: '작업 모니터링', icon: Activity },

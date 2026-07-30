@@ -178,6 +178,7 @@ describe('SPA routes', () => {
         ['/admin/organizations', 'admin-organizations'],
         ['/admin/roles', 'admin-roles'],
         ['/admin/models', 'admin-models'],
+        ['/admin/settings/keycloak', 'admin-settings-keycloak'],
         ['/admin/prompts', 'admin-prompts'],
         ['/admin/assets', 'admin-assets'],
         ['/admin/jobs', 'admin-jobs'],

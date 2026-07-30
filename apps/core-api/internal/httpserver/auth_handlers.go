@@ -19,14 +19,17 @@ import (
 )
 
 type AuthOptions struct {
-	SecureCookies      bool
-	FrontendURL        string
-	KeycloakAdminRoles []string
+	SecureCookies bool
+	FrontendURL   string
 }
 
 type KeycloakProvider interface {
 	Authorization(context.Context) (auth.AuthorizationRequest, error)
 	Exchange(context.Context, string, string, string) (auth.KeycloakIdentity, error)
+	// AdminRoles reports which Keycloak realm/client roles map to the
+	// application's ADMIN role. Reads live off whatever the provider
+	// currently holds, so an admin editing it takes effect immediately.
+	AdminRoles() []string
 }
 
 type authHandlers struct {
@@ -94,7 +97,7 @@ func (handlers *authHandlers) completeKeycloak(writer http.ResponseWriter, reque
 		return
 	}
 	principal, token, err := handlers.service.LoginWithKeycloak(
-		request.Context(), identity, handlers.options.KeycloakAdminRoles,
+		request.Context(), identity, handlers.keycloak.AdminRoles(),
 	)
 	if err != nil {
 		handlers.failLogin(writer, "sso_failed")

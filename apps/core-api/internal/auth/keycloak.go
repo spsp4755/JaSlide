@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -160,6 +161,57 @@ func (keycloak *Keycloak) oauthConfig(provider *oidc.Provider) oauth2.Config {
 		RedirectURL: keycloak.config.RedirectURI, Endpoint: provider.Endpoint(),
 		Scopes: []string{oidc.ScopeOpenID, "email", "profile"},
 	}
+}
+
+// KeycloakRegistry holds the active *Keycloak and its admin-role mapping
+// behind atomic pointers, so an admin editing SSO settings takes effect on
+// the next login attempt instead of requiring a process restart. It is
+// always safe to pass to httpserver.NewAuthHandlers, even before any
+// Keycloak is configured: unlike a bare *Keycloak(nil) — which satisfies the
+// KeycloakProvider interface as a non-nil value and panics the moment a
+// method is called on it — the registry itself is never nil, and it checks
+// its own held pointer before delegating.
+type KeycloakRegistry struct {
+	current    atomic.Pointer[Keycloak]
+	adminRoles atomic.Pointer[[]string]
+}
+
+func NewKeycloakRegistry(initial *Keycloak, adminRoles []string) *KeycloakRegistry {
+	registry := &KeycloakRegistry{}
+	registry.Set(initial, adminRoles)
+	return registry
+}
+
+func (registry *KeycloakRegistry) Set(keycloak *Keycloak, adminRoles []string) {
+	registry.current.Store(keycloak)
+	registry.adminRoles.Store(&adminRoles)
+}
+
+func (registry *KeycloakRegistry) Get() *Keycloak {
+	return registry.current.Load()
+}
+
+func (registry *KeycloakRegistry) AdminRoles() []string {
+	if roles := registry.adminRoles.Load(); roles != nil {
+		return *roles
+	}
+	return nil
+}
+
+func (registry *KeycloakRegistry) Authorization(ctx context.Context) (AuthorizationRequest, error) {
+	current := registry.Get()
+	if current == nil {
+		return AuthorizationRequest{}, errors.New("Keycloak is not configured")
+	}
+	return current.Authorization(ctx)
+}
+
+func (registry *KeycloakRegistry) Exchange(ctx context.Context, code, verifier, nonce string) (KeycloakIdentity, error) {
+	current := registry.Get()
+	if current == nil {
+		return KeycloakIdentity{}, errors.New("Keycloak is not configured")
+	}
+	return current.Exchange(ctx, code, verifier, nonce)
 }
 
 func randomToken() (string, error) {

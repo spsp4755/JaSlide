@@ -254,6 +254,44 @@ func TestKeycloakRejectsUnconfiguredClient(t *testing.T) {
 	}
 }
 
+func TestKeycloakRegistryReturnsNotConfiguredUntilSet(t *testing.T) {
+	registry := NewKeycloakRegistry(nil, nil)
+	if _, err := registry.Authorization(context.Background()); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("Authorization() error = %v, want not-configured", err)
+	}
+	if _, err := registry.Exchange(context.Background(), "code", "verifier", "nonce"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("Exchange() error = %v, want not-configured", err)
+	}
+	if roles := registry.AdminRoles(); len(roles) != 0 {
+		t.Fatalf("AdminRoles() = %v, want none before Set()", roles)
+	}
+}
+
+func TestKeycloakRegistrySetSwapsWhichKeycloakServesRequests(t *testing.T) {
+	registry := NewKeycloakRegistry(nil, nil)
+	keycloak, err := NewKeycloak(KeycloakConfig{
+		Issuer: "https://keycloak.invalid", ClientID: "jaslide", RedirectURI: "https://jaslide.example/callback",
+	}, http.DefaultClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	registry.Set(keycloak, []string{"jaslide-admin"})
+
+	if registry.Get() != keycloak {
+		t.Fatal("Get() did not return the Keycloak instance passed to Set()")
+	}
+	if roles := registry.AdminRoles(); len(roles) != 1 || roles[0] != "jaslide-admin" {
+		t.Fatalf("AdminRoles() = %v, want [jaslide-admin]", roles)
+	}
+	// Reaches the real (fake) Keycloak instead of the registry's own
+	// "not configured" guard now — it fails differently (OIDC discovery
+	// against a host that doesn't exist), proving Set() actually swapped it in.
+	if _, err := registry.Authorization(context.Background()); err == nil || strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("Authorization() error = %v, want a discovery failure, not not-configured", err)
+	}
+}
+
 func ExampleValidateState() {
 	fmt.Println(ValidateState("same", "same") == nil)
 	// Output: true

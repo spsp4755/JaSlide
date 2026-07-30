@@ -441,7 +441,7 @@ func TestKeycloakStartSetsTenMinuteTransactionCookie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(nil, NewAuthHandlers(auth.NewService(store, sessions), keycloak, AuthOptions{
+	handler := New(nil, NewAuthHandlers(auth.NewService(store, sessions), auth.NewKeycloakRegistry(keycloak, nil), AuthOptions{
 		FrontendURL: "https://jaslide.example",
 	}))
 	response := httptest.NewRecorder()
@@ -471,8 +471,9 @@ func TestKeycloakUnavailableReturnsToLogin(t *testing.T) {
 }
 
 type fakeKeycloak struct {
-	request  auth.AuthorizationRequest
-	identity auth.KeycloakIdentity
+	adminRoles []string
+	request    auth.AuthorizationRequest
+	identity   auth.KeycloakIdentity
 }
 
 func (provider fakeKeycloak) Authorization(context.Context) (auth.AuthorizationRequest, error) {
@@ -481,6 +482,10 @@ func (provider fakeKeycloak) Authorization(context.Context) (auth.AuthorizationR
 
 func (provider fakeKeycloak) Exchange(context.Context, string, string, string) (auth.KeycloakIdentity, error) {
 	return provider.identity, nil
+}
+
+func (provider fakeKeycloak) AdminRoles() []string {
+	return provider.adminRoles
 }
 
 func TestKeycloakCallbackCreatesSessionAndRedirectsAdmin(t *testing.T) {
@@ -494,6 +499,7 @@ func TestKeycloakCallbackCreatesSessionAndRedirectsAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := fakeKeycloak{
+		adminRoles: []string{"jaslide-admin"},
 		request: auth.AuthorizationRequest{
 			URL: "https://keycloak.example/authorize", State: "expected-state",
 			Nonce: "expected-nonce", Verifier: "expected-verifier",
@@ -504,7 +510,7 @@ func TestKeycloakCallbackCreatesSessionAndRedirectsAdmin(t *testing.T) {
 		},
 	}
 	handler := New(nil, NewAuthHandlers(auth.NewService(store, sessions), provider, AuthOptions{
-		FrontendURL: "https://jaslide.example", KeycloakAdminRoles: []string{"jaslide-admin"},
+		FrontendURL: "https://jaslide.example",
 	}))
 	start := httptest.NewRecorder()
 	handler.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/api/auth/keycloak", nil))

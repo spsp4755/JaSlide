@@ -44,6 +44,8 @@ type Handlers struct {
 	startedAt   time.Time
 	policy      *outboundpolicy.Policy
 	canceller   LiveCanceller
+	store       *db.Store
+	keycloak    *auth.KeycloakRegistry
 }
 
 func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, rendererURL string, client *http.Client, templateHandlers http.Handler, options ...any) http.Handler {
@@ -53,7 +55,7 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 	h := &Handlers{
 		auth: authService, queue: queue,
 		rendererURL: strings.TrimRight(rendererURL, "/"), client: client, templates: templateHandlers,
-		startedAt: time.Now(),
+		startedAt: time.Now(), store: store,
 	}
 	for _, option := range options {
 		switch value := option.(type) {
@@ -61,6 +63,8 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 			h.policy = value
 		case LiveCanceller:
 			h.canceller = value
+		case *auth.KeycloakRegistry:
+			h.keycloak = value
 		}
 	}
 	if store != nil {
@@ -154,6 +158,10 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 		r.Get("/{id}", h.getUser)
 		r.Patch("/{id}", h.updateUser)
 		r.Delete("/{id}", h.deactivateUser)
+	})
+	router.Route("/settings/keycloak", func(r chi.Router) {
+		r.Get("/", h.getKeycloakSettings)
+		r.Put("/", h.updateKeycloakSettings)
 	})
 	if templateHandlers != nil {
 		router.Mount("/templates", templateHandlers)
@@ -1082,6 +1090,86 @@ func (h *Handlers) deactivateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "User deactivated successfully"})
+}
+
+func (h *Handlers) getKeycloakSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.store.GetKeycloakSettings(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, keycloakSettingsResponse(settings))
+}
+
+// updateKeycloakSettings persists the admin's SSO configuration and, if it
+// still parses as a usable Keycloak client, hot-swaps the live registry so
+// the new settings take effect on the next login without a restart. An
+// omitted clientSecret keeps whatever was saved before, since GET never
+// returns the real secret for an admin to copy back in.
+func (h *Handlers) updateKeycloakSettings(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Issuer, ClientID, ClientSecret, RedirectURI, AdminRoles *string }
+	if !decode(w, r, &in) {
+		return
+	}
+	settings, err := h.store.GetKeycloakSettings(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if in.Issuer != nil {
+		settings.Issuer = strings.TrimSpace(*in.Issuer)
+	}
+	if in.ClientID != nil {
+		settings.ClientID = strings.TrimSpace(*in.ClientID)
+	}
+	if in.ClientSecret != nil {
+		settings.ClientSecret = *in.ClientSecret
+	}
+	if in.RedirectURI != nil {
+		settings.RedirectURI = strings.TrimSpace(*in.RedirectURI)
+	}
+	if in.AdminRoles != nil {
+		settings.AdminRoles = strings.TrimSpace(*in.AdminRoles)
+	}
+
+	var keycloak *auth.Keycloak
+	if settings.Issuer != "" || settings.ClientID != "" || settings.RedirectURI != "" {
+		keycloak, err = auth.NewKeycloak(auth.KeycloakConfig{
+			Issuer: settings.Issuer, ClientID: settings.ClientID,
+			ClientSecret: settings.ClientSecret, RedirectURI: settings.RedirectURI,
+		}, &http.Client{Timeout: 10 * time.Second})
+		if err != nil {
+			badRequest(w, err.Error())
+			return
+		}
+	}
+
+	if err := h.store.SaveKeycloakSettings(r.Context(), settings); err != nil {
+		writeError(w, err)
+		return
+	}
+	if h.keycloak != nil {
+		h.keycloak.Set(keycloak, splitAdminRoles(settings.AdminRoles))
+	}
+	writeJSON(w, http.StatusOK, keycloakSettingsResponse(settings))
+}
+
+func keycloakSettingsResponse(settings db.KeycloakSettings) map[string]any {
+	return map[string]any{
+		"issuer": settings.Issuer, "clientId": settings.ClientID,
+		"clientSecretSet": settings.ClientSecret != "",
+		"redirectUri":     settings.RedirectURI, "adminRoles": settings.AdminRoles,
+	}
+}
+
+func splitAdminRoles(value string) []string {
+	var roles []string
+	for _, role := range strings.Split(value, ",") {
+		if role = strings.TrimSpace(role); role != "" {
+			roles = append(roles, role)
+		}
+	}
+	return roles
 }
 
 func (h *Handlers) dynamicUpdate(ctx context.Context, table, id string, raw map[string]json.RawMessage, allowed map[string]string) (map[string]any, error) {

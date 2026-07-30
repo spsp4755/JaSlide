@@ -59,6 +59,7 @@ export const appRoutes: RouteObject[] = [
                                     { path: 'roles', id: 'admin-roles', lazy: page(() => import('@/app/admin/roles/page')) },
                                     { path: 'templates', id: 'admin-templates', lazy: page(() => import('@/app/admin/templates/page')) },
                                     { path: 'models', id: 'admin-models', lazy: page(() => import('@/app/admin/models/page')) },
+                                    { path: 'settings/keycloak', id: 'admin-settings-keycloak', lazy: page(() => import('@/app/admin/settings/keycloak/page')) },
                                     { path: 'prompts', id: 'admin-prompts', lazy: page(() => import('@/app/admin/prompts/page')) },
                                     { path: 'assets', id: 'admin-assets', lazy: page(() => import('@/app/admin/assets/page')) },
                                     { path: 'jobs', id: 'admin-jobs', lazy: page(() => import('@/app/admin/jobs/page')) },
