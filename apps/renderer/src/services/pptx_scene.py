@@ -199,6 +199,16 @@ def pptx_to_scene(content: bytes) -> dict:
     return {"slides": slides}
 
 
+def _table_cell_from_edit(cell) -> dict:
+    """`_apply_native_edit` (pptx_generator.py) only ever reads a table edit's
+    cells as plain strings, so that's the shape generation.service.ts writes —
+    never the scene's own `{paragraphs: [...]}` cell. Normalize here, or
+    SceneCanvas's table renderer crashes reading `.paragraphs` off a string."""
+    if isinstance(cell, dict):
+        return cell
+    return {"paragraphs": [{"runs": [{"text": cell if isinstance(cell, str) else ""}], "level": 0, "align": "left"}]}
+
+
 def _apply_edit_fields(object_: dict, edit: dict) -> None:
     """An existing scene object's fields, patched from one legacy `objectEdits`
     entry — everything `_apply_native_edit` (pptx_generator.py) reads."""
@@ -210,7 +220,10 @@ def _apply_edit_fields(object_: dict, edit: dict) -> None:
     if object_["type"] == "text" and isinstance(edit.get("paragraphs"), list):
         object_["paragraphs"] = edit["paragraphs"]
     elif object_["type"] == "table" and isinstance(edit.get("cells"), list):
-        object_["cells"] = edit["cells"]
+        object_["cells"] = [
+            [_table_cell_from_edit(cell) for cell in row] if isinstance(row, list) else row
+            for row in edit["cells"]
+        ]
     elif object_["type"] in ("shape", "line"):
         if isinstance(edit.get("fillColor"), str):
             object_["fill"] = edit["fillColor"]

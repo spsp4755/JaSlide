@@ -209,6 +209,27 @@ def test_apply_edits_to_scene_deletes_an_object():
     assert edited["objects"] == []
 
 
+def test_apply_edits_to_scene_converts_legacy_string_cells_to_paragraphs():
+    # generation.service.ts writes table objectEdits the same way _apply_native_edit
+    # (pptx_generator.py) reads them — plain strings per cell, never the scene's own
+    # {paragraphs: [...]} shape. The scene view must normalize these, or SceneCanvas's
+    # table renderer crashes reading `.paragraphs` off a bare string.
+    def build(slide):
+        slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(6), Inches(2))
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    table_id = scene["objects"][0]["id"]
+
+    edited = apply_edits_to_scene(scene, [{
+        "objectId": table_id,
+        "cells": [["추진실적", "추진계획"], ["a", "b"]],
+    }])
+
+    table = edited["objects"][0]
+    assert table["cells"][0][0]["paragraphs"][0]["runs"][0]["text"] == "추진실적"
+    assert table["cells"][1][1]["paragraphs"][0]["runs"][0]["text"] == "b"
+
+
 def test_apply_edits_to_scene_duplicates_an_existing_object():
     def build(slide):
         shape = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(1), Inches(1), Inches(2), Inches(1))
