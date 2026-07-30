@@ -67,6 +67,17 @@
 - A second migration run was idempotent. A non-empty unmanaged schema was
   rejected without creating a JaSlide migration ledger.
 
+### P0-4 Restart Persistence Acceptance
+
+- A local user and presentation were created through the public API and a
+  template was added to the same isolated PostgreSQL volume.
+- All application containers were removed and recreated while the PostgreSQL,
+  Redis, and uploads volumes were retained.
+- The second migration run completed with `applied=0 adopted=0 skipped=6`.
+  Local login, `/api/auth/me`, and presentation retrieval succeeded after the
+  restart; the user, presentation, and template rows were all preserved.
+- The isolated containers, network, and volumes were removed after verification.
+
 ## Automated Verification
 
 - `go test ./...` — passed.
