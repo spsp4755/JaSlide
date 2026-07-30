@@ -18,6 +18,9 @@ type Store struct {
 	redis *redis.Client
 }
 
+func (store *Store) Pool() *pgxpool.Pool { return store.pool }
+func (store *Store) Redis() *redis.Client { return store.redis }
+
 func Open(parent context.Context, cfg config.Config) (*Store, error) {
 	ctx, cancel := context.WithTimeout(parent, dependencyTimeout)
 	defer cancel()

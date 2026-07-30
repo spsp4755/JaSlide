@@ -13,12 +13,18 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/admin"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/assets"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	exportapi "github.com/spsp4755/JaSlide/apps/core-api/internal/export"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/generation"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpserver"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/presentations"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/renderer"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/skills"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/templates"
 )
 
 func main() {
@@ -48,12 +54,33 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	client := &http.Client{Timeout: 30 * time.Second}
+	rendererClient := renderer.New(cfg.RendererURL, &http.Client{Timeout: 180 * time.Second})
+	templateService := templates.NewService(store, rendererClient, cfg.LocalStoragePath)
+	generationStore := generation.NewSQLStore(store)
+	generationQueue := generation.NewRedisQueue(store.Redis())
+	llmClient := generation.NewOpenAIClient(generationStore, &http.Client{Timeout: 5 * time.Minute}, generation.EnvironmentModel{
+		BaseURL: cfg.OpenAIBaseURL, APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIModel, MaxTokens: cfg.OpenAIMaxTokens,
+	})
+	generationService := generation.NewService(generationStore, llmClient, generationQueue)
+	go generationService.Run(signalContext)
+
 	apiRoutes := chi.NewRouter()
 	apiRoutes.Mount("/presentations", presentations.NewHandlers(
 		presentations.NewService(store, cfg.RendererURL, cfg.LocalStoragePath, client), authService,
 	))
 	apiRoutes.Mount("/assets", assets.NewHandlers(assets.NewService(store, cfg.LocalStoragePath), authService))
+	apiRoutes.Mount("/templates", templates.NewHandlers(templateService))
+	apiRoutes.Mount("/skills", skills.NewHandlers(store, rendererClient, cfg.LocalStoragePath, authService))
+	apiRoutes.Mount("/generation", generation.NewHandlers(generationService, authService, rendererClient))
+	apiRoutes.Mount("/export", exportapi.NewHandlers(store, rendererClient, cfg.LocalStoragePath, authService))
+	apiRoutes.Mount("/admin", admin.NewHandlers(
+		store, authService, generationQueue, cfg.RendererURL, client,
+		templates.NewAdminHandlers(templateService, authService),
+	))
 	server := &http.Server{
 		Addr: cfg.Address,
 		Handler: httpserver.New(
@@ -65,8 +92,6 @@ func run() error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	log.Printf("core API listening on %s", cfg.Address)
 	return runServer(signalContext, server)
 }

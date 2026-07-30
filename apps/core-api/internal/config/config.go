@@ -25,6 +25,10 @@ type Config struct {
 	KeycloakRedirectURI  string
 	KeycloakAdminRoles   []string
 	LocalStoragePath     string
+	OpenAIBaseURL        string
+	OpenAIAPIKey         string
+	OpenAIModel          string
+	OpenAIMaxTokens      int
 }
 
 func Load() (Config, error) {
@@ -57,6 +61,10 @@ func Load() (Config, error) {
 		KeycloakRedirectURI:  keycloakRedirectURI,
 		KeycloakAdminRoles:   commaSeparated(value("KEYCLOAK_ADMIN_ROLES")),
 		LocalStoragePath:     defaultValue(value("LOCAL_STORAGE_PATH"), "uploads"),
+		OpenAIBaseURL:        strings.TrimRight(value("OPENAI_BASE_URL"), "/"),
+		OpenAIAPIKey:         value("OPENAI_API_KEY"),
+		OpenAIModel:          defaultValue(value("OPENAI_MODEL"), "gpt-4-turbo-preview"),
+		OpenAIMaxTokens:      integerValue(value("OPENAI_MAX_TOKENS"), 4096),
 	}
 
 	if strings.EqualFold(config.Environment, "production") {
@@ -89,6 +97,14 @@ func Load() (Config, error) {
 	}
 
 	return config, nil
+}
+
+func integerValue(raw string, fallback int) int {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func parseLifetime(value string) (time.Duration, error) {
