@@ -7,6 +7,7 @@ COPY apps/core-api ./
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/core-api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/seed ./cmd/seed
 
 FROM debian:bookworm-20250721-slim@sha256:2424c1850714a4d94666ec928e24d86de958646737b1d113f5b2207be44d37d8
 
@@ -17,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 ENV LOCAL_STORAGE_PATH=/app/apps/api/uploads
 WORKDIR /app
 COPY --from=build /out/core-api ./core-api
+COPY --from=build /out/seed ./seed
 
 EXPOSE 4000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=6 \

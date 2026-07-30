@@ -70,7 +70,34 @@ origin proxy로만 접근합니다. 사내 Keycloak/LLM endpoint는 폐쇄망 �
 logs migrate`로 원인을 확인하고 DB 백업을 복원하거나 migration 이력을
 정리한 뒤 다시 실행합니다.
 
-## 4. 점검표
+## 4. 신규 배포 초기화 (사용자·템플릿 wipe, 관리자 계정 생성)
+
+내부 사용자 테스트를 위한 신규 배포는 개발/검증 과정에서 생성된 사용자, 관리자,
+템플릿을 전혀 물려받아서는 안 됩니다. `migrate` 컨테이너가 스키마를 적용한
+직후, API를 실 사용자에게 노출하기 전에 한 번만 `jaslide/core-api` image의
+`cmd/seed` 바이너리를 실행해 모든 사용자(관리자 포함)와 템플릿을 지우고
+관리자 계정 하나만 남깁니다.
+
+```bash
+docker run --rm --network jaslide_default \
+  -e DATABASE_URL="postgresql://<user>:<password>@postgres:5432/<db>" \
+  -e JASLIDE_CONFIRM_RESET="wipe all users and templates" \
+  jaslide/core-api:v0.6.1 /app/seed
+```
+
+- `JASLIDE_CONFIRM_RESET`은 정확히 위 문자열이어야 실행되며, 그 외에는
+  즉시 실패합니다 — 잘못 설정된 환경 변수로 우발적으로 실행되는 것을 막기
+  위함입니다.
+- 기본 관리자 계정은 `admin@koreacb.com` / `admin1234`이며,
+  `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`로 재정의할 수 있습니다.
+- `TRUNCATE ... CASCADE`로 동작하므로 사용자/템플릿뿐 아니라 그에 딸린
+  발표자료, 생성 작업, 댓글 등 모든 데이터가 함께 지워집니다. **기존 운영
+  데이터가 있는 DB에는 절대 실행하지 마십시오** — 완전히 새로 배포하는
+  경우에만 사용합니다.
+- 이미 실 사용자 데이터가 쌓인 배포를 재설정하려면 반드시 `postgres_data`를
+  먼저 백업하십시오.
+
+## 5. 점검표
 
 - archive SHA-256이 외부망 준비 환경의 값과 일치한다.
 - 여섯 image가 모두 `linux/amd64`이며 올바른 release tag를 가진다.
