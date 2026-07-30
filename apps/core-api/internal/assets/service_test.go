@@ -3,14 +3,16 @@ package assets
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 )
 
@@ -104,9 +106,11 @@ func TestDownloadForcesLegacyActiveContentToAttachment(t *testing.T) {
 	if err := os.WriteFile(target, []byte("<script>alert(document.domain)</script>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	router := chi.NewRouter()
+	router.Mount("/uploads", NewDownloadHandler(root))
 	request := httptest.NewRequest(http.MethodGet, "/uploads/uploads/legacy.html", nil)
 	recorder := httptest.NewRecorder()
-	NewDownloadHandler(root).ServeHTTP(recorder, request)
+	router.ServeHTTP(recorder, request)
 	response := recorder.Result()
 	defer response.Body.Close()
 	if recorder.Code != http.StatusOK {
@@ -120,6 +124,13 @@ func TestDownloadForcesLegacyActiveContentToAttachment(t *testing.T) {
 	}
 	if got := response.Header.Get("Content-Type"); got != "application/octet-stream" {
 		t.Fatalf("Content-Type = %q, want application/octet-stream", got)
+	}
+
+	post := httptest.NewRequest(http.MethodPost, "/uploads/uploads/legacy.html", nil)
+	postRecorder := httptest.NewRecorder()
+	router.ServeHTTP(postRecorder, post)
+	if postRecorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST status = %d, want 405", postRecorder.Code)
 	}
 }
 
@@ -145,24 +156,21 @@ func TestDeleteDoesNotDeleteDatabaseRowWhenFileRemovalFails(t *testing.T) {
 	}
 }
 
-func TestDownloadAndDeleteRejectSymlinkEscape(t *testing.T) {
+func TestUploadDownloadAndDeleteRejectDirectoryLinkEscape(t *testing.T) {
 	root := t.TempDir()
-	uploads := filepath.Join(root, "uploads")
-	if err := os.MkdirAll(uploads, 0o755); err != nil {
+	outside := t.TempDir()
+	link := filepath.Join(root, "uploads")
+	createDirectoryLink(t, outside, link)
+	outsideFile := filepath.Join(outside, "escape.png")
+	if err := os.WriteFile(outsideFile, validPNG(), 0o644); err != nil {
 		t.Fatal(err)
-	}
-	outside := filepath.Join(t.TempDir(), "outside.png")
-	if err := os.WriteFile(outside, validPNG(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	link := filepath.Join(uploads, "escape.png")
-	if err := os.Symlink(outside, link); err != nil {
-		t.Skipf("symlinks are unavailable: %v", err)
 	}
 
+	router := chi.NewRouter()
+	router.Mount("/uploads", NewDownloadHandler(root))
 	request := httptest.NewRequest(http.MethodGet, "/uploads/uploads/escape.png", nil)
 	recorder := httptest.NewRecorder()
-	NewDownloadHandler(root).ServeHTTP(recorder, request)
+	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("download status = %d, want 404", recorder.Code)
 	}
@@ -178,12 +186,34 @@ func TestDownloadAndDeleteRejectSymlinkEscape(t *testing.T) {
 	if repository.deleteCalls != 0 {
 		t.Fatalf("DeleteAsset() calls = %d, want 0", repository.deleteCalls)
 	}
-	file, err := os.Open(outside)
-	if err != nil {
+	if _, err := os.Stat(outsideFile); err != nil {
 		t.Fatalf("outside file was removed: %v", err)
 	}
-	_, _ = io.Copy(io.Discard, file)
-	_ = file.Close()
+
+	uploadRepository := &memoryRepository{}
+	_, err = NewService(uploadRepository, root).Upload(
+		context.Background(), userID, "new.png", "image/png", "IMAGE", validPNG(),
+	)
+	if !errors.Is(err, ErrBadRequest) {
+		t.Fatalf("Upload() error = %v, want ErrBadRequest", err)
+	}
+	if uploadRepository.createCalls != 0 {
+		t.Fatalf("CreateAsset() calls = %d, want 0", uploadRepository.createCalls)
+	}
+}
+
+func createDirectoryLink(t *testing.T, target, link string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		command := exec.Command("cmd", "/c", "mklink", "/J", link, target)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Skipf("directory junctions are unavailable: %v (%s)", err, output)
+		}
+		return
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("directory symlinks are unavailable: %v", err)
+	}
 }
 
 func validPNG() []byte {

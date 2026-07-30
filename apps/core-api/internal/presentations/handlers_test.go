@@ -23,6 +23,7 @@ import (
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpserver"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/presentations"
 )
 
@@ -41,8 +42,8 @@ func TestEndpointInventoryIncludesEveryNestPresentationSlideAndAssetRoute(t *tes
 	if err := json.Unmarshal(raw, &endpoints); err != nil {
 		t.Fatal(err)
 	}
-	if len(endpoints) != 26 {
-		t.Fatalf("endpoint inventory has %d routes, want 26", len(endpoints))
+	if len(endpoints) != 27 {
+		t.Fatalf("endpoint inventory has %d routes, want 27", len(endpoints))
 	}
 	required := map[string]bool{
 		"GET /api/presentations/{id}/slides/{order}/template-html":    false,
@@ -62,12 +63,21 @@ func TestEndpointInventoryIncludesEveryNestPresentationSlideAndAssetRoute(t *tes
 		}
 	}
 
-	actualRouter := chi.NewRouter()
-	actualRouter.Mount("/api/presentations", presentations.NewHandlers(nil, nil))
-	actualRouter.Mount("/api/assets", assets.NewHandlers(nil, nil))
-	actual := map[string]bool{"GET /uploads/{}": true}
-	if err := chi.Walk(actualRouter, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		actual[canonicalRoute(method+" "+route)] = true
+	apiRoutes := chi.NewRouter()
+	apiRoutes.Mount("/presentations", presentations.NewHandlers(nil, nil))
+	apiRoutes.Mount("/assets", assets.NewHandlers(nil, nil))
+	productionRouter := httpserver.New(nil, nil, apiRoutes, assets.NewDownloadHandler(t.TempDir()))
+	routes, ok := productionRouter.(chi.Routes)
+	if !ok {
+		t.Fatalf("production router type %T does not expose registered routes", productionRouter)
+	}
+	actual := map[string]bool{}
+	if err := chi.Walk(routes, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if strings.HasPrefix(route, "/api/presentations") ||
+			strings.HasPrefix(route, "/api/assets") ||
+			strings.HasPrefix(route, "/uploads") {
+			actual[canonicalRoute(method+" "+route)] = true
+		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -504,6 +514,7 @@ func stringField(t *testing.T, value map[string]any, key string) string {
 }
 
 func canonicalRoute(route string) string {
+	route = strings.ReplaceAll(route, "/*", "/{}")
 	var result strings.Builder
 	for {
 		start := strings.Index(route, "{")

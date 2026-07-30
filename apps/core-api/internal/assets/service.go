@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/storagepath"
 )
 
 var (
@@ -53,17 +54,8 @@ func (service *Service) Upload(ctx context.Context, userID, filename, mimeType, 
 		return db.Asset{}, err
 	}
 	key := filepath.ToSlash(filepath.Join("uploads", id+"-"+filename))
-	target, err := localPath(service.root, key)
+	target, err := storagepath.Writable(service.root, key)
 	if err != nil {
-		return db.Asset{}, ErrBadRequest
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return db.Asset{}, err
-	}
-	if symlink, err := pathHasSymlink(service.root, filepath.Dir(target)); err != nil || symlink {
-		if err != nil {
-			return db.Asset{}, err
-		}
 		return db.Asset{}, ErrBadRequest
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(target), ".upload-*")
@@ -122,14 +114,8 @@ func (service *Service) Delete(ctx context.Context, id, userID string) error {
 	}
 	const prefix = "/uploads/"
 	if strings.HasPrefix(asset.URL, prefix) {
-		target, pathErr := localPath(service.root, strings.TrimPrefix(asset.URL, prefix))
+		target, pathErr := storagepath.Removable(service.root, strings.TrimPrefix(asset.URL, prefix))
 		if pathErr != nil {
-			return pathErr
-		}
-		if symlink, err := pathHasSymlink(service.root, target); err != nil || symlink {
-			if err != nil {
-				return err
-			}
 			return ErrBadRequest
 		}
 		if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -141,18 +127,6 @@ func (service *Service) Delete(ctx context.Context, id, userID string) error {
 		return ErrNotFound
 	}
 	return err
-}
-
-func localPath(root, key string) (string, error) {
-	if key == "" || filepath.IsAbs(key) || strings.Contains(key, `\`) {
-		return "", ErrBadRequest
-	}
-	root = filepath.Clean(root)
-	target := filepath.Clean(filepath.Join(root, filepath.FromSlash(key)))
-	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
-		return "", ErrBadRequest
-	}
-	return target, nil
 }
 
 func safeFilename(name string) bool {
@@ -167,28 +141,6 @@ func safeFilename(name string) bool {
 		}
 	}
 	return true
-}
-
-func pathHasSymlink(root, target string) (bool, error) {
-	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(target))
-	if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) || relative == ".." {
-		return false, ErrBadRequest
-	}
-	current := filepath.Clean(root)
-	for _, part := range strings.Split(relative, string(os.PathSeparator)) {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func allowedUploadType(assetType, filename string, data []byte) (string, bool) {

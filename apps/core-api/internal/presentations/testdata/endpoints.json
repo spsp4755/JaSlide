@@ -24,5 +24,6 @@
   {"method":"POST","path":"/api/assets/chart","auth":"user"},
   {"method":"GET","path":"/api/assets/{id}","auth":"user"},
   {"method":"DELETE","path":"/api/assets/{id}","auth":"user"},
-  {"method":"GET","path":"/uploads/{key...}","auth":"public"}
+  {"method":"GET","path":"/uploads/{key...}","auth":"public"},
+  {"method":"HEAD","path":"/uploads/{key...}","auth":"public"}
 ]

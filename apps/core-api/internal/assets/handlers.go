@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/storagepath"
 )
 
 const maxUploadBytes = 64 << 20
@@ -50,18 +51,14 @@ func NewHandlers(service *Service, authService *auth.Service) http.Handler {
 
 func NewDownloadHandler(root string) http.Handler {
 	root = filepath.Clean(root)
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("X-Content-Type-Options", "nosniff")
 		key := chi.URLParam(request, "*")
 		if key == "" {
 			key = strings.TrimPrefix(request.URL.Path, "/uploads/")
 		}
-		target, err := localPath(root, strings.TrimPrefix(key, "/"))
+		target, err := storagepath.Existing(root, strings.TrimPrefix(key, "/"))
 		if err != nil {
-			http.NotFound(writer, request)
-			return
-		}
-		if symlink, pathErr := pathHasSymlink(root, target); pathErr != nil || symlink {
 			http.NotFound(writer, request)
 			return
 		}
@@ -86,6 +83,10 @@ func NewDownloadHandler(root string) http.Handler {
 		}
 		http.ServeFile(writer, request, target)
 	})
+	router := chi.NewRouter()
+	router.Get("/*", handler.ServeHTTP)
+	router.Head("/*", handler.ServeHTTP)
+	return router
 }
 
 func (handler *handlers) upload(writer http.ResponseWriter, request *http.Request) {

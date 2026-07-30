@@ -18,6 +18,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/storagepath"
 )
 
 var (
@@ -410,12 +411,8 @@ func (service *Service) renderer(ctx context.Context, path string, body any) (js
 }
 
 func (service *Service) readUpload(key string) ([]byte, error) {
-	if key == "" || filepath.IsAbs(key) || strings.Contains(key, `\`) {
-		return nil, ErrBadRequest
-	}
-	target := filepath.Clean(filepath.Join(service.uploadsRoot, filepath.FromSlash(key)))
-	root := filepath.Clean(service.uploadsRoot)
-	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
+	target, err := storagepath.Existing(service.uploadsRoot, key)
+	if err != nil {
 		return nil, ErrBadRequest
 	}
 	return os.ReadFile(target)
