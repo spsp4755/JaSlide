@@ -12,10 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/assets"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpserver"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/presentations"
 )
 
 func main() {
@@ -41,15 +44,23 @@ func run() error {
 		}
 	}()
 
-	authRoutes, err := buildAuthRoutes(cfg, store)
+	authRoutes, authService, err := buildAuthRuntime(cfg, store)
 	if err != nil {
 		return err
 	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	apiRoutes := chi.NewRouter()
+	apiRoutes.Mount("/presentations", presentations.NewHandlers(
+		presentations.NewService(store, cfg.RendererURL, cfg.LocalStoragePath, client), authService,
+	))
+	apiRoutes.Mount("/assets", assets.NewHandlers(assets.NewService(store, cfg.LocalStoragePath), authService))
 	server := &http.Server{
 		Addr: cfg.Address,
 		Handler: httpserver.New(
 			dependencyProbe{config: cfg, store: store, client: &http.Client{Timeout: 2 * time.Second}},
 			authRoutes,
+			apiRoutes,
+			assets.NewDownloadHandler(cfg.LocalStoragePath),
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -61,9 +72,14 @@ func run() error {
 }
 
 func buildAuthRoutes(cfg config.Config, store auth.Repository) (http.Handler, error) {
+	routes, _, err := buildAuthRuntime(cfg, store)
+	return routes, err
+}
+
+func buildAuthRuntime(cfg config.Config, store auth.Repository) (http.Handler, *auth.Service, error) {
 	sessions, err := auth.NewSessions(cfg.JWTSecret, cfg.JWTLifetime)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var keycloak *auth.Keycloak
 	if cfg.KeycloakIssuer != "" && cfg.KeycloakClientID != "" && cfg.KeycloakRedirectURI != "" {
@@ -72,14 +88,15 @@ func buildAuthRoutes(cfg config.Config, store auth.Repository) (http.Handler, er
 			ClientSecret: cfg.KeycloakClientSecret, RedirectURI: cfg.KeycloakRedirectURI,
 		}, &http.Client{Timeout: 10 * time.Second})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return httpserver.NewAuthHandlers(auth.NewService(store, sessions), keycloak, httpserver.AuthOptions{
+	service := auth.NewService(store, sessions)
+	return httpserver.NewAuthHandlers(service, keycloak, httpserver.AuthOptions{
 		SecureCookies:      strings.EqualFold(cfg.Environment, "production"),
 		FrontendURL:        cfg.FrontendURL,
 		KeycloakAdminRoles: cfg.KeycloakAdminRoles,
-	}), nil
+	}), service, nil
 }
 
 func runServer(signalContext context.Context, server *http.Server) error {

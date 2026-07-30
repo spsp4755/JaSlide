@@ -11,7 +11,7 @@ type DependencyProbe interface {
 	Ready() error
 }
 
-func New(probe DependencyProbe, authRoutes ...http.Handler) http.Handler {
+func New(probe DependencyProbe, routeGroups ...http.Handler) http.Handler {
 	router := chi.NewRouter()
 	router.Get("/api/health/live", func(writer http.ResponseWriter, _ *http.Request) {
 		writeStatus(writer, http.StatusOK, "ok")
@@ -23,8 +23,14 @@ func New(probe DependencyProbe, authRoutes ...http.Handler) http.Handler {
 		}
 		writeStatus(writer, http.StatusOK, "ok")
 	})
-	if len(authRoutes) > 0 && authRoutes[0] != nil {
-		router.Mount("/api/auth", authRoutes[0])
+	if len(routeGroups) > 0 && routeGroups[0] != nil {
+		router.Mount("/api/auth", routeGroups[0])
+	}
+	if len(routeGroups) > 1 && routeGroups[1] != nil {
+		router.Mount("/api", routeGroups[1])
+	}
+	if len(routeGroups) > 2 && routeGroups[2] != nil {
+		router.Mount("/uploads", routeGroups[2])
 	}
 	return router
 }

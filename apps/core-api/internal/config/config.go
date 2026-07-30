@@ -24,6 +24,7 @@ type Config struct {
 	KeycloakClientSecret string
 	KeycloakRedirectURI  string
 	KeycloakAdminRoles   []string
+	LocalStoragePath     string
 }
 
 func Load() (Config, error) {
@@ -55,6 +56,7 @@ func Load() (Config, error) {
 		KeycloakClientSecret: value("KEYCLOAK_CLIENT_SECRET"),
 		KeycloakRedirectURI:  keycloakRedirectURI,
 		KeycloakAdminRoles:   commaSeparated(value("KEYCLOAK_ADMIN_ROLES")),
+		LocalStoragePath:     defaultValue(value("LOCAL_STORAGE_PATH"), "uploads"),
 	}
 
 	if strings.EqualFold(config.Environment, "production") {
