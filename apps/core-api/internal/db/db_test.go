@@ -113,6 +113,36 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 	if byID.Email != email || byID.Role != "USER" || byID.Status != "ACTIVE" {
 		t.Fatalf("FindUserByID() = %#v", byID)
 	}
+	if err := store.RecordFailedLogin(ctx, userID, time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSuccessfulLogin(ctx, userID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordLoginAttempt(ctx, email, true, &userID, "127.0.0.1", "go-test", ""); err != nil {
+		t.Fatal(err)
+	}
+	registerRowCleanup(t, store, `DELETE FROM "LoginLog" WHERE "email" = $1`, email)
+
+	keycloakEmail := fmt.Sprintf("go-keycloak-%d@example.com", suffix)
+	keycloakUser, err := store.ResolveKeycloakUser(
+		ctx, "https://keycloak.example/realms/company", "subject-123",
+		keycloakEmail, nil, nil, "ADMIN",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerRowCleanup(t, store, `DELETE FROM "User" WHERE "id" = $1`, keycloakUser.ID)
+	if keycloakUser.Email != keycloakEmail || keycloakUser.Role != "ADMIN" {
+		t.Fatalf("ResolveKeycloakUser() = %#v", keycloakUser)
+	}
+	linkedAgain, err := store.ResolveKeycloakUser(
+		ctx, "https://keycloak.example/realms/company", "subject-123",
+		keycloakEmail, nil, nil, "USER",
+	)
+	if err != nil || linkedAgain.ID != keycloakUser.ID || linkedAgain.Role != "ADMIN" {
+		t.Fatalf("linked ResolveKeycloakUser() = %#v, %v", linkedAgain, err)
+	}
 
 	page, err := store.ListPresentations(ctx, userID, 1, 1)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpserver"
@@ -40,9 +41,16 @@ func run() error {
 		}
 	}()
 
+	authRoutes, err := buildAuthRoutes(cfg, store)
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
-		Addr:              cfg.Address,
-		Handler:           httpserver.New(dependencyProbe{config: cfg, store: store, client: &http.Client{Timeout: 2 * time.Second}}),
+		Addr: cfg.Address,
+		Handler: httpserver.New(
+			dependencyProbe{config: cfg, store: store, client: &http.Client{Timeout: 2 * time.Second}},
+			authRoutes,
+		),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -50,6 +58,28 @@ func run() error {
 	defer stop()
 	log.Printf("core API listening on %s", cfg.Address)
 	return runServer(signalContext, server)
+}
+
+func buildAuthRoutes(cfg config.Config, store auth.Repository) (http.Handler, error) {
+	sessions, err := auth.NewSessions(cfg.JWTSecret, cfg.JWTLifetime)
+	if err != nil {
+		return nil, err
+	}
+	var keycloak *auth.Keycloak
+	if cfg.KeycloakIssuer != "" && cfg.KeycloakClientID != "" && cfg.KeycloakRedirectURI != "" {
+		keycloak, err = auth.NewKeycloak(auth.KeycloakConfig{
+			Issuer: cfg.KeycloakIssuer, ClientID: cfg.KeycloakClientID,
+			ClientSecret: cfg.KeycloakClientSecret, RedirectURI: cfg.KeycloakRedirectURI,
+		}, &http.Client{Timeout: 10 * time.Second})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return httpserver.NewAuthHandlers(auth.NewService(store, sessions), keycloak, httpserver.AuthOptions{
+		SecureCookies:      strings.EqualFold(cfg.Environment, "production"),
+		FrontendURL:        cfg.FrontendURL,
+		KeycloakAdminRoles: cfg.KeycloakAdminRoles,
+	}), nil
 }
 
 func runServer(signalContext context.Context, server *http.Server) error {
