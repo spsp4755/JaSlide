@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"sort"
 	"strings"
 	"time"
 
@@ -127,20 +128,21 @@ func (handlers *authHandlers) login(writer http.ResponseWriter, request *http.Re
 		Email    string  `json:"email"`
 		Password *string `json:"password"`
 	}
-	if err := decodeJSON(writer, request, &input); err != nil {
+	validation, err := decodeJSON(writer, request, &input, "email", "password")
+	if err != nil {
 		handlers.badJSON(writer, err)
 		return
 	}
 	if !validEmail(input.Email) {
-		writeValidationError(writer, []string{"email must be an email"})
-		return
+		validation = append(validation, "email must be an email")
 	}
 	if input.Password == nil {
-		writeValidationError(writer, []string{"password should not be empty", "password must be a string"})
-		return
+		validation = append(validation, "password should not be empty", "password must be a string")
+	} else if *input.Password == "" {
+		validation = append(validation, "password should not be empty")
 	}
-	if *input.Password == "" {
-		writeValidationError(writer, []string{"password should not be empty"})
+	if len(validation) != 0 {
+		writeValidationError(writer, validation)
 		return
 	}
 
@@ -172,22 +174,23 @@ func (handlers *authHandlers) register(writer http.ResponseWriter, request *http
 		Password *string `json:"password"`
 		Name     *string `json:"name"`
 	}
-	if err := decodeJSON(writer, request, &input); err != nil {
+	validation, err := decodeJSON(writer, request, &input, "email", "password", "name")
+	if err != nil {
 		handlers.badJSON(writer, err)
 		return
 	}
 	if !validEmail(input.Email) {
-		writeValidationError(writer, []string{"email must be an email"})
-		return
+		validation = append(validation, "email must be an email")
 	}
 	if input.Password == nil {
-		writeValidationError(writer, []string{
+		validation = append(validation,
 			"password must be longer than or equal to 8 characters", "password must be a string",
-		})
-		return
+		)
+	} else if len(*input.Password) < 8 {
+		validation = append(validation, "password must be longer than or equal to 8 characters")
 	}
-	if len(*input.Password) < 8 {
-		writeValidationError(writer, []string{"password must be longer than or equal to 8 characters"})
+	if len(validation) != 0 {
+		writeValidationError(writer, validation)
 		return
 	}
 	principal, token, err := handlers.service.Register(
@@ -245,7 +248,33 @@ func loginUser(principal auth.Principal) loginResponseUser {
 
 func validEmail(value string) bool {
 	address, err := mail.ParseAddress(value)
-	return err == nil && address.Address == value && strings.Contains(value, "@")
+	if err != nil || address.Address != value || len(value) > 254 {
+		return false
+	}
+	at := strings.LastIndexByte(value, '@')
+	if at <= 0 || at > 64 || at == len(value)-1 {
+		return false
+	}
+	domain := value[at+1:]
+	labels := strings.Split(domain, ".")
+	if len(labels) < 2 || len(labels[len(labels)-1]) < 2 {
+		return false
+	}
+	for index, label := range labels {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if character >= 'a' && character <= 'z' ||
+				character >= 'A' && character <= 'Z' ||
+				index < len(labels)-1 && character >= '0' && character <= '9' ||
+				character == '-' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 func clientIP(request *http.Request) string {
@@ -272,27 +301,54 @@ func writeValidationError(writer http.ResponseWriter, messages []string) {
 	})
 }
 
-func decodeJSON(writer http.ResponseWriter, request *http.Request, target any) error {
+func decodeJSON(
+	writer http.ResponseWriter,
+	request *http.Request,
+	target any,
+	allowedFields ...string,
+) ([]string, error) {
 	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err != nil {
+		return nil, err
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		if err == nil {
-			return errors.New("multiple JSON values")
+			return nil, errors.New("multiple JSON values")
 		}
-		return err
+		return nil, err
 	}
-	return nil
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	allowed := make(map[string]bool, len(allowedFields))
+	for _, field := range allowedFields {
+		allowed[field] = true
+	}
+	var unknown []string
+	for field := range fields {
+		if !allowed[field] {
+			unknown = append(unknown, field)
+			delete(fields, field)
+		}
+	}
+	sort.Strings(unknown)
+	known, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(known, target); err != nil {
+		return nil, err
+	}
+	var validation []string
+	for _, field := range unknown {
+		validation = append(validation, "property "+field+" should not exist")
+	}
+	return validation, nil
 }
 
 func (handlers *authHandlers) badJSON(writer http.ResponseWriter, err error) {
-	if strings.HasPrefix(err.Error(), "json: unknown field ") {
-		field := strings.Trim(err.Error()[len("json: unknown field "):], `"`)
-		writeValidationError(writer, []string{"property " + field + " should not exist"})
-		return
-	}
 	message := "Bad Request"
 	if errors.Is(err, io.ErrUnexpectedEOF) {
 		message = "Unexpected end of JSON input"

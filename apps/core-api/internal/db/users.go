@@ -147,9 +147,11 @@ func (store *Store) ResolveKeycloakUser(
 		if user.Email != email {
 			return User{}, errors.New("Keycloak account email does not match linked user")
 		}
-		user, err = scanUser(transaction.QueryRow(ctx, updateUserRoleQuery, user.ID, newRole))
-		if err != nil {
-			return User{}, err
+		if keycloakManagedRole(user.Role) {
+			user, err = scanUser(transaction.QueryRow(ctx, updateUserRoleQuery, user.ID, newRole))
+			if err != nil {
+				return User{}, err
+			}
 		}
 		return user, transaction.Commit(ctx)
 	}
@@ -175,7 +177,7 @@ func (store *Store) ResolveKeycloakUser(
 	if err != nil {
 		return User{}, err
 	}
-	if user.Role != newRole {
+	if keycloakManagedRole(user.Role) && user.Role != newRole {
 		user, err = scanUser(transaction.QueryRow(ctx, updateUserRoleQuery, user.ID, newRole))
 		if err != nil {
 			return User{}, err
@@ -215,6 +217,10 @@ const updateUserRoleQuery = `
 		"status"::text, "preferences", "mfaEnabled", "mfaSecret",
 		"failedLoginAttempts", "lockedUntil", "organizationId",
 		"lastLoginAt", "createdAt", "updatedAt"`
+
+func keycloakManagedRole(role string) bool {
+	return role == "USER" || role == "ADMIN"
+}
 
 func randomID() (string, error) {
 	value := make([]byte, 18)

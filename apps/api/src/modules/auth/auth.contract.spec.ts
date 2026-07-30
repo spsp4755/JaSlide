@@ -158,6 +158,30 @@ describe('HTTP authentication contract', () => {
             { email: user.email, password: 'password123', extra: true },
             ['property extra should not exist'],
         ],
+        [
+            'single-label email domain',
+            { email: 'a@b', password: 'password123' },
+            ['email must be an email'],
+        ],
+        [
+            'one-character top-level domain',
+            { email: 'x@y.c', password: 'password123' },
+            ['email must be an email'],
+        ],
+        [
+            'case-variant email key',
+            { Email: user.email, password: 'password123' },
+            ['property Email should not exist', 'email must be an email'],
+        ],
+        [
+            'case-variant password key',
+            { email: user.email, Password: 'password123' },
+            [
+                'property Password should not exist',
+                'password should not be empty',
+                'password must be a string',
+            ],
+        ],
     ])('rejects %s using the global validation contract', async (_name, body, messages) => {
         const response = await request(app.getHttpServer())
             .post('/api/auth/login')

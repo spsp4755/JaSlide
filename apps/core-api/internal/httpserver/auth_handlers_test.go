@@ -66,7 +66,9 @@ func (store *authStore) ResolveKeycloakUser(_ context.Context, _, _, _ string, _
 		return db.User{}, errors.New("not configured")
 	}
 	user := *store.keycloakUser
-	user.Role = role
+	if user.Role == "USER" || user.Role == "ADMIN" {
+		user.Role = role
+	}
 	store.keycloakUser = &user
 	return user, nil
 }
@@ -227,14 +229,48 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 
 func TestLoginRejectsInvalidBodiesBeforeAuthentication(t *testing.T) {
 	tests := []struct {
-		name string
-		body string
+		name     string
+		body     string
+		messages []string
 	}{
-		{"missing password", `{"email":"test@example.com"}`},
-		{"empty password", `{"email":"test@example.com","password":""}`},
-		{"unknown property", `{"email":"test@example.com","password":"password123","extra":true}`},
-		{"malformed JSON", `{"email":"test@example.com"`},
-		{"multiple JSON values", `{"email":"test@example.com","password":"password123"}{"email":"other@example.com"}`},
+		{
+			"missing password", `{"email":"test@example.com"}`,
+			[]string{"password should not be empty", "password must be a string"},
+		},
+		{
+			"empty password", `{"email":"test@example.com","password":""}`,
+			[]string{"password should not be empty"},
+		},
+		{
+			"unknown property", `{"email":"test@example.com","password":"password123","extra":true}`,
+			[]string{"property extra should not exist"},
+		},
+		{
+			"single-label email domain", `{"email":"a@b","password":"password123"}`,
+			[]string{"email must be an email"},
+		},
+		{
+			"one-character top-level domain", `{"email":"x@y.c","password":"password123"}`,
+			[]string{"email must be an email"},
+		},
+		{
+			"case-variant email key", `{"Email":"test@example.com","password":"password123"}`,
+			[]string{"property Email should not exist", "email must be an email"},
+		},
+		{
+			"case-variant password key", `{"email":"test@example.com","Password":"password123"}`,
+			[]string{
+				"property Password should not exist",
+				"password should not be empty",
+				"password must be a string",
+			},
+		},
+		{"malformed JSON", `{"email":"test@example.com"`, nil},
+		{
+			"multiple JSON values",
+			`{"email":"test@example.com","password":"password123"}{"email":"other@example.com"}`,
+			nil,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -251,6 +287,15 @@ func TestLoginRejectsInvalidBodiesBeforeAuthentication(t *testing.T) {
 			}
 			if body["error"] != "Bad Request" || body["statusCode"] != float64(400) {
 				t.Fatalf("body = %#v", body)
+			}
+			if test.messages != nil {
+				var actual []string
+				for _, message := range body["message"].([]any) {
+					actual = append(actual, message.(string))
+				}
+				if strings.Join(actual, "\n") != strings.Join(test.messages, "\n") {
+					t.Fatalf("messages = %#v, want %#v", actual, test.messages)
+				}
 			}
 		})
 	}
@@ -513,6 +558,33 @@ func TestKeycloakLoginSynchronizesRolePromotionAndRevocation(t *testing.T) {
 	)
 	if err != nil || revoked.Role != "USER" {
 		t.Fatalf("revoked principal = %#v, %v", revoked, err)
+	}
+}
+
+func TestKeycloakLoginPreservesApplicationManagedRoles(t *testing.T) {
+	for _, role := range []string{"SYSTEM_ADMIN", "ORG_ADMIN", "OPERATOR", "AUDITOR"} {
+		t.Run(role, func(t *testing.T) {
+			user := db.User{
+				ID: "keycloak-user", Email: "user@example.com", Role: role, Status: "ACTIVE",
+			}
+			store := &authStore{users: map[string]db.User{}, keycloakUser: &user}
+			sessions, err := auth.NewSessions("test-secret-at-least-32-characters", time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			principal, _, err := auth.NewService(store, sessions).LoginWithKeycloak(
+				context.Background(),
+				auth.KeycloakIdentity{
+					Issuer:  "https://keycloak.example/realms/company",
+					Subject: "subject-123", Email: user.Email,
+					Roles: []string{"jaslide-admin"},
+				},
+				[]string{"jaslide-admin"},
+			)
+			if err != nil || principal.Role != role {
+				t.Fatalf("principal = %#v, %v; want preserved %s", principal, err, role)
+			}
+		})
 	}
 }
 

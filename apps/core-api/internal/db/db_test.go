@@ -166,6 +166,17 @@ func TestStoreReadsCurrentPrismaTables(t *testing.T) {
 	if err != nil || promotedAgain.ID != keycloakUser.ID || promotedAgain.Role != "ADMIN" {
 		t.Fatalf("promoted ResolveKeycloakUser() = %#v, %v", promotedAgain, err)
 	}
+	if _, err := store.pool.Exec(ctx, `
+		UPDATE "User" SET "role" = 'ORG_ADMIN' WHERE "id" = $1`, keycloakUser.ID); err != nil {
+		t.Fatal(err)
+	}
+	preservedRole, err := store.ResolveKeycloakUser(
+		ctx, "https://keycloak.example/realms/company", "subject-123",
+		keycloakEmail, nil, nil, "USER",
+	)
+	if err != nil || preservedRole.Role != "ORG_ADMIN" {
+		t.Fatalf("preserved ResolveKeycloakUser() = %#v, %v", preservedRole, err)
+	}
 
 	localEmail := fmt.Sprintf("go-register-%d@example.com", suffix)
 	passwordHash := "$2a$10$RK29UA5QXRUEuLcP1OcN.eKIcGTrTVE1w.g1RkIskCMZxRTq7iNf."

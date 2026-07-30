@@ -33,8 +33,10 @@ Initial commit: `905ab1e56f97a2e4645297af3dac984cf8751f90`
     tables.
   - A successful login clears failures only when the failure count read during
     password verification still matches and no concurrent lock is active.
-  - Keycloak roles are synchronized on every login, including admin promotion
-    and revocation for linked and existing-email users.
+  - Keycloak-managed `USER`/`ADMIN` roles are synchronized on every login,
+    including admin promotion and revocation for linked and existing-email
+    users. Application-managed `SYSTEM_ADMIN`, `ORG_ADMIN`, `OPERATOR`, and
+    `AUDITOR` roles are preserved.
 - `apps/core-api/internal/config/config.go`
   - Adds Nest-compatible `JWT_EXPIRES_IN` defaults plus Keycloak/frontend
     settings and requires a JWT secret of at least 32 bytes in production.
@@ -66,6 +68,9 @@ Initial commit: `905ab1e56f97a2e4645297af3dac984cf8751f90`
   stale successful login cannot clear a concurrent lockout.
 - Keycloak provider identity and mapped role are authoritative after linking; a
   linked identity cannot change to another email.
+- Login and registration reject case-variant JSON keys rather than relying on
+  Go's default case-insensitive struct matching. Email validation matches the
+  captured Nest `IsEmail` contract for required domain/TLD cases.
 - No access or ID token is returned to the browser JSON response.
 
 ## Concerns and follow-up
@@ -86,3 +91,8 @@ Initial commit: `905ab1e56f97a2e4645297af3dac984cf8751f90`
   routes and optional strategy remain untouched. Before NestJS is deleted,
   external clients must be inventoried and Google OAuth either ported or
   explicitly deprecated; it is not silently removed by this task.
+- The current Nest implementation maps Keycloak roles only for newly created
+  users and preserves every existing role. The Go policy deliberately adds the
+  requested promotion/revocation only within `USER`/`ADMIN`; roles managed by
+  JaSlide administration remain untouched because the schema has no separate
+  role-provenance field.
