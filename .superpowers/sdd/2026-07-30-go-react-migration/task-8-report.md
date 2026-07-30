@@ -117,3 +117,56 @@
   too); documented here rather than fixed.
 - Isolated containers, network, and the verification-only renderer image were
   removed after verification.
+
+## P3 Route Compatibility Audit and Gap Closure
+
+- Ran a full route-by-route audit of every `apps/api/src/**/*.controller.ts`
+  route (~145 routes, 44 controllers) against `apps/core-api/internal/**`.
+  All core user-facing features (auth minus Google, presentations/slides/
+  scene, blocks/collaborators/comments/versions/favorites/export-presets/
+  font-sets/color-palettes/input-prompts/recent-works, assets, export,
+  generation, skills, templates, and most of admin) already matched.
+- **Google OAuth** (`/auth/google`, `/auth/google/callback`) — confirmed
+  missing from Go. Per the closed-network deployment requirement (no external
+  network calls in production), this is intentionally **not ported** — it
+  cannot function in a closed network regardless.
+- **`GET /admin/dashboard/charts`** and **`GET /admin/organizations/:id/members`**
+  — missing from Go; confirmed (`grep` across `apps/web/src`) neither has any
+  frontend caller. Left unported.
+- **8 unauthenticated legacy admin controllers** (`admin-api-keys`,
+  `admin-color-palettes`, `admin-font-sets`, `admin-integrations`,
+  `admin-permissions`, `admin-security-policies`, `admin-seed-data`,
+  `admin-sessions`, `admin-themes`, `admin-webhooks` — ~50 routes, ~1,650
+  lines of backing service code) have **no `@UseGuards` at all** in the
+  current NestJS API and **zero frontend callers**. This is a live
+  unauthenticated admin surface on the current NestJS deployment. Confirmed
+  unused; will not be ported — dropped along with the rest of `apps/api`.
+- **Admin user create/update/delete** (`POST/PATCH/DELETE /admin/users`) was
+  a genuine gap — Go only had list/get. Ported in
+  `apps/core-api/internal/admin/handlers.go` (`createUser`, `updateUser`,
+  `deactivateUser`), matching the NestJS service's behavior exactly: email
+  uniqueness check, bcrypt password hash on create, default role `USER`,
+  partial `COALESCE` update of name/image/role/status/organizationId, and a
+  **soft** delete (`status='INACTIVE'`, row is not removed). Added
+  `apps/core-api/internal/admin/users_test.go`, a real-Postgres black-box
+  test covering create, duplicate-email rejection, password hashing,
+  partial update, and soft-deactivation (verifies the row still exists with
+  `status=INACTIVE` rather than being gone). Full Go test suite re-run
+  afterward: all packages pass except one pre-existing, unrelated
+  `internal/db` test that expects `search_path=public` on the test
+  Postgres connection — an artifact of this session's ad hoc
+  `postgres:16-alpine` container missing a `search_path` query param, not a
+  regression from this change (only `internal/admin` files were touched).
+- **`ORG_ADMIN` role check** — the audit initially flagged
+  `admin/handlers.go`'s `requireAdmin` (only accepts `ADMIN`/`SYSTEM_ADMIN`)
+  as a bug versus NestJS's `RolesGuard`, which treats `@Roles('ADMIN')` as
+  inclusive of `ORG_ADMIN` via its role hierarchy. Checked
+  `admin/contracts_test.go`'s `TestAdminRoleIntent`, which explicitly asserts
+  `ORG_ADMIN` should **not** get system-admin-panel access. This looks like a
+  deliberate, existing tightening (the system admin panel is cross-org; an
+  org-scoped admin getting full access to every organization's users/jobs/
+  models looks like the old system's privilege-escalation bug, not a feature
+  to preserve) — **left as-is**, not "fixed" to match legacy behavior.
+- Remaining before `apps/api` deletion: delete `apps/api`, `docker/api.Dockerfile`;
+  remove Prisma/NestJS/Next.js packages and build scripts; remove `.next`/Node
+  server config; update CI to build only Go API + Vite + Python renderer.

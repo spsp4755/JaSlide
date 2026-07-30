@@ -25,6 +25,7 @@ import (
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Queue interface {
@@ -149,7 +150,10 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 	})
 	router.Route("/users", func(r chi.Router) {
 		r.Get("/", h.listUsers)
+		r.Post("/", h.createUser)
 		r.Get("/{id}", h.getUser)
+		r.Patch("/{id}", h.updateUser)
+		r.Delete("/{id}", h.deactivateUser)
 	})
 	if templateHandlers != nil {
 		router.Mount("/templates", templateHandlers)
@@ -1017,6 +1021,67 @@ func (h *Handlers) listUsers(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) getUser(w http.ResponseWriter, r *http.Request) {
 	row, err := queryOneMap(r.Context(), h.pool, `SELECT id,email,name,image,role,status,"organizationId","lastLoginAt","createdAt","updatedAt" FROM "User" WHERE id=$1`, chi.URLParam(r, "id"))
 	writeResult(w, row, err)
+}
+
+func (h *Handlers) createUser(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Email, Password, Name, Role, OrganizationID string }
+	if !decode(w, r, &in) || strings.TrimSpace(in.Email) == "" {
+		badRequest(w, "email is required")
+		return
+	}
+	if _, err := queryOneMap(r.Context(), h.pool, `SELECT id FROM "User" WHERE email=$1`, in.Email); err == nil {
+		badRequest(w, "Email already exists")
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, err)
+		return
+	}
+	var hashed *string
+	if in.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), 10)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		value := string(hash)
+		hashed = &value
+	}
+	role := in.Role
+	if role == "" {
+		role = "USER"
+	}
+	row, err := queryOneMap(r.Context(), h.pool, `
+		INSERT INTO "User"(id,email,name,password,role,"organizationId","updatedAt")
+		VALUES($1,$2,NULLIF($3,''),$4,$5::"UserRole",NULLIF($6,''),now())
+		RETURNING id,email,name,role,status,"organizationId","createdAt"`,
+		newID(), in.Email, in.Name, hashed, role, in.OrganizationID)
+	writeCreated(w, row, err)
+}
+
+func (h *Handlers) updateUser(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Name, Image, Role, Status, OrganizationID *string }
+	if !decode(w, r, &in) {
+		return
+	}
+	row, err := queryOneMap(r.Context(), h.pool, `
+		UPDATE "User" SET
+		  name=COALESCE($2,name), image=COALESCE($3,image),
+		  role=COALESCE($4::"UserRole",role), status=COALESCE($5::"UserStatus",status),
+		  "organizationId"=COALESCE($6,"organizationId"), "updatedAt"=now()
+		WHERE id=$1
+		RETURNING id,email,name,image,role,status,"organizationId","updatedAt"`,
+		chi.URLParam(r, "id"), in.Name, in.Image, in.Role, in.Status, in.OrganizationID)
+	writeResult(w, row, err)
+}
+
+func (h *Handlers) deactivateUser(w http.ResponseWriter, r *http.Request) {
+	_, err := queryOneMap(r.Context(), h.pool,
+		`UPDATE "User" SET status='INACTIVE',"updatedAt"=now() WHERE id=$1 RETURNING id`, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "User deactivated successfully"})
 }
 
 func (h *Handlers) dynamicUpdate(ctx context.Context, table, id string, raw map[string]json.RawMessage, allowed map[string]string) (map[string]any, error) {
