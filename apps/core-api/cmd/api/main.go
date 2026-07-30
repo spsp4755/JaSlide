@@ -90,7 +90,7 @@ func run() error {
 	versions.RegisterRoutes(apiRoutes, store, authService)
 	apiRoutes.Mount("/admin", admin.NewHandlers(
 		store, authService, generationQueue, cfg.RendererURL, client,
-		templates.NewAdminHandlers(templateService, authService),
+		templates.NewAdminHandlers(templateService, authService), llmPolicy, generationService,
 	))
 	server := &http.Server{
 		Addr: cfg.Address,

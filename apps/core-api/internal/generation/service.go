@@ -280,17 +280,29 @@ func (service *Service) Run(ctx context.Context) {
 	if !ok {
 		return
 	}
-	if ids, err := service.repo.RecoverableGenerationIDs(ctx); err == nil {
-		for _, id := range ids {
-			_ = service.queue.Add(ctx, id)
-		}
-	}
+	lastRecovery := time.Time{}
 	for ctx.Err() == nil {
+		if time.Since(lastRecovery) >= 10*time.Second {
+			service.recover(ctx)
+			lastRecovery = time.Now()
+		}
 		id, err := queue.Pop(ctx)
 		if err != nil {
 			continue
 		}
 		service.Process(ctx, id)
+	}
+}
+
+// recover is deliberately retried by Run: a Redis outage must not strand rows
+// that were committed to Postgres before their queue message was delivered.
+func (service *Service) recover(ctx context.Context) {
+	ids, err := service.repo.RecoverableGenerationIDs(ctx)
+	if err != nil {
+		return
+	}
+	for _, id := range ids {
+		_ = service.queue.Add(ctx, id)
 	}
 }
 
@@ -432,6 +444,10 @@ func (service *Service) cancelJob(jobID string) {
 	}
 }
 
+// CancelLive interrupts an in-flight LLM request after its durable job state
+// has been moved to CANCELLED by the caller.
+func (service *Service) CancelLive(jobID string) { service.cancelJob(jobID) }
+
 type AIEditInput struct {
 	SlideID     string   `json:"slideId,omitempty"`
 	SlideIDs    []string `json:"slideIds,omitempty"`
@@ -461,6 +477,10 @@ func (service *Service) AIEdit(ctx context.Context, userID string, input AIEditI
 			edited, err := service.llm.EditHTML(ctx, html, input.Instruction)
 			if err != nil {
 				return nil, err
+			}
+			edited, err = contentsecurity.SanitizeHTML(edited)
+			if err != nil {
+				return nil, fmt.Errorf("invalid edited HTML")
 			}
 			if preservesHTMLStructure(html, edited) {
 				fields["html"] = edited

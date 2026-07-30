@@ -66,6 +66,10 @@ func (policy *Policy) APIKeyFromEnvironment(name string) (string, bool) {
 	return os.LookupEnv(name)
 }
 
+func (policy *Policy) AllowsEnvironmentKey(name string) bool {
+	return policy != nil && policy.envKeys[name]
+}
+
 func parseEndpoint(raw string) (*url.URL, error) {
 	endpoint, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || endpoint.User != nil || endpoint.Host == "" ||

@@ -24,11 +24,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
 )
 
 type Queue interface {
 	Add(context.Context, string) error
 }
+type LiveCanceller interface{ CancelLive(string) }
 
 type Handlers struct {
 	pool        *pgxpool.Pool
@@ -39,9 +41,11 @@ type Handlers struct {
 	client      *http.Client
 	templates   http.Handler
 	startedAt   time.Time
+	policy      *outboundpolicy.Policy
+	canceller   LiveCanceller
 }
 
-func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, rendererURL string, client *http.Client, templateHandlers http.Handler) http.Handler {
+func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, rendererURL string, client *http.Client, templateHandlers http.Handler, options ...any) http.Handler {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
@@ -49,6 +53,14 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 		auth: authService, queue: queue,
 		rendererURL: strings.TrimRight(rendererURL, "/"), client: client, templates: templateHandlers,
 		startedAt: time.Now(),
+	}
+	for _, option := range options {
+		switch value := option.(type) {
+		case *outboundpolicy.Policy:
+			h.policy = value
+		case LiveCanceller:
+			h.canceller = value
+		}
 	}
 	if store != nil {
 		h.pool, h.redis = store.Pool(), store.Redis()
@@ -390,10 +402,17 @@ func (h *Handlers) retryJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) cancelJob(w http.ResponseWriter, r *http.Request) {
-	tag, err := h.pool.Exec(r.Context(), `UPDATE "GenerationJob" SET status='CANCELLED',"completedAt"=now(),"updatedAt"=now() WHERE id=$1 AND status NOT IN ('COMPLETED','FAILED','CANCELLED')`, chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	tag, err := h.pool.Exec(r.Context(), `UPDATE "GenerationJob" SET status='CANCELLED',"completedAt"=now(),"updatedAt"=now() WHERE id=$1 AND status NOT IN ('COMPLETED','FAILED','CANCELLED')`, id)
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	if tag.RowsAffected() > 0 {
+		_, _ = h.pool.Exec(r.Context(), `UPDATE "Presentation" SET status='FAILED',"updatedAt"=now() WHERE id=(SELECT "presentationId" FROM "GenerationJob" WHERE id=$1)`, id)
+		if h.canceller != nil {
+			h.canceller.CancelLive(id)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": tag.RowsAffected() > 0})
 }
@@ -453,11 +472,14 @@ func (h *Handlers) exportLogs(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) listModels(w http.ResponseWriter, r *http.Request) {
 	where, args := filters(r, []filterSpec{{"provider", "provider"}})
-	pagedQuery(w, r, h.pool, `SELECT * FROM "LlmModel"`+where+` ORDER BY "createdAt" DESC`, `SELECT count(*) FROM "LlmModel"`+where, args)
+	pagedQueryTransform(w, r, h.pool, `SELECT * FROM "LlmModel"`+where+` ORDER BY "createdAt" DESC`, `SELECT count(*) FROM "LlmModel"`+where, args, redactModel)
 }
 
 func (h *Handlers) getModel(w http.ResponseWriter, r *http.Request) {
 	row, err := queryOneMap(r.Context(), h.pool, `SELECT * FROM "LlmModel" WHERE id=$1`, chi.URLParam(r, "id"))
+	if row != nil {
+		redactModel(row)
+	}
 	writeResult(w, row, err)
 }
 
@@ -509,6 +531,9 @@ func (h *Handlers) createModel(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = tx.Commit(r.Context())
 	}
+	if row != nil {
+		redactModel(row)
+	}
 	writeCreated(w, row, err)
 }
 
@@ -524,6 +549,9 @@ func (h *Handlers) updateModel(w http.ResponseWriter, r *http.Request) {
 		"isDefault": `"isDefault"`, "config": "config",
 	}
 	row, err := h.dynamicUpdate(r.Context(), "LlmModel", chi.URLParam(r, "id"), raw, allowed)
+	if row != nil {
+		redactModel(row)
+	}
 	writeResult(w, row, err)
 }
 
@@ -603,12 +631,16 @@ func (h *Handlers) modelTest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": "Model endpoint is not configured"})
 		return
 	}
+	if h.policy != nil && h.policy.ValidateEndpoint(endpoint) != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": "Model endpoint is not allowed"})
+		return
+	}
 	key := ""
 	if apiKey != nil {
 		key = *apiKey
 	}
 	if key == "" && apiKeyEnvVar != nil {
-		key = os.Getenv(*apiKeyEnvVar)
+		key, _ = h.policy.APIKeyFromEnvironment(*apiKeyEnvVar)
 	}
 	start := time.Now()
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint+"/models", nil)
@@ -661,6 +693,12 @@ func (h *Handlers) modelTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, modelTestSuccess(name, time.Since(start).Milliseconds()))
+}
+
+func redactModel(row map[string]any) {
+	if _, ok := row["apiKey"]; ok {
+		row["apiKey"] = nil
+	}
 }
 
 func (h *Handlers) forceStopJobs(w http.ResponseWriter, r *http.Request) {

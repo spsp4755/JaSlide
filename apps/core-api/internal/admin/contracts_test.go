@@ -83,3 +83,11 @@ func TestAdminRoleIntent(t *testing.T) {
 		}
 	}
 }
+
+func TestModelResponseNeverExposesStoredAPIKey(t *testing.T) {
+	model := map[string]any{"id": "model-1", "apiKey": "secret"}
+	redactModel(model)
+	if model["apiKey"] != nil {
+		t.Fatalf("api key exposed: %#v", model["apiKey"])
+	}
+}
