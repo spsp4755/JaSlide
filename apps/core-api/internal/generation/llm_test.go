@@ -7,12 +7,46 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
 )
 
 type staticModelSource struct{ model Model }
 
 func (source staticModelSource) DefaultModel(context.Context) (Model, error) {
 	return source.model, nil
+}
+
+func TestOpenAIClientRejectsModelEndpointOutsideConfiguredAllowlist(t *testing.T) {
+	policy, err := outboundpolicy.New([]string{"http://approved.internal/v1"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "unsafe", Endpoint: "http://169.254.169.254/latest", IsActive: true,
+	}}, http.DefaultClient, EnvironmentModel{}, policy)
+	if _, err := client.resolveModel(context.Background()); err == nil {
+		t.Fatal("expected unapproved model endpoint rejection")
+	}
+}
+
+func TestOpenAIClientDoesNotReadUnapprovedEnvironmentSecret(t *testing.T) {
+	t.Setenv("DATABASE_URL", "secret-database-url")
+	policy, err := outboundpolicy.New([]string{"http://approved.internal/v1"}, []string{"APPROVED_LLM_KEY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "safe", Endpoint: "http://approved.internal/v1",
+		APIKeyEnvVar: "DATABASE_URL", IsActive: true,
+	}}, http.DefaultClient, EnvironmentModel{}, policy)
+	model, err := client.resolveModel(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.APIKey != "" {
+		t.Fatal("unapproved environment secret was loaded")
+	}
 }
 
 func TestConfiguredLocalModelGeneratesTenSlideOutlineInBatches(t *testing.T) {

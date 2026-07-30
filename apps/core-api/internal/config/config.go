@@ -10,25 +10,27 @@ import (
 )
 
 type Config struct {
-	Address              string
-	Environment          string
-	DatabaseURL          string
-	RedisURL             string
-	JWTSecret            string
-	JWTLifetime          time.Duration
-	RendererURL          string
-	PublicOrigin         string
-	FrontendURL          string
-	KeycloakIssuer       string
-	KeycloakClientID     string
-	KeycloakClientSecret string
-	KeycloakRedirectURI  string
-	KeycloakAdminRoles   []string
-	LocalStoragePath     string
-	OpenAIBaseURL        string
-	OpenAIAPIKey         string
-	OpenAIModel          string
-	OpenAIMaxTokens      int
+	Address                 string
+	Environment             string
+	DatabaseURL             string
+	RedisURL                string
+	JWTSecret               string
+	JWTLifetime             time.Duration
+	RendererURL             string
+	PublicOrigin            string
+	FrontendURL             string
+	KeycloakIssuer          string
+	KeycloakClientID        string
+	KeycloakClientSecret    string
+	KeycloakRedirectURI     string
+	KeycloakAdminRoles      []string
+	LocalStoragePath        string
+	OpenAIBaseURL           string
+	OpenAIAPIKey            string
+	OpenAIModel             string
+	OpenAIMaxTokens         int
+	AllowedLLMEndpoints     []string
+	AllowedLLMAPIKeyEnvVars []string
 }
 
 func Load() (Config, error) {
@@ -46,26 +48,30 @@ func Load() (Config, error) {
 		keycloakRedirectURI = strings.TrimRight(value("APP_URL"), "/") + "/api/auth/keycloak/callback"
 	}
 	config := Config{
-		Address:              defaultValue(value("CORE_API_ADDR"), ":4000"),
-		Environment:          defaultValue(value("NODE_ENV"), defaultValue(value("APP_ENV"), "development")),
-		DatabaseURL:          value("DATABASE_URL"),
-		RedisURL:             value("REDIS_URL"),
-		JWTSecret:            value("JWT_SECRET"),
-		JWTLifetime:          jwtLifetime,
-		RendererURL:          value("RENDERER_URL"),
-		PublicOrigin:         publicOrigin,
-		FrontendURL:          defaultValue(value("FRONTEND_URL"), "http://localhost:3000"),
-		KeycloakIssuer:       strings.TrimRight(value("KEYCLOAK_ISSUER"), "/"),
-		KeycloakClientID:     value("KEYCLOAK_CLIENT_ID"),
-		KeycloakClientSecret: value("KEYCLOAK_CLIENT_SECRET"),
-		KeycloakRedirectURI:  keycloakRedirectURI,
-		KeycloakAdminRoles:   commaSeparated(value("KEYCLOAK_ADMIN_ROLES")),
-		LocalStoragePath:     defaultValue(value("LOCAL_STORAGE_PATH"), "uploads"),
-		OpenAIBaseURL:        strings.TrimRight(value("OPENAI_BASE_URL"), "/"),
-		OpenAIAPIKey:         value("OPENAI_API_KEY"),
-		OpenAIModel:          defaultValue(value("OPENAI_MODEL"), "gpt-4-turbo-preview"),
-		OpenAIMaxTokens:      integerValue(value("OPENAI_MAX_TOKENS"), 4096),
+		Address:                 defaultValue(value("CORE_API_ADDR"), ":4000"),
+		Environment:             defaultValue(value("NODE_ENV"), defaultValue(value("APP_ENV"), "development")),
+		DatabaseURL:             value("DATABASE_URL"),
+		RedisURL:                value("REDIS_URL"),
+		JWTSecret:               value("JWT_SECRET"),
+		JWTLifetime:             jwtLifetime,
+		RendererURL:             value("RENDERER_URL"),
+		PublicOrigin:            publicOrigin,
+		FrontendURL:             defaultValue(value("FRONTEND_URL"), "http://localhost:3000"),
+		KeycloakIssuer:          strings.TrimRight(value("KEYCLOAK_ISSUER"), "/"),
+		KeycloakClientID:        value("KEYCLOAK_CLIENT_ID"),
+		KeycloakClientSecret:    value("KEYCLOAK_CLIENT_SECRET"),
+		KeycloakRedirectURI:     keycloakRedirectURI,
+		KeycloakAdminRoles:      commaSeparated(value("KEYCLOAK_ADMIN_ROLES")),
+		LocalStoragePath:        defaultValue(value("LOCAL_STORAGE_PATH"), "uploads"),
+		OpenAIBaseURL:           strings.TrimRight(value("OPENAI_BASE_URL"), "/"),
+		OpenAIAPIKey:            value("OPENAI_API_KEY"),
+		OpenAIModel:             defaultValue(value("OPENAI_MODEL"), "gpt-4-turbo-preview"),
+		OpenAIMaxTokens:         integerValue(value("OPENAI_MAX_TOKENS"), 4096),
+		AllowedLLMAPIKeyEnvVars: commaSeparated(value("LLM_ALLOWED_API_KEY_ENV_VARS")),
 	}
+	config.AllowedLLMEndpoints = appendUnique(
+		[]string{config.OpenAIBaseURL}, commaSeparated(value("LLM_ALLOWED_ENDPOINTS"))...,
+	)
 
 	if strings.EqualFold(config.Environment, "production") {
 		for name, value := range map[string]string{
@@ -127,6 +133,19 @@ func commaSeparated(value string) []string {
 	for _, item := range strings.Split(value, ",") {
 		if item = strings.TrimSpace(item); item != "" {
 			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func appendUnique(existing []string, values ...string) []string {
+	result := make([]string, 0, len(existing)+len(values))
+	seen := map[string]bool{}
+	for _, value := range append(existing, values...) {
+		value = strings.TrimSpace(value)
+		if value != "" && !seen[value] {
+			seen[value] = true
+			result = append(result, value)
 		}
 	}
 	return result

@@ -9,8 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
+
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
 )
 
 const outlineBatchSize = 6
@@ -34,10 +35,15 @@ type OpenAIClient struct {
 	models ModelSource
 	http   *http.Client
 	env    EnvironmentModel
+	policy *outboundpolicy.Policy
 }
 
-func NewOpenAIClient(models ModelSource, client *http.Client, env EnvironmentModel) *OpenAIClient {
-	return &OpenAIClient{models: models, http: client, env: env}
+func NewOpenAIClient(models ModelSource, client *http.Client, env EnvironmentModel, policies ...*outboundpolicy.Policy) *OpenAIClient {
+	var policy *outboundpolicy.Policy
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
+	return &OpenAIClient{models: models, http: client, env: env, policy: policy}
 }
 
 func (client *OpenAIClient) Outline(ctx context.Context, input OutlineRequest) (Outline, error) {
@@ -235,7 +241,7 @@ func (client *OpenAIClient) resolveModel(ctx context.Context) (Model, error) {
 	model, err := client.models.DefaultModel(ctx)
 	if err == nil && model.IsActive {
 		if model.APIKey == "" && model.APIKeyEnvVar != "" {
-			model.APIKey = os.Getenv(model.APIKeyEnvVar)
+			model.APIKey, _ = client.policy.APIKeyFromEnvironment(model.APIKeyEnvVar)
 		}
 		if model.Endpoint == "" && strings.EqualFold(model.Provider, "openai") {
 			model.Endpoint = "https://api.openai.com/v1"
@@ -243,7 +249,11 @@ func (client *OpenAIClient) resolveModel(ctx context.Context) (Model, error) {
 		if model.Endpoint == "" {
 			return Model{}, errors.New("LLM endpoint is not configured")
 		}
-		if _, err := url.ParseRequestURI(model.Endpoint); err != nil {
+		if client.policy != nil {
+			if err := client.policy.ValidateEndpoint(model.Endpoint); err != nil {
+				return Model{}, err
+			}
+		} else if _, err := url.ParseRequestURI(model.Endpoint); err != nil {
 			return Model{}, errors.New("LLM endpoint is invalid")
 		}
 		if model.MaxTokens <= 0 {
@@ -253,6 +263,11 @@ func (client *OpenAIClient) resolveModel(ctx context.Context) (Model, error) {
 	}
 	if client.env.BaseURL == "" {
 		return Model{}, errors.New("No LLM configured")
+	}
+	if client.policy != nil {
+		if err := client.policy.ValidateEndpoint(client.env.BaseURL); err != nil {
+			return Model{}, err
+		}
 	}
 	maxTokens := client.env.MaxTokens
 	if maxTokens <= 0 {

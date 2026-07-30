@@ -216,6 +216,9 @@ func extractDOCX(content []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := validateOfficeArchive(archive.File); err != nil {
+		return "", err
+	}
 	for _, entry := range archive.File {
 		if entry.Name != "word/document.xml" {
 			continue
@@ -228,6 +231,9 @@ func extractDOCX(content []byte) (string, error) {
 func extractXLSX(content []byte) (string, error) {
 	archive, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
 	if err != nil {
+		return "", err
+	}
+	if err := validateOfficeArchive(archive.File); err != nil {
 		return "", err
 	}
 	var sections []string
@@ -246,6 +252,26 @@ func extractXLSX(content []byte) (string, error) {
 		return "", errors.New("worksheets missing")
 	}
 	return strings.Join(sections, "\n\n"), nil
+}
+
+const (
+	maxOfficeArchiveEntries    = 2000
+	maxOfficeUncompressedBytes = 32 << 20
+)
+
+func validateOfficeArchive(entries []*zip.File) error {
+	if len(entries) > maxOfficeArchiveEntries {
+		return errors.New("office archive contains too many entries")
+	}
+	var total uint64
+	for _, entry := range entries {
+		size := entry.UncompressedSize64
+		if size > maxOfficeUncompressedBytes || total > maxOfficeUncompressedBytes-size {
+			return errors.New("office archive is too large")
+		}
+		total += size
+	}
+	return nil
 }
 
 func xmlText(entry *zip.File, textElements, newlineElements map[string]bool) (string, error) {

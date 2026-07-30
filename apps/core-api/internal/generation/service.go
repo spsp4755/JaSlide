@@ -10,6 +10,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/contentsecurity"
 )
 
 var (
@@ -98,7 +102,7 @@ type StartResult struct {
 
 type Repository interface {
 	VisibleSkill(context.Context, string, string, *string) (Skill, error)
-	TemplateConfig(context.Context, string) (json.RawMessage, error)
+	VisibleTemplateConfig(context.Context, string, string) (json.RawMessage, error)
 	CreateGeneration(context.Context, Presentation, Job) error
 	GenerationJob(context.Context, string, string) (Job, error)
 	SetGenerationStatus(context.Context, string, string, int, json.RawMessage) (bool, error)
@@ -107,7 +111,7 @@ type Repository interface {
 	CompleteGeneration(context.Context, string, string, []Slide) error
 	SlideForEdit(context.Context, string, string) (Slide, error)
 	UpdateSlideContent(context.Context, string, json.RawMessage) (Slide, error)
-	QueuedGenerationIDs(context.Context) ([]string, error)
+	RecoverableGenerationIDs(context.Context) ([]string, error)
 }
 
 type Queue interface {
@@ -139,10 +143,12 @@ type Service struct {
 	repo  Repository
 	llm   LLM
 	queue Queue
+	mu    sync.Mutex
+	jobs  map[string]*runningJob
 }
 
 func NewService(repo Repository, llm LLM, queue Queue) *Service {
-	return &Service{repo: repo, llm: llm, queue: queue}
+	return &Service{repo: repo, llm: llm, queue: queue, jobs: map[string]*runningJob{}}
 }
 
 func (service *Service) Start(ctx context.Context, principal Principal, input StartInput) (StartResult, error) {
@@ -155,6 +161,9 @@ func (service *Service) Start(ctx context.Context, principal Principal, input St
 	}
 	if input.TemplateID == nil && skill.TemplateID != nil {
 		input.TemplateID = skill.TemplateID
+	}
+	if _, err := service.template(ctx, input.TemplateID, principal.ID); err != nil {
+		return StartResult{}, err
 	}
 	input.SkillGuidance = skill.OutlineGuidance
 	if input.Outline != nil {
@@ -198,8 +207,11 @@ func (service *Service) Start(ctx context.Context, principal Principal, input St
 		return StartResult{}, err
 	}
 	if err := service.queue.Add(ctx, jobID); err != nil {
-		_, _ = service.repo.SetGenerationStatus(ctx, jobID, "FAILED", 0, json.RawMessage(`{"message":"queue unavailable"}`))
-		return StartResult{}, fmt.Errorf("queue generation: %w", err)
+		raw := json.RawMessage(`{"message":"queue unavailable"}`)
+		compensationCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		return StartResult{}, fmt.Errorf("queue generation: %w",
+			errors.Join(err, service.repo.FailGeneration(compensationCtx, jobID, raw)))
 	}
 	return StartResult{JobID: jobID, PresentationID: presentationID, Status: "QUEUED"}, nil
 }
@@ -220,6 +232,7 @@ func (service *Service) Cancel(ctx context.Context, jobID, userID string) error 
 	if !cancelled {
 		return fmt.Errorf("%w: job not found or already completed", ErrBadInput)
 	}
+	service.cancelJob(jobID)
 	return nil
 }
 
@@ -249,7 +262,7 @@ func (service *Service) GenerateOutline(ctx context.Context, principal Principal
 	if language == "" {
 		language = detectLanguage(content)
 	}
-	catalog, err := service.templateCatalog(ctx, input.TemplateID)
+	catalog, err := service.templateCatalog(ctx, input.TemplateID, principal.ID)
 	if err != nil {
 		return Outline{}, err
 	}
@@ -267,7 +280,7 @@ func (service *Service) Run(ctx context.Context) {
 	if !ok {
 		return
 	}
-	if ids, err := service.repo.QueuedGenerationIDs(ctx); err == nil {
+	if ids, err := service.repo.RecoverableGenerationIDs(ctx); err == nil {
 		for _, id := range ids {
 			_ = service.queue.Add(ctx, id)
 		}
@@ -282,8 +295,10 @@ func (service *Service) Run(ctx context.Context) {
 }
 
 func (service *Service) Process(ctx context.Context, jobID string) {
+	ctx, finished := service.jobContext(ctx, jobID)
+	defer finished()
 	job, err := service.repo.GenerationJob(ctx, jobID, "")
-	if err != nil || job.Status == "COMPLETED" || job.Status == "CANCELLED" {
+	if err != nil || job.Status == "COMPLETED" || job.Status == "FAILED" || job.Status == "CANCELLED" {
 		return
 	}
 	var input StartInput
@@ -302,7 +317,7 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	if input.Outline != nil {
 		outline = *input.Outline
 	} else {
-		catalog, catalogErr := service.templateCatalog(ctx, input.TemplateID)
+		catalog, catalogErr := service.templateCatalog(ctx, input.TemplateID, job.UserID)
 		if catalogErr != nil {
 			service.fail(ctx, jobID, catalogErr)
 			return
@@ -319,7 +334,7 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	if err := service.updateStatus(ctx, jobID, "GENERATING_CONTENT", 30); err != nil {
 		return
 	}
-	template, err := service.template(ctx, input.TemplateID)
+	template, err := service.template(ctx, input.TemplateID, job.UserID)
 	if err != nil {
 		service.fail(ctx, jobID, err)
 		return
@@ -348,6 +363,9 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 			generated, htmlErr := service.llm.SlideHTML(ctx, original, SlideRequest{
 				Title: item.Title, Type: item.Type, Language: input.Language, KeyPoints: item.KeyPoints,
 			})
+			if htmlErr == nil {
+				generated, htmlErr = contentsecurity.SanitizeHTML(generated)
+			}
 			if htmlErr == nil && preservesHTMLStructure(original, generated) {
 				fields["html"] = generated
 			} else {
@@ -381,6 +399,36 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 		if !errors.Is(err, ErrCancelled) {
 			service.fail(ctx, jobID, err)
 		}
+	}
+}
+
+type runningJob struct{ cancel context.CancelFunc }
+
+func (service *Service) jobContext(parent context.Context, jobID string) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(parent)
+	job := &runningJob{cancel: cancel}
+	service.mu.Lock()
+	if previous := service.jobs[jobID]; previous != nil {
+		previous.cancel()
+	}
+	service.jobs[jobID] = job
+	service.mu.Unlock()
+	return ctx, func() {
+		cancel()
+		service.mu.Lock()
+		if service.jobs[jobID] == job {
+			delete(service.jobs, jobID)
+		}
+		service.mu.Unlock()
+	}
+}
+
+func (service *Service) cancelJob(jobID string) {
+	service.mu.Lock()
+	job := service.jobs[jobID]
+	service.mu.Unlock()
+	if job != nil {
+		job.cancel()
 	}
 }
 
@@ -467,13 +515,17 @@ type templateData struct {
 	Source     map[string]any
 }
 
-func (service *Service) template(ctx context.Context, id *string) (templateData, error) {
+func (service *Service) template(ctx context.Context, id *string, userID string) (templateData, error) {
 	if id == nil || *id == "" {
 		return templateData{}, nil
 	}
-	raw, err := service.repo.TemplateConfig(ctx, *id)
+	raw, err := service.repo.VisibleTemplateConfig(ctx, *id, userID)
 	if err != nil {
 		return templateData{}, fmt.Errorf("%w: Template not found", ErrBadInput)
+	}
+	raw, err = contentsecurity.SanitizeTemplateConfig(raw)
+	if err != nil {
+		return templateData{}, fmt.Errorf("%w: Invalid template", ErrBadInput)
 	}
 	fields := rawObject(raw)
 	htmlSlides := stringSlice(fields["htmlSlides"])
@@ -483,8 +535,8 @@ func (service *Service) template(ctx context.Context, id *string) (templateData,
 	}, nil
 }
 
-func (service *Service) templateCatalog(ctx context.Context, id *string) ([]string, error) {
-	template, err := service.template(ctx, id)
+func (service *Service) templateCatalog(ctx context.Context, id *string, userID string) ([]string, error) {
+	template, err := service.template(ctx, id, userID)
 	if err != nil {
 		return nil, err
 	}

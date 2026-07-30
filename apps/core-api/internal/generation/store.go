@@ -49,9 +49,14 @@ func (store *SQLStore) VisibleSkill(ctx context.Context, id, userID string, orga
 	return skill, err
 }
 
-func (store *SQLStore) TemplateConfig(ctx context.Context, id string) (json.RawMessage, error) {
+func (store *SQLStore) VisibleTemplateConfig(ctx context.Context, id, userID string) (json.RawMessage, error) {
 	var raw json.RawMessage
-	err := store.db.Pool().QueryRow(ctx, `SELECT "config" FROM "Template" WHERE "id"=$1`, id).Scan(&raw)
+	err := store.db.Pool().QueryRow(ctx, `
+		SELECT t."config" FROM "Template" t
+		WHERE t."id"=$1 AND (
+			t."isPublic" OR
+			t."organizationId"=(SELECT u."organizationId" FROM "User" u WHERE u."id"=$2)
+		)`, id, userID).Scan(&raw)
 	return raw, err
 }
 
@@ -134,12 +139,19 @@ func (store *SQLStore) SetGenerationStatus(
 }
 
 func (store *SQLStore) CancelGeneration(ctx context.Context, id, userID string) (bool, error) {
-	result, err := store.db.Pool().Exec(ctx, `
-		UPDATE "GenerationJob" SET "status"='CANCELLED',"completedAt"=NOW(),"updatedAt"=NOW()
-		WHERE "id"=$1 AND "userId"=$2 AND "status" NOT IN ('COMPLETED','FAILED','CANCELLED')`,
-		id, userID,
-	)
-	return result.RowsAffected() == 1, err
+	var cancelled bool
+	err := store.db.Pool().QueryRow(ctx, `
+		WITH cancelled AS (
+			UPDATE "GenerationJob"
+			SET "status"='CANCELLED',"completedAt"=NOW(),"updatedAt"=NOW()
+			WHERE "id"=$1 AND "userId"=$2 AND "status" NOT IN ('COMPLETED','FAILED','CANCELLED')
+			RETURNING "presentationId"
+		), failed_presentation AS (
+			UPDATE "Presentation" SET "status"='FAILED',"updatedAt"=NOW()
+			WHERE "id" IN (SELECT "presentationId" FROM cancelled)
+		)
+		SELECT EXISTS(SELECT 1 FROM cancelled)`, id, userID).Scan(&cancelled)
+	return cancelled, err
 }
 
 func (store *SQLStore) CompleteGeneration(ctx context.Context, jobID, title string, slides []Slide) error {
@@ -214,8 +226,11 @@ func (store *SQLStore) UpdateSlideContent(ctx context.Context, id string, conten
 	return slide, err
 }
 
-func (store *SQLStore) QueuedGenerationIDs(ctx context.Context) ([]string, error) {
-	rows, err := store.db.Pool().Query(ctx, `SELECT "id" FROM "GenerationJob" WHERE "status"='QUEUED' ORDER BY "createdAt"`)
+func (store *SQLStore) RecoverableGenerationIDs(ctx context.Context) ([]string, error) {
+	rows, err := store.db.Pool().Query(ctx, `
+		SELECT "id" FROM "GenerationJob"
+		WHERE "status" NOT IN ('COMPLETED','FAILED','CANCELLED')
+		ORDER BY "createdAt"`)
 	if err != nil {
 		return nil, err
 	}

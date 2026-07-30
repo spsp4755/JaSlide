@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -37,6 +38,7 @@ type Handlers struct {
 	rendererURL string
 	client      *http.Client
 	templates   http.Handler
+	startedAt   time.Time
 }
 
 func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, rendererURL string, client *http.Client, templateHandlers http.Handler) http.Handler {
@@ -44,12 +46,16 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
 	h := &Handlers{
-		pool: store.Pool(), redis: store.Redis(), auth: authService, queue: queue,
+		auth: authService, queue: queue,
 		rendererURL: strings.TrimRight(rendererURL, "/"), client: client, templates: templateHandlers,
+		startedAt: time.Now(),
+	}
+	if store != nil {
+		h.pool, h.redis = store.Pool(), store.Redis()
 	}
 	router := chi.NewRouter()
 	router.Use(auth.RequireUser(authService))
-	router.Use(auth.RequireRole("ADMIN"))
+	router.Use(requireAdmin)
 	router.Route("/dashboard", func(r chi.Router) {
 		r.Get("/stats", h.dashboardStats)
 		r.Get("/activity", h.dashboardActivity)
@@ -139,67 +145,106 @@ func NewHandlers(store *db.Store, authService *auth.Service, queue Queue, render
 	return router
 }
 
+func requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := auth.PrincipalFromContext(r.Context())
+		if !ok || !isAdminRole(principal.Role) {
+			writeJSON(w, http.StatusForbidden, map[string]any{
+				"message": "Insufficient permissions - Admin access required",
+				"error":   "Forbidden", "statusCode": http.StatusForbidden,
+			})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isAdminRole(role string) bool {
+	return role == "ADMIN" || role == "SYSTEM_ADMIN"
+}
+
 func (h *Handlers) dashboardStats(w http.ResponseWriter, r *http.Request) {
-	counts := map[string]int64{}
-	for key, table := range map[string]string{
-		"totalUsers": `"User"`, "totalPresentations": `"Presentation"`, "totalTemplates": `"Template"`,
-		"totalAssets": `"Asset"`, "totalJobs": `"GenerationJob"`,
-	} {
-		var count int64
-		_ = h.pool.QueryRow(r.Context(), "SELECT count(*) FROM "+table).Scan(&count)
-		counts[key] = count
+	var totalUsers, activeUsers, totalPresentations, totalGenerations, failedGenerations int64
+	err := h.pool.QueryRow(r.Context(), `
+		SELECT
+			(SELECT count(*) FROM "User"),
+			(SELECT count(*) FROM "User" WHERE "lastLoginAt">=now()-interval '24 hours' OR "updatedAt">=now()-interval '24 hours'),
+			(SELECT count(*) FROM "Presentation"),
+			(SELECT count(*) FROM "GenerationJob"),
+			(SELECT count(*) FROM "GenerationJob" WHERE status='FAILED')`).
+		Scan(&totalUsers, &activeUsers, &totalPresentations, &totalGenerations, &failedGenerations)
+	if err != nil {
+		writeError(w, err)
+		return
 	}
-	for key, query := range map[string]string{
-		"newUsers":         `SELECT count(*) FROM "User" WHERE "createdAt">=now()-interval '30 days'`,
-		"newPresentations": `SELECT count(*) FROM "Presentation" WHERE "createdAt">=now()-interval '30 days'`,
-		"failedJobs":       `SELECT count(*) FROM "GenerationJob" WHERE status='FAILED'`,
-	} {
-		var count int64
-		_ = h.pool.QueryRow(r.Context(), query).Scan(&count)
-		counts[key] = count
-	}
-	writeJSON(w, http.StatusOK, counts)
+	writeJSON(w, http.StatusOK, dashboardStatsContract(
+		totalUsers, activeUsers, totalPresentations, totalGenerations, failedGenerations,
+	))
 }
 
 func (h *Handlers) dashboardActivity(w http.ResponseWriter, r *http.Request) {
 	rows, err := queryMaps(r.Context(), h.pool, `
-		SELECT a.id,a.action,a.resource,a."resourceId",a.details,a."createdAt",
-		       CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id',u.id,'email',u.email,'name',u.name) END user
-		FROM "AuditLog" a LEFT JOIN "User" u ON u.id=a."userId"
-		ORDER BY a."createdAt" DESC LIMIT 20`)
+		SELECT id,type,message,"createdAt" FROM (
+			SELECT a.id,'audit' type,
+			       concat(COALESCE(u.email,'System'),' ',a.action,' ',a.resource) message,
+			       a."createdAt"
+			FROM "AuditLog" a LEFT JOIN "User" u ON u.id=a."userId"
+			UNION ALL
+			SELECT j.id,'job' type,
+			       concat('Generation job ',lower(j.status::text),' for ',u.email) message,
+			       j."createdAt"
+			FROM "GenerationJob" j LEFT JOIN "User" u ON u.id=j."userId"
+		) activity ORDER BY "createdAt" DESC LIMIT 10`)
 	writeResult(w, rows, err)
 }
 
 func (h *Handlers) health(w http.ResponseWriter, r *http.Request) {
-	status := map[string]any{"status": "healthy", "timestamp": time.Now().UTC()}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	dbStatus := "connected"
-	if err := h.pool.Ping(ctx); err != nil {
-		dbStatus, status["status"] = "disconnected", "degraded"
-	}
-	redisStatus := "connected"
-	if err := h.redis.Ping(ctx).Err(); err != nil {
-		redisStatus, status["status"] = "disconnected", "degraded"
-	}
-	rendererStatus := "connected"
-	if h.rendererURL == "" {
-		rendererStatus = "not_configured"
-	} else {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, h.rendererURL+"/health", nil)
-		res, err := h.client.Do(req)
-		if err != nil || res.StatusCode < 200 || res.StatusCode >= 300 {
-			rendererStatus, status["status"] = "disconnected", "degraded"
+	check := func(action func() error) map[string]any {
+		started := time.Now()
+		status := "up"
+		if action() != nil {
+			status = "down"
 		}
-		if res != nil {
-			res.Body.Close()
+		return map[string]any{"status": status, "latency": time.Since(started).Milliseconds()}
+	}
+	database := check(func() error { return h.pool.Ping(ctx) })
+	redisStatus := check(func() error { return h.redis.Ping(ctx).Err() })
+	renderer := check(func() error {
+		if h.rendererURL == "" {
+			return errors.New("renderer is not configured")
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.rendererURL+"/health", nil)
+		if err != nil {
+			return err
+		}
+		res, err := h.client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			return fmt.Errorf("renderer returned %d", res.StatusCode)
+		}
+		return nil
+	})
+	services := map[string]any{
+		"api":      map[string]any{"status": "up", "latency": int64(0)},
+		"database": database, "redis": redisStatus, "renderer": renderer,
+	}
+	status := "healthy"
+	for _, service := range []map[string]any{database, redisStatus, renderer} {
+		if service["status"] != "up" {
+			status = "degraded"
 		}
 	}
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-	status["services"] = map[string]string{"database": dbStatus, "redis": redisStatus, "renderer": rendererStatus}
-	status["memory"] = map[string]uint64{"alloc": mem.Alloc, "system": mem.Sys}
-	writeJSON(w, http.StatusOK, status)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": status, "services": services, "memory": memoryContract(mem),
+		"uptime": time.Since(h.startedAt).Seconds(),
+	})
 }
 
 func (h *Handlers) listAlerts(w http.ResponseWriter, r *http.Request) {
@@ -287,7 +332,8 @@ func (h *Handlers) listDocuments(w http.ResponseWriter, r *http.Request) {
 	sql := `SELECT p.*,json_build_object('id',u.id,'email',u.email,'name',u.name) user,
 		(SELECT count(*) FROM "Slide" s WHERE s."presentationId"=p.id) "_slideCount"
 		FROM "Presentation" p JOIN "User" u ON u.id=p."userId"` + where + ` ORDER BY p."createdAt" DESC`
-	pagedQuery(w, r, h.pool, sql, `SELECT count(*) FROM "Presentation" p`+where, args)
+	pagedQueryTransform(w, r, h.pool, sql, `SELECT count(*) FROM "Presentation" p`+where, args,
+		func(row map[string]any) { addCountContract(row, map[string]string{"slides": "_slideCount"}) })
 }
 
 func (h *Handlers) getDocument(w http.ResponseWriter, r *http.Request) {
@@ -310,19 +356,17 @@ func (h *Handlers) getJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) jobStats(w http.ResponseWriter, r *http.Request) {
-	rows, err := queryMaps(r.Context(), h.pool, `SELECT status::text,count(*)::int count FROM "GenerationJob" GROUP BY status`)
+	rows, err := queryMaps(r.Context(), h.pool, `SELECT status::text,count(*)::bigint count FROM "GenerationJob" GROUP BY status ORDER BY status`)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	stats := map[string]int64{"total": 0}
-	for _, row := range rows {
-		status, _ := row["status"].(string)
-		count := number(row["count"])
-		stats[strings.ToLower(status)] = count
-		stats["total"] += count
+	var recent24h int64
+	if err := h.pool.QueryRow(r.Context(), `SELECT count(*) FROM "GenerationJob" WHERE "createdAt">=now()-interval '24 hours'`).Scan(&recent24h); err != nil {
+		writeError(w, err)
+		return
 	}
-	writeJSON(w, http.StatusOK, stats)
+	writeJSON(w, http.StatusOK, jobStatsContract(rows, recent24h))
 }
 
 func (h *Handlers) retryJob(w http.ResponseWriter, r *http.Request) {
@@ -539,16 +583,24 @@ func (h *Handlers) modelTest(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "modelId is required")
 		return
 	}
-	var endpoint, modelID string
+	var name, provider, endpoint, modelID string
 	var apiKey, apiKeyEnvVar *string
-	err := h.pool.QueryRow(r.Context(), `SELECT COALESCE(endpoint,''),"modelId","apiKey","apiKeyEnvVar" FROM "LlmModel" WHERE id=$1`, in.ModelID).Scan(&endpoint, &modelID, &apiKey, &apiKeyEnvVar)
+	err := h.pool.QueryRow(r.Context(), `SELECT name,provider,COALESCE(endpoint,''),"modelId","apiKey","apiKeyEnvVar" FROM "LlmModel" WHERE id=$1`, in.ModelID).
+		Scan(&name, &provider, &endpoint, &modelID, &apiKey, &apiKeyEnvVar)
 	if err != nil {
-		writeError(w, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": "Model not found"})
+		} else {
+			writeError(w, err)
+		}
 		return
 	}
 	endpoint = strings.TrimRight(endpoint, "/")
+	if endpoint == "" && strings.EqualFold(provider, "openai") {
+		endpoint = "https://api.openai.com/v1"
+	}
 	if endpoint == "" {
-		badRequest(w, "Model endpoint is not configured")
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": "Model endpoint is not configured"})
 		return
 	}
 	key := ""
@@ -558,32 +610,68 @@ func (h *Handlers) modelTest(w http.ResponseWriter, r *http.Request) {
 	if key == "" && apiKeyEnvVar != nil {
 		key = os.Getenv(*apiKeyEnvVar)
 	}
-	body, _ := json.Marshal(map[string]any{"model": modelID, "messages": []map[string]string{{"role": "user", "content": "Reply OK"}}, "max_tokens": 8})
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/chat/completions", bytes.NewReader(body))
+	start := time.Now()
+	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint+"/models", nil)
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	res, err := h.client.Do(req)
+	if err == nil && res.StatusCode >= 200 && res.StatusCode < 300 {
+		defer res.Body.Close()
+		var models struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		_ = json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&models)
+		if len(models.Data) > 0 {
+			found := false
+			for _, model := range models.Data {
+				found = found || model.ID == modelID
+			}
+			if !found {
+				writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": "Configured model is not installed on the endpoint"})
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, modelTestSuccess(name, time.Since(start).Milliseconds()))
+		return
+	}
+	if res != nil {
+		res.Body.Close()
+	}
+	body, _ := json.Marshal(map[string]any{
+		"model": modelID, "messages": []map[string]string{{"role": "user", "content": "Reply with OK."}},
+		"max_tokens": 1, "temperature": 0,
+	})
+	req, _ = http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint+"/chat/completions", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
-	start := time.Now()
-	res, err := h.client.Do(req)
+	res, err = h.client.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
 		return
 	}
 	defer res.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-	writeJSON(w, http.StatusOK, map[string]any{"success": res.StatusCode >= 200 && res.StatusCode < 300, "status": res.StatusCode, "latency": time.Since(start).Milliseconds(), "response": string(data)})
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		data, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": strings.TrimSpace(string(data))})
+		return
+	}
+	writeJSON(w, http.StatusOK, modelTestSuccess(name, time.Since(start).Milliseconds()))
 }
 
 func (h *Handlers) forceStopJobs(w http.ResponseWriter, r *http.Request) {
-	tag, err := h.pool.Exec(r.Context(), `UPDATE "GenerationJob" SET status='CANCELLED',"completedAt"=now(),"updatedAt"=now() WHERE status NOT IN ('COMPLETED','FAILED','CANCELLED')`)
+	tag, err := h.pool.Exec(r.Context(), `
+		UPDATE "GenerationJob" SET status='CANCELLED',"completedAt"=now(),"updatedAt"=now()
+		WHERE status IN ('PROCESSING','GENERATING_OUTLINE','GENERATING_CONTENT','APPLYING_DESIGN','RENDERING')`)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "stopped": tag.RowsAffected()})
+	writeJSON(w, http.StatusOK, forceStopContract(tag.RowsAffected()))
 }
 
 func (h *Handlers) listOrganizations(w http.ResponseWriter, r *http.Request) {
@@ -593,9 +681,15 @@ func (h *Handlers) listOrganizations(w http.ResponseWriter, r *http.Request) {
 		where, args = ` WHERE o.name ILIKE $1 OR o.slug ILIKE $1`, []any{"%" + q + "%"}
 	}
 	sql := `SELECT o.*,(SELECT count(*) FROM "User" u WHERE u."organizationId"=o.id) "_userCount",
-		(SELECT count(*) FROM "Template" t WHERE t."organizationId"=o.id) "_templateCount"
+		(SELECT count(*) FROM "Template" t WHERE t."organizationId"=o.id) "_templateCount",
+		(SELECT count(*) FROM "Asset" a WHERE a."organizationId"=o.id) "_assetCount"
 		FROM "Organization" o` + where + ` ORDER BY o."createdAt" DESC`
-	pagedQuery(w, r, h.pool, sql, `SELECT count(*) FROM "Organization" o`+where, args)
+	pagedQueryTransform(w, r, h.pool, sql, `SELECT count(*) FROM "Organization" o`+where, args,
+		func(row map[string]any) {
+			addCountContract(row, map[string]string{
+				"users": "_userCount", "templates": "_templateCount", "assets": "_assetCount",
+			})
+		})
 }
 
 func (h *Handlers) getOrganization(w http.ResponseWriter, r *http.Request) {
@@ -938,6 +1032,17 @@ func appendCondition(where string, args []any, format, value string) (string, []
 }
 
 func pagedQuery(w http.ResponseWriter, r *http.Request, pool *pgxpool.Pool, sql, countSQL string, args []any) {
+	pagedQueryTransform(w, r, pool, sql, countSQL, args, nil)
+}
+
+func pagedQueryTransform(
+	w http.ResponseWriter,
+	r *http.Request,
+	pool *pgxpool.Pool,
+	sql, countSQL string,
+	args []any,
+	transform func(map[string]any),
+) {
 	page, limit := pagination(r)
 	var total int64
 	if err := pool.QueryRow(r.Context(), countSQL, args...).Scan(&total); err != nil {
@@ -949,6 +1054,11 @@ func pagedQuery(w http.ResponseWriter, r *http.Request, pool *pgxpool.Pool, sql,
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	if transform != nil {
+		for _, row := range data {
+			transform(row)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": data, "total": total, "page": page, "limit": limit, "totalPages": (total + int64(limit) - 1) / int64(limit)})
 }
@@ -1033,6 +1143,57 @@ func number(value any) int64 {
 	default:
 		n, _ := strconv.ParseInt(fmt.Sprint(value), 10, 64)
 		return n
+	}
+}
+
+func addCountContract(row map[string]any, fields map[string]string) {
+	counts := make(map[string]int64, len(fields))
+	for name, source := range fields {
+		counts[name] = number(row[source])
+		delete(row, source)
+	}
+	row["_count"] = counts
+}
+
+func dashboardStatsContract(totalUsers, activeUsers, totalPresentations, totalGenerations, failedGenerations int64) map[string]any {
+	errorRate := float64(0)
+	if totalGenerations > 0 {
+		errorRate = math.Round(float64(failedGenerations)*10000/float64(totalGenerations)) / 100
+	}
+	return map[string]any{
+		"totalUsers": int(totalUsers), "activeUsers": int(activeUsers),
+		"totalPresentations": int(totalPresentations), "totalGenerations": int(totalGenerations),
+		"errorRate": errorRate,
+	}
+}
+
+func jobStatsContract(rows []map[string]any, recent24h int64) map[string]any {
+	byStatus := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		byStatus = append(byStatus, map[string]any{
+			"status": fmt.Sprint(row["status"]), "_count": number(row["count"]),
+		})
+	}
+	return map[string]any{"byStatus": byStatus, "last24Hours": recent24h}
+}
+
+func forceStopContract(affected int64) map[string]any {
+	return map[string]any{"success": true, "affectedJobs": affected}
+}
+
+func modelTestSuccess(name string, responseTime int64) map[string]any {
+	return map[string]any{
+		"success": true, "model": name, "responseTime": responseTime,
+		"message": "Model endpoint is reachable",
+	}
+}
+
+func memoryContract(mem runtime.MemStats) map[string]uint64 {
+	const megabyte = 1 << 20
+	return map[string]uint64{
+		"heapUsed":  mem.HeapAlloc / megabyte,
+		"heapTotal": mem.HeapSys / megabyte,
+		"rss":       mem.Sys / megabyte,
 	}
 }
 

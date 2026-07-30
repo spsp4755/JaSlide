@@ -16,15 +16,19 @@ import (
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/admin"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/assets"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/comments"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 	exportapi "github.com/spsp4755/JaSlide/apps/core-api/internal/export"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/generation"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpserver"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/presentations"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/profile"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/renderer"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/skills"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/templates"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/versions"
 )
 
 func main() {
@@ -62,9 +66,13 @@ func run() error {
 	templateService := templates.NewService(store, rendererClient, cfg.LocalStoragePath)
 	generationStore := generation.NewSQLStore(store)
 	generationQueue := generation.NewRedisQueue(store.Redis())
+	llmPolicy, err := outboundpolicy.New(cfg.AllowedLLMEndpoints, cfg.AllowedLLMAPIKeyEnvVars)
+	if err != nil {
+		return err
+	}
 	llmClient := generation.NewOpenAIClient(generationStore, &http.Client{Timeout: 5 * time.Minute}, generation.EnvironmentModel{
 		BaseURL: cfg.OpenAIBaseURL, APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIModel, MaxTokens: cfg.OpenAIMaxTokens,
-	})
+	}, llmPolicy)
 	generationService := generation.NewService(generationStore, llmClient, generationQueue)
 	go generationService.Run(signalContext)
 
@@ -77,6 +85,9 @@ func run() error {
 	apiRoutes.Mount("/skills", skills.NewHandlers(store, rendererClient, cfg.LocalStoragePath, authService))
 	apiRoutes.Mount("/generation", generation.NewHandlers(generationService, authService, rendererClient))
 	apiRoutes.Mount("/export", exportapi.NewHandlers(store, rendererClient, cfg.LocalStoragePath, authService))
+	comments.RegisterRoutes(apiRoutes, store, authService)
+	profile.RegisterRoutes(apiRoutes, store, authService)
+	versions.RegisterRoutes(apiRoutes, store, authService)
 	apiRoutes.Mount("/admin", admin.NewHandlers(
 		store, authService, generationQueue, cfg.RendererURL, client,
 		templates.NewAdminHandlers(templateService, authService),

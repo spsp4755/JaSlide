@@ -62,6 +62,26 @@ func TestLoadRejectsInvalidJWTLifetime(t *testing.T) {
 	}
 }
 
+func TestLoadBuildsImmutableLLMEndpointAndEnvironmentAllowlists(t *testing.T) {
+	t.Setenv("NODE_ENV", "development")
+	t.Setenv("OPENAI_BASE_URL", "http://vllm.internal:8000/v1")
+	t.Setenv("LLM_ALLOWED_ENDPOINTS", "http://sglang.internal:30000/v1")
+	t.Setenv("LLM_ALLOWED_API_KEY_ENV_VARS", "VLLM_API_KEY,SGLANG_API_KEY")
+
+	config, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.AllowedLLMEndpoints) != 2 ||
+		config.AllowedLLMEndpoints[0] != "http://vllm.internal:8000/v1" ||
+		config.AllowedLLMEndpoints[1] != "http://sglang.internal:30000/v1" {
+		t.Fatalf("endpoint allowlist = %#v", config.AllowedLLMEndpoints)
+	}
+	if len(config.AllowedLLMAPIKeyEnvVars) != 2 || config.AllowedLLMAPIKeyEnvVars[1] != "SGLANG_API_KEY" {
+		t.Fatalf("environment allowlist = %#v", config.AllowedLLMAPIKeyEnvVars)
+	}
+}
+
 func TestLoadRequiresLongJWTSecretInProduction(t *testing.T) {
 	setValidProductionEnvironment(t)
 	t.Setenv("JWT_SECRET", strings.Repeat("a", 31))
