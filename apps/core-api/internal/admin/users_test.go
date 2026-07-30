@@ -19,9 +19,8 @@ import (
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 )
 
-// generation.service.ts's admin console needs to create, edit and deactivate user
-// accounts the same way the retired NestJS AdminUsersController did — this is the
-// last piece the Task 8 route-parity audit found missing before apps/api can go.
+// The admin console needs to create, edit and deactivate user accounts the same
+// way the retired NestJS AdminUsersController did.
 func TestAdminCanCreateUpdateAndDeactivateUsers(t *testing.T) {
 	databaseURL := os.Getenv("JASLIDE_TEST_DATABASE_URL")
 	redisURL := os.Getenv("JASLIDE_TEST_REDIS_URL")

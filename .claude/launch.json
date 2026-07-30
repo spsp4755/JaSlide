@@ -4,7 +4,7 @@
         {
             "name": "web-dev",
             "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["--filter", "@jaslide/web", "exec", "next", "dev", "-p", "3010"],
+            "runtimeArgs": ["--filter", "@jaslide/web", "exec", "vite", "--port", "3010"],
             "port": 3010
         }
     ]

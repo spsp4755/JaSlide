@@ -1,1 +1,0 @@
-src/modules/presentations/presentations.service.spec.ts(111,17): error TS2322: Type '"TEXT"' is not assignable to type 'SourceType'.

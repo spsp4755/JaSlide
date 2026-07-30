@@ -9,7 +9,6 @@ ENV VITE_API_URL=${VITE_API_URL}
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
 COPY packages ./packages
 COPY apps/web ./apps/web
-COPY apps/api/src/assets/fonts ./apps/api/src/assets/fonts
 
 RUN pnpm install --frozen-lockfile --trust-lockfile
 RUN pnpm --filter @jaslide/shared build
