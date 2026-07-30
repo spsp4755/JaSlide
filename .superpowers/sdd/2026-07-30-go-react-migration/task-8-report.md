@@ -167,6 +167,46 @@
   org-scoped admin getting full access to every organization's users/jobs/
   models looks like the old system's privilege-escalation bug, not a feature
   to preserve) — **left as-is**, not "fixed" to match legacy behavior.
-- Remaining before `apps/api` deletion: delete `apps/api`, `docker/api.Dockerfile`;
-  remove Prisma/NestJS/Next.js packages and build scripts; remove `.next`/Node
-  server config; update CI to build only Go API + Vite + Python renderer.
+- Deleted `apps/api` (227 files) and `docker/api.Dockerfile`. Supporting
+  cleanup so the rest of the stack builds without it:
+  - Relocated the two bundled Noto Sans KR fonts from
+    `apps/api/src/assets/fonts` into `apps/web/public/fonts`;
+    `docker/web.Dockerfile` no longer copies from `apps/api`.
+  - `.github/workflows/ci.yml`: replaced `prisma migrate deploy`/
+    `db:generate` with `go run ./cmd/migrate`; replaced the
+    `docker/api.Dockerfile` build/push step with `docker/core-api.Dockerfile`
+    tagged `core-api`; fixed stale artifact paths (`apps/api/dist` dropped,
+    `apps/web/.next` → `apps/web/dist`, which was already broken
+    independent of this change).
+  - `pnpm-workspace.yaml`: dropped the NestJS/Prisma-only `allowBuilds`
+    entries (`@nestjs/core`, `@prisma/client`, `@prisma/engines`, `prisma`,
+    `bcrypt`); confirmed via `grep` that no other `package.json` in the
+    workspace references them.
+  - `turbo.json`: dropped the dead `.next/**`/`!.next/cache/**` build output
+    globs (apps/web has had no `next.config.*` or `.next` output since the
+    Vite migration).
+  - `.claude/launch.json`: the local dev-server config still invoked
+    `next dev`; updated to `vite --port 3010` (apps/web's actual `dev`
+    script has been Vite since Task 6).
+  - Compose files (`docker-compose.yml`, `docker-compose.offline.yml`,
+    `docker-compose.override.yml`, `docker-compose.diagnostics.yml`),
+    `deploy/k8s/jaslide-k8s.yaml`, and `scripts/release/build-amd64-images.sh`
+    were already fully on `jaslide/core-api` — no changes needed there.
+- Full verification after deletion: `pnpm install` (lockfile fully dropped
+  `apps/api` and its ~641 transitive packages, no manual lockfile edits
+  needed), `pnpm build` (web builds clean), `pnpm test` (99 node:test +
+  35 vitest tests, all passing, including the relocated-font check), the
+  full Go test suite (all packages pass except the one pre-existing,
+  unrelated `internal/db` search_path environment artifact noted under
+  P1-6/P1-7), and a real browser check on the Vite dev server: both
+  `/fonts/NotoSansKR-{Regular,Bold}.otf` return 200 and the login page
+  renders correctly with Korean text.
+- Known pre-existing issue found but explicitly out of scope: `pnpm lint`
+  fails on `@jaslide/shared` ("No files matching the pattern src/ were
+  found") — reproduced identically on the pre-deletion commit via
+  `git stash`, so it predates and is unrelated to this change. Not fixed
+  here.
+
+**Task 8 / P3 complete.** The repository's production runtime is now Go
+core-api + Vite React SPA + Python renderer only, with no NestJS or
+Next.js code remaining.
