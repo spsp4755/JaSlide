@@ -36,10 +36,37 @@ func TestConfigLoadRejectsMissingProductionDependencies(t *testing.T) {
 			t.Setenv("JWT_SECRET", "test-secret")
 			t.Setenv("RENDERER_URL", "http://renderer:8000")
 			t.Setenv("PUBLIC_ORIGIN", "https://slides.internal")
+			t.Setenv("CORS_ORIGIN", "")
 			t.Setenv(missing, "")
 
 			if _, err := config.Load(); err == nil {
 				t.Fatalf("Load() error = nil when %s is empty", missing)
+			}
+		})
+	}
+}
+
+func TestConfigLoadRejectsWrongProductionDependencySchemes(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{"database", "DATABASE_URL", "mysql://database:3306/jaslide"},
+		{"redis", "REDIS_URL", "http://redis:6379"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("NODE_ENV", "production")
+			t.Setenv("DATABASE_URL", "postgresql://postgres:secret@database:5432/jaslide")
+			t.Setenv("REDIS_URL", "redis://redis:6379")
+			t.Setenv("JWT_SECRET", "test-secret")
+			t.Setenv("RENDERER_URL", "http://renderer:8000")
+			t.Setenv("PUBLIC_ORIGIN", "https://slides.internal")
+			t.Setenv("CORS_ORIGIN", "")
+			t.Setenv(test.key, test.value)
+
+			if _, err := config.Load(); err == nil {
+				t.Fatalf("Load() error = nil for %s", test.value)
 			}
 		})
 	}

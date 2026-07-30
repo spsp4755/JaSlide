@@ -45,10 +45,10 @@ func Load() (Config, error) {
 				return Config{}, fmt.Errorf("%s is required in production", name)
 			}
 		}
-		if err := validateURL("DATABASE_URL", config.DatabaseURL); err != nil {
+		if err := validateURLScheme("DATABASE_URL", config.DatabaseURL, "postgres", "postgresql"); err != nil {
 			return Config{}, err
 		}
-		if err := validateURL("REDIS_URL", config.RedisURL); err != nil {
+		if err := validateURLScheme("REDIS_URL", config.RedisURL, "redis", "rediss"); err != nil {
 			return Config{}, err
 		}
 		if err := validateHTTPURL("RENDERER_URL", config.RendererURL); err != nil {
@@ -80,12 +80,18 @@ func validateURL(name, raw string) error {
 }
 
 func validateHTTPURL(name, raw string) error {
+	return validateURLScheme(name, raw, "http", "https")
+}
+
+func validateURLScheme(name, raw string, schemes ...string) error {
 	if err := validateURL(name, raw); err != nil {
 		return err
 	}
 	parsed, _ := url.Parse(raw)
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("%s must use http or https", name)
+	for _, scheme := range schemes {
+		if parsed.Scheme == scheme {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("%s must use %s", name, strings.Join(schemes, " or "))
 }
