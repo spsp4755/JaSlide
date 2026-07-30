@@ -57,6 +57,16 @@
   returned 201 and the user row was present in PostgreSQL.
 - The isolated containers, network, and volumes were removed after the checks.
 
+### P0-3 Existing Prisma Database Acceptance
+
+- The migration integration test created a Prisma-managed schema with three
+  completed migration ledger rows and a separate row containing `preserved`.
+- The Go migrator adopted the three matching Prisma migrations, applied the
+  remaining three migrations, recorded all six in the JaSlide ledger, and kept
+  the probe row unchanged.
+- A second migration run was idempotent. A non-empty unmanaged schema was
+  rejected without creating a JaSlide migration ledger.
+
 ## Automated Verification
 
 - `go test ./...` — passed.
