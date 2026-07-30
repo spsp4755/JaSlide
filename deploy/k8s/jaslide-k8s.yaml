@@ -1,18 +1,18 @@
 # JaSlide k8s 배포 매니페스트 — 레지스트리 없이 배포
 #
 # 이미지 준비 (인터넷 되는 amd64 빌드 PC에서 — 상세는 docs/deployment.md 참고):
-#   ./scripts/release/build-amd64-images.sh v0.6.0
-#   # dist/release/jaslide-v0.6.0-linux-amd64-images.tar.gz 및 SHA-256 파일을 반입
+#   ./scripts/release/build-amd64-images.sh v0.6.1
+#   # dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz 및 SHA-256 파일을 반입
 #
 # 폐쇄망 반입 후, 각 워커 노드 전부에서:
-#   sudo ctr -n k8s.io images import jaslide-v0.6.0-linux-amd64-images.tar.gz
+#   sudo ctr -n k8s.io images import jaslide-v0.6.1-linux-amd64-images.tar.gz
 #
 # 마스터에서:
 #   kubectl apply -f namespace.yaml
 #   kubectl apply -f jaslide-k8s.yaml
 #
 # 아래에서 CHANGE_ME 와 Ingress host만 실제 값으로 바꾸면 됩니다.
-# Harbor 등 레지스트리를 쓰는 경우에만 image를 <레지스트리>/jaslide/api:v0.6.0 형태로
+# Harbor 등 레지스트리를 쓰는 경우에만 image를 <레지스트리>/jaslide/api:v0.6.1 형태로
 # 바꾸고, 각 Deployment에 imagePullSecrets를 추가하세요.
 apiVersion: v1
 kind: Secret
@@ -62,7 +62,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: jaslide/api:v0.6.0     # 워커에 import한 이미지 그대로 (빌드 스크립트가 이 태그로 만듦)
+          image: jaslide/api:v0.6.1     # 워커에 import한 이미지 그대로 (빌드 스크립트가 이 태그로 만듦)
           imagePullPolicy: IfNotPresent  # 노드에 있는 이미지 사용 (폐쇄망: 밖에서 pull 안 함)
           ports: [{ containerPort: 4000 }]
           envFrom:
@@ -117,7 +117,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: jaslide/web:v0.6.0
+          image: jaslide/web:v0.6.1
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 3000 }]
           envFrom:
@@ -154,7 +154,7 @@ spec:
     spec:
       containers:
         - name: renderer
-          image: jaslide/renderer:v0.6.0
+          image: jaslide/renderer:v0.6.1
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8000 }]
           readinessProbe:
@@ -189,7 +189,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: jaslide/redis:v0.6.0
+          image: jaslide/redis:v0.6.1
           imagePullPolicy: IfNotPresent
           args: ["--appendonly", "yes"]   # 재시작 시 큐 유실 방지
           ports: [{ containerPort: 6379 }]
@@ -237,7 +237,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: jaslide/postgres:v0.6.0
+          image: jaslide/postgres:v0.6.1
           imagePullPolicy: IfNotPresent
           env:
             - { name: POSTGRES_USER, value: jaslide }

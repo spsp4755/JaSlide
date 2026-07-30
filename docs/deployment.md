@@ -25,23 +25,23 @@ After the first login, register the internal model in **Admin > Models** and run
 
 ## Kubernetes, no registry (closed network)
 
-Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [namespace.yaml](../deploy/k8s/namespace.yaml). No Harbor, no `imagePullSecrets` — every worker node imports the image tar directly into containerd, and the build script already tags images exactly as the manifest references them (`jaslide/api:v0.6.0`, etc.), so there is no retagging step either. Replace every `CHANGE_ME` and the Ingress host before applying.
+Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [namespace.yaml](../deploy/k8s/namespace.yaml). No Harbor, no `imagePullSecrets` — every worker node imports the image tar directly into containerd, and the build script already tags images exactly as the manifest references them (`jaslide/api:v0.6.1`, etc.), so there is no retagging step either. Replace every `CHANGE_ME` and the Ingress host before applying.
 
 **1. Build images on an internet-connected machine.** The release image defaults to relative `/api`, so it remains valid when the final Ingress hostname changes:
 
 ```bash
-./scripts/release/build-amd64-images.sh v0.6.0
+./scripts/release/build-amd64-images.sh v0.6.1
 ```
 
 **2. Save to tar and carry into the closed network:**
 
-The script produces `dist/release/jaslide-v0.6.0-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
+The script produces `dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
 
 **3. Import on every worker node (inside the closed network):**
 
 ```bash
-shasum -a 256 -c jaslide-v0.6.0-linux-amd64-images.tar.gz.sha256
-sudo ctr -n k8s.io images import jaslide-v0.6.0-linux-amd64-images.tar.gz
+shasum -a 256 -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
+sudo ctr -n k8s.io images import jaslide-v0.6.1-linux-amd64-images.tar.gz
 sudo ctr -n k8s.io images ls | grep jaslide   # confirm all 5 images landed
 ```
 
@@ -55,7 +55,7 @@ kubectl apply -f deploy/k8s/jaslide-k8s.yaml
 kubectl -n jaslide get pods -w
 ```
 
-**5. Every later release:** repeat steps 1-3 for the new tag, edit the image tag (`v0.6.0` → `v0.6.0`) on the 5 `image:` lines in `jaslide-k8s.yaml`, then:
+**5. Every later release:** repeat steps 1-3 for the new tag, edit the image tag (`v0.6.1` → `v0.6.1`) on the 5 `image:` lines in `jaslide-k8s.yaml`, then:
 
 ```bash
 kubectl apply -f deploy/k8s/jaslide-k8s.yaml
@@ -65,4 +65,4 @@ No `kubectl rollout restart` needed — each release uses a distinct image tag, 
 
 Readiness: `curl https://jaslide.internal/api/health` once the Ingress resolves. The default web image uses `/api`; rebuild it only when an external API origin is deliberately configured.
 
-**Using a registry instead (e.g. Harbor):** change each `image:` to `<registry>/jaslide/<service>:v0.6.0`, add `imagePullSecrets: [{ name: <your-secret> }]` under each Deployment's pod spec, and create that secret once with `kubectl create secret docker-registry <name> --docker-server=... --dry-run=client -o yaml > secret.local.yaml && kubectl apply -f secret.local.yaml` (keep that file out of git — it holds real credentials).
+**Using a registry instead (e.g. Harbor):** change each `image:` to `<registry>/jaslide/<service>:v0.6.1`, add `imagePullSecrets: [{ name: <your-secret> }]` under each Deployment's pod spec, and create that secret once with `kubectl create secret docker-registry <name> --docker-server=... --dry-run=client -o yaml > secret.local.yaml && kubectl apply -f secret.local.yaml` (keep that file out of git — it holds real credentials).

@@ -9,9 +9,9 @@
 `linux/amd64` 이미지는 빌드 PC의 CPU와 무관하게 명시적으로 생성합니다. 웹은 기본적으로 동일 Ingress의 상대 경로 `/api`를 사용하므로 사내 도메인을 이미지에 고정하지 않습니다.
 
 ```bash
-./scripts/release/build-amd64-images.sh v0.6.0
-# dist/release/jaslide-v0.6.0-linux-amd64-images.tar.gz
-# dist/release/jaslide-v0.6.0-linux-amd64-images.tar.gz.sha256
+./scripts/release/build-amd64-images.sh v0.6.1
+# dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz
+# dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
 ```
 
 개발 또는 빌드 재현용 pnpm 저장소를 함께 전달해야 한다면, 신뢰하는 lockfile과 준비된 저장소를 사용합니다.
@@ -25,25 +25,25 @@ tar -czf jaslide-pnpm-store.tar.gz pnpm-store
 
 ## 2. 폐쇄망 반입 및 실행
 
-1. `jaslide-v0.6.0-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
+1. `jaslide-v0.6.1-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
 2. Kubernetes 배포 환경에서는 **레지스트리 없이** 각 워커 노드의 containerd로 직접 import합니다. 실제 `kubectl apply` 절차는 [Kubernetes 배포 문서](deployment.md#kubernetes-no-registry-closed-network)를 따릅니다.
 
 ```bash
-shasum -a 256 -c jaslide-v0.6.0-linux-amd64-images.tar.gz.sha256
-sudo ctr -n k8s.io images import jaslide-v0.6.0-linux-amd64-images.tar.gz
+shasum -a 256 -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
+sudo ctr -n k8s.io images import jaslide-v0.6.1-linux-amd64-images.tar.gz
 sudo ctr -n k8s.io images ls | grep jaslide   # 5개(api/web/renderer/postgres/redis) 모두 amd64인지 확인
 ```
 
 Harbor 등 레지스트리를 쓰기로 했다면 대신 Podman으로 로드해 태그·푸시합니다:
 
 ```bash
-podman load -i jaslide-v0.6.0-linux-amd64-images.tar.gz
-podman image inspect --format '{{.Architecture}}' jaslide/api:v0.6.0  # amd64
-podman tag jaslide/api:v0.6.0 <레지스트리>/jaslide/api:v0.6.0
-podman push <레지스트리>/jaslide/api:v0.6.0
+podman load -i jaslide-v0.6.1-linux-amd64-images.tar.gz
+podman image inspect --format '{{.Architecture}}' jaslide/api:v0.6.1  # amd64
+podman tag jaslide/api:v0.6.1 <레지스트리>/jaslide/api:v0.6.1
+podman push <레지스트리>/jaslide/api:v0.6.1
 ```
 
-`docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.6.0`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
+`docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.6.1`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
 
 ## 3. 폐쇄망에서 소스 빌드가 필요한 경우
 
