@@ -1,6 +1,11 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
+import { useAuthStore } from '@/stores/auth-store';
 
 export const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+
+interface AuthRequestConfig extends AxiosRequestConfig {
+    skipAuthRedirect?: boolean;
+}
 
 export const assetUrl = (url: string) => {
     if (!url.startsWith('/') || !apiBaseUrl.startsWith('http')) return url;
@@ -19,9 +24,15 @@ const api = axios.create({
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        const request = error.config as AuthRequestConfig | undefined;
         if (error.response?.status === 401) {
-            if (typeof window !== 'undefined') {
-                window.location.href = '/login';
+            useAuthStore.getState().clearAuth();
+            if (
+                !request?.skipAuthRedirect &&
+                typeof window !== 'undefined' &&
+                window.location.pathname !== '/login'
+            ) {
+                window.location.assign('/login');
             }
         }
         return Promise.reject(error);
@@ -35,7 +46,7 @@ export const authApi = {
     register: (data: { email: string; password: string; name?: string }) =>
         api.post('/auth/register', data),
     logout: () => api.post('/auth/logout'),
-    me: () => api.get('/auth/me'),
+    me: () => api.get('/auth/me', { skipAuthRedirect: true } as AuthRequestConfig),
 };
 
 // Presentations

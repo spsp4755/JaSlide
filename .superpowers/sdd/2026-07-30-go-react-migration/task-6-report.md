@@ -50,3 +50,28 @@ The route table includes:
 
 Authenticated API/editor data flow was not exercised against the in-progress Go API in this task.
 Cookie handling, same-origin `/api` routing, and unauthenticated redirect behavior are covered; the combined Go API + Vite end-to-end test belongs to the integration phase.
+
+## Review Follow-up
+
+- Added a 100 MiB production Nginx request limit so the proxy does not reject the
+  API's 20–64 MiB upload contracts at Nginx's 1 MiB default.
+- Added `/uploads` to the Vite development proxy.
+- Added an application boot request to `GET /auth/me`. Protected routes wait for
+  this HttpOnly-cookie verification instead of trusting persisted browser state.
+- Added centralized authenticated and admin route guards.
+- A 401 during boot clears stale state and sends protected routes to `/login`;
+  authenticated non-admin users are sent from admin routes to `/dashboard`.
+- Replaced route-table-only assertions with rendered React Router tests covering
+  direct login, editor parameter delivery, unauthenticated editor access,
+  non-admin rejection, Keycloak-style fresh cookie hydration, and 401 recovery.
+- Removed the ignored `apps/web/.next` output left by the retired runtime.
+
+### Follow-up Verification
+
+- 99 existing tests and 34 rendered Vite/router tests passed.
+- TypeScript and the Vite production build passed with 2,557 transformed modules.
+- The production Docker image accepted 2,097,152-byte POST bodies through both
+  `/api` and `/uploads`; both reached the upstream and returned 200 rather than 413.
+- All 27 hard-refresh paths still returned the SPA entry document.
+- Browser QA opened `/editor/deck-123` against an upstream returning 401 and
+  observed `/login`, the complete login form, and no browser console warnings or errors.

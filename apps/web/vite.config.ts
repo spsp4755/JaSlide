@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
@@ -13,6 +13,7 @@ export default defineConfig({
         port: 3000,
         proxy: {
             '/api': 'http://localhost:4000',
+            '/uploads': 'http://localhost:4000',
             '/socket.io': {
                 target: 'http://localhost:4000',
                 ws: true,
@@ -22,5 +23,8 @@ export default defineConfig({
     preview: {
         port: 3000,
         host: '0.0.0.0',
+    },
+    test: {
+        setupFiles: ['./test/setup.ts'],
     },
 });
