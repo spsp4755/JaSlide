@@ -51,6 +51,7 @@ func NewHandlers(service *Service, authService *auth.Service) http.Handler {
 func NewDownloadHandler(root string) http.Handler {
 	root = filepath.Clean(root)
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("X-Content-Type-Options", "nosniff")
 		key := chi.URLParam(request, "*")
 		if key == "" {
 			key = strings.TrimPrefix(request.URL.Path, "/uploads/")
@@ -60,10 +61,28 @@ func NewDownloadHandler(root string) http.Handler {
 			http.NotFound(writer, request)
 			return
 		}
+		if symlink, pathErr := pathHasSymlink(root, target); pathErr != nil || symlink {
+			http.NotFound(writer, request)
+			return
+		}
 		info, err := os.Stat(target)
 		if err != nil || info.IsDir() {
 			http.NotFound(writer, request)
 			return
+		}
+		head, err := readHead(target)
+		if err != nil {
+			http.NotFound(writer, request)
+			return
+		}
+		mimeType, renderable := renderableStoredType(filepath.Base(target), head)
+		if renderable {
+			writer.Header().Set("Content-Type", mimeType)
+		} else {
+			writer.Header().Set("Content-Type", "application/octet-stream")
+			writer.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
+				"filename": filepath.Base(target),
+			}))
 		}
 		http.ServeFile(writer, request, target)
 	})
@@ -164,10 +183,11 @@ func (handler *handlers) chart(writer http.ResponseWriter, request *http.Request
 	var input struct {
 		Data   chartData `json:"data"`
 		Config struct {
-			Width         int   `json:"width"`
-			Height        int   `json:"height"`
-			ShowLegend    *bool `json:"showLegend"`
-			ShowGridLines *bool `json:"showGridLines"`
+			Width         int    `json:"width"`
+			Height        int    `json:"height"`
+			Theme         string `json:"theme"`
+			ShowLegend    *bool  `json:"showLegend"`
+			ShowGridLines *bool  `json:"showGridLines"`
 		} `json:"config"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 1<<20))
@@ -194,13 +214,16 @@ func (handler *handlers) chart(writer http.ResponseWriter, request *http.Request
 	}
 	showLegend := input.Config.ShowLegend == nil || *input.Config.ShowLegend
 	showGrid := input.Config.ShowGridLines == nil || *input.Config.ShowGridLines
-	svg := chartSVG(input.Data, width, height, showLegend, showGrid)
+	svg := chartSVG(input.Data, width, height, input.Config.Theme, showLegend, showGrid)
 	writeJSON(writer, http.StatusCreated, map[string]any{"svgCode": svg, "config": input.Data})
 }
 
-func chartSVG(data chartData, width, height int, showLegend, showGrid bool) string {
+func chartSVG(data chartData, width, height int, theme string, showLegend, showGrid bool) string {
 	var svg strings.Builder
 	fmt.Fprintf(&svg, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d">`, width, height, width, height)
+	if theme == "dark" {
+		svg.WriteString(`<rect width="100%" height="100%" fill="#1F2937"/>`)
+	}
 	if data.Title != "" {
 		fmt.Fprintf(&svg, `<text x="%d" y="24" text-anchor="middle" fill="#111827" font-size="16" font-weight="600">%s</text>`, width/2, escapeXML(data.Title))
 	}
@@ -284,11 +307,11 @@ func chartSVG(data chartData, width, height int, showLegend, showGrid bool) stri
 				ix2, iy2 := centerX+inner*math.Cos(next), centerY+inner*math.Sin(next)
 				fmt.Fprintf(&svg, `<path d="M %.2f %.2f A %.2f %.2f 0 %d 1 %.2f %.2f L %.2f %.2f A %.2f %.2f 0 %d 0 %.2f %.2f Z" fill="%s"/>`,
 					x1, y1, radius, radius, large, x2, y2, ix2, iy2, inner, inner, large, ix1, iy1,
-					escapeXML(colorAt(data.Datasets[0].BackgroundColor, index, chartPalette[index%len(chartPalette)])))
+					escapeXML(pieColor(data.Datasets[0].BackgroundColor, index)))
 			} else {
 				fmt.Fprintf(&svg, `<path d="M %.2f %.2f L %.2f %.2f A %.2f %.2f 0 %d 1 %.2f %.2f Z" fill="%s"/>`,
 					centerX, centerY, x1, y1, radius, radius, large, x2, y2,
-					escapeXML(colorAt(data.Datasets[0].BackgroundColor, index, chartPalette[index%len(chartPalette)])))
+					escapeXML(pieColor(data.Datasets[0].BackgroundColor, index)))
 			}
 			angle = next
 		}
@@ -301,11 +324,19 @@ func chartSVG(data chartData, width, height int, showLegend, showGrid bool) stri
 		}
 	}
 	if showLegend {
-		for index, dataset := range data.Datasets {
-			y := 50 + index*20
-			fmt.Fprintf(&svg, `<rect x="%d" y="%d" width="12" height="12" fill="%s" rx="2"/><text x="%d" y="%d" fill="#6B7280" font-size="11">%s</text>`,
-				width-120, y, escapeXML(colorAt(dataset.BackgroundColor, 0, dataset.BorderColor)),
-				width-102, y+10, escapeXML(dataset.Label))
+		if data.Type == "pie" || data.Type == "doughnut" {
+			for index, label := range data.Labels {
+				y := 50 + index*20
+				fmt.Fprintf(&svg, `<rect x="20" y="%d" width="12" height="12" fill="%s" rx="2"/><text x="38" y="%d" fill="#6B7280" font-size="11">%s</text>`,
+					y, escapeXML(pieColor(data.Datasets[0].BackgroundColor, index)), y+10, escapeXML(label))
+			}
+		} else {
+			for index, dataset := range data.Datasets {
+				y := 50 + index*20
+				fmt.Fprintf(&svg, `<rect x="%d" y="%d" width="12" height="12" fill="%s" rx="2"/><text x="%d" y="%d" fill="#6B7280" font-size="11">%s</text>`,
+					width-120, y, escapeXML(colorAt(dataset.BackgroundColor, 0, dataset.BorderColor)),
+					width-102, y+10, escapeXML(dataset.Label))
+			}
 		}
 	}
 	svg.WriteString(`</svg>`)
@@ -328,12 +359,52 @@ func colorAt(value any, index int, fallback string) string {
 	return fallback
 }
 
+func pieColor(value any, index int) string {
+	if colors, ok := value.([]any); ok && index < len(colors) {
+		if color, ok := colors[index].(string); ok && color != "" {
+			return color
+		}
+	}
+	return chartPalette[index%len(chartPalette)]
+}
+
 func rawFilename(disposition string) string {
 	_, params, err := mime.ParseMediaType(disposition)
 	if err != nil {
 		return ""
 	}
 	return params["filename"]
+}
+
+func readHead(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	head := make([]byte, 512)
+	count, err := file.Read(head)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return head[:count], nil
+}
+
+func renderableStoredType(filename string, head []byte) (string, bool) {
+	mimeType := detectedMediaType(head)
+	extension := strings.ToLower(filepath.Ext(filename))
+	for _, policy := range uploadMediaPolicy {
+		allowed, exists := policy[mimeType]
+		if !exists {
+			continue
+		}
+		for _, candidate := range allowed {
+			if extension == candidate {
+				return mimeType, true
+			}
+		}
+	}
+	return "", false
 }
 
 func escapeXML(value string) string {

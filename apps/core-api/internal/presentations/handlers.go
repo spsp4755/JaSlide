@@ -91,10 +91,49 @@ func (handler *handlers) getShared(writer http.ResponseWriter, request *http.Req
 }
 
 func (handler *handlers) updatePresentation(writer http.ResponseWriter, request *http.Request) {
-	var input UpdatePresentationInput
-	if err := decodeStrict(writer, request, &input); err != nil {
+	var raw map[string]json.RawMessage
+	if err := decodeStrict(writer, request, &raw); err != nil {
 		writeBadRequest(writer, err.Error())
 		return
+	}
+	allowed := map[string]bool{"title": true, "description": true, "templateId": true, "isPublic": true}
+	var input UpdatePresentationInput
+	for name, value := range raw {
+		if !allowed[name] {
+			writeBadRequest(writer, "property "+name+" should not exist")
+			return
+		}
+		switch name {
+		case "title", "description", "templateId":
+			field := OptionalString{Present: true}
+			if string(value) != "null" {
+				var text string
+				if json.Unmarshal(value, &text) != nil {
+					writeBadRequest(writer, name+" must be a string")
+					return
+				}
+				field.Value = &text
+			}
+			switch name {
+			case "title":
+				input.Title = field
+			case "description":
+				input.Description = field
+			case "templateId":
+				input.TemplateID = field
+			}
+		case "isPublic":
+			field := OptionalBool{Present: true}
+			if string(value) != "null" {
+				var boolean bool
+				if json.Unmarshal(value, &boolean) != nil {
+					writeBadRequest(writer, "isPublic must be a boolean value")
+					return
+				}
+				field.Value = &boolean
+			}
+			input.IsPublic = field
+		}
 	}
 	result, err := handler.service.UpdatePresentation(
 		request.Context(), chi.URLParam(request, "id"), userID(request), input,

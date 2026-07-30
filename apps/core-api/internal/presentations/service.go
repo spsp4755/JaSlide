@@ -61,8 +61,18 @@ type CreatePresentationInput struct {
 }
 
 type UpdatePresentationInput struct {
-	Title, Description, TemplateID *string
-	IsPublic                       *bool
+	Title, Description, TemplateID OptionalString
+	IsPublic                       OptionalBool
+}
+
+type OptionalString struct {
+	Present bool
+	Value   *string
+}
+
+type OptionalBool struct {
+	Present bool
+	Value   *bool
 }
 
 type CreateSlideInput struct {
@@ -128,7 +138,10 @@ func (service *Service) UpdatePresentation(ctx context.Context, id, userID strin
 		return db.PresentationDetail{}, err
 	}
 	result, err := service.store.UpdatePresentation(ctx, id, db.PresentationUpdate{
-		Title: input.Title, Description: input.Description, TemplateID: input.TemplateID, IsPublic: input.IsPublic,
+		TitleSet: input.Title.Present, Title: input.Title.Value,
+		DescriptionSet: input.Description.Present, Description: input.Description.Value,
+		TemplateIDSet: input.TemplateID.Present, TemplateID: input.TemplateID.Value,
+		IsPublicSet: input.IsPublic.Present, IsPublic: input.IsPublic.Value,
 	})
 	return result, mapStoreError(err)
 }
@@ -192,15 +205,15 @@ func (service *Service) SlideTemplateHTML(ctx context.Context, presentationID, u
 	if selected == nil {
 		return nil, ErrNotFound
 	}
-	content := rawObject(selected.Content)
-	if html, ok := content["html"].(string); ok && strings.TrimSpace(html) != "" {
+	content := rawFields(selected.Content)
+	if html, ok := rawString(content["html"]); ok && strings.TrimSpace(html) != "" {
 		return map[string]string{"html": html}, nil
 	}
 	if presentation.Template != nil {
-		config := rawObject(presentation.Template.Config)
-		index, validIndex := integer(content["templateIndex"])
-		if slides, ok := config["htmlSlides"].([]any); ok && validIndex && index >= 0 && index < len(slides) {
-			if html, ok := slides[index].(string); ok {
+		config := rawFields(presentation.Template.Config)
+		index, validIndex := rawInteger(content["templateIndex"])
+		if slides, ok := rawArray(config["htmlSlides"]); ok && validIndex && index >= 0 && index < len(slides) {
+			if html, ok := rawString(slides[index]); ok {
 				return map[string]string{"html": html}, nil
 			}
 		}
@@ -295,29 +308,30 @@ func (service *Service) GetScene(ctx context.Context, id, userID string) (json.R
 	if slide.OwnerID != userID && !slide.IsPublic {
 		return nil, ErrForbidden
 	}
-	content, config := rawObject(slide.Content), rawObject(slide.TemplateConfig)
-	source := object(config["source"])
-	if source["kind"] == "pptx" {
-		key, _ := source["storageKey"].(string)
+	content, config := rawFields(slide.Content), rawFields(slide.TemplateConfig)
+	source := rawFields(config["source"])
+	sourceKind, _ := rawString(source["kind"])
+	if sourceKind == "pptx" {
+		key, _ := rawString(source["storageKey"])
 		if key == "" {
-			key, _ = object(config["pptxTemplate"])["storageKey"].(string)
+			key, _ = rawString(rawFields(config["pptxTemplate"])["storageKey"])
 		}
 		sourcePPTX, err := service.readUpload(key)
 		if err != nil {
 			return nil, fmt.Errorf("%w: PPTX source file is unavailable", ErrBadRequest)
 		}
-		index, _ := integer(content["templateIndex"])
+		index, _ := rawInteger(content["templateIndex"])
 		return service.renderer(ctx, "/api/scene/pptx/load", map[string]any{
 			"sourcePptx": base64.StdEncoding.EncodeToString(sourcePPTX), "templateIndex": index,
-			"objectEdits": arrayOrEmpty(content["objectEdits"]),
+			"objectEdits": rawOrEmptyArray(content["objectEdits"]),
 		})
 	}
-	html, _ := content["html"].(string)
+	html, _ := rawString(content["html"])
 	if strings.TrimSpace(html) == "" {
-		index, ok := integer(content["templateIndex"])
-		slides, _ := config["htmlSlides"].([]any)
+		index, ok := rawInteger(content["templateIndex"])
+		slides, _ := rawArray(config["htmlSlides"])
 		if ok && index >= 0 && index < len(slides) {
-			html, _ = slides[index].(string)
+			html, _ = rawString(slides[index])
 		}
 	}
 	if strings.TrimSpace(html) == "" {
@@ -334,9 +348,10 @@ func (service *Service) SaveScene(ctx context.Context, id, userID string, scene 
 	if slide.OwnerID != userID {
 		return db.Slide{}, ErrForbidden
 	}
-	content, config := rawObject(slide.Content), rawObject(slide.TemplateConfig)
-	source := object(config["source"])
-	if source["kind"] == "pptx" {
+	content, config := rawFields(slide.Content), rawFields(slide.TemplateConfig)
+	source := rawFields(config["source"])
+	sourceKind, _ := rawString(source["kind"])
+	if sourceKind == "pptx" {
 		response, err := service.renderer(ctx, "/api/scene/pptx/save", map[string]any{"scene": scene})
 		if err != nil {
 			return db.Slide{}, err
@@ -359,7 +374,7 @@ func (service *Service) SaveScene(ctx context.Context, id, userID string, scene 
 		if err := json.Unmarshal(response, &result); err != nil || result.HTML == "" {
 			return db.Slide{}, fmt.Errorf("invalid renderer response")
 		}
-		content["html"] = result.HTML
+		content["html"], _ = json.Marshal(result.HTML)
 	}
 	updated, err := json.Marshal(content)
 	if err != nil {
@@ -443,31 +458,33 @@ func newID() (string, error) {
 	return "go-" + hex.EncodeToString(value[:]), nil
 }
 
-func rawObject(raw json.RawMessage) map[string]any {
-	result := map[string]any{}
+func rawFields(raw json.RawMessage) map[string]json.RawMessage {
+	result := map[string]json.RawMessage{}
 	_ = json.Unmarshal(raw, &result)
 	return result
 }
 
-func object(value any) map[string]any {
-	result, _ := value.(map[string]any)
-	if result == nil {
-		result = map[string]any{}
-	}
-	return result
+func rawString(raw json.RawMessage) (string, bool) {
+	var result string
+	err := json.Unmarshal(raw, &result)
+	return result, err == nil
 }
 
-func integer(value any) (int, bool) {
-	number, ok := value.(float64)
-	if !ok || number != float64(int(number)) {
-		return 0, false
-	}
-	return int(number), true
+func rawInteger(raw json.RawMessage) (int, bool) {
+	var result int
+	err := json.Unmarshal(raw, &result)
+	return result, err == nil
 }
 
-func arrayOrEmpty(value any) any {
-	if value == nil {
-		return []any{}
+func rawArray(raw json.RawMessage) ([]json.RawMessage, bool) {
+	var result []json.RawMessage
+	err := json.Unmarshal(raw, &result)
+	return result, err == nil
+}
+
+func rawOrEmptyArray(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return json.RawMessage("[]")
 	}
-	return value
+	return raw
 }

@@ -97,6 +97,8 @@ type PresentationCreate struct {
 type PresentationUpdate struct {
 	Title, Description, TemplateID *string
 	IsPublic                       *bool
+	TitleSet, DescriptionSet       bool
+	TemplateIDSet, IsPublicSet     bool
 }
 
 type SlideCreate struct {
@@ -239,17 +241,21 @@ func (store *Store) UpdatePresentation(ctx context.Context, id string, input Pre
 		args = append(args, value)
 		parts = append(parts, fmt.Sprintf(`"%s"=$%d`, column, len(args)))
 	}
-	if input.Title != nil {
-		add("title", *input.Title)
+	if input.TitleSet {
+		add("title", nullableString(input.Title))
 	}
-	if input.Description != nil {
-		add("description", *input.Description)
+	if input.DescriptionSet {
+		add("description", nullableString(input.Description))
 	}
-	if input.TemplateID != nil {
-		add("templateId", *input.TemplateID)
+	if input.TemplateIDSet {
+		add("templateId", nullableString(input.TemplateID))
 	}
-	if input.IsPublic != nil {
-		add("isPublic", *input.IsPublic)
+	if input.IsPublicSet {
+		if input.IsPublic == nil {
+			add("isPublic", nil)
+		} else {
+			add("isPublic", *input.IsPublic)
+		}
 	}
 	tag, err := store.pool.Exec(ctx, `UPDATE "Presentation" SET `+strings.Join(parts, ",")+` WHERE "id"=$1`, args...)
 	if err != nil {
@@ -259,6 +265,13 @@ func (store *Store) UpdatePresentation(ctx context.Context, id string, input Pre
 		return PresentationDetail{}, pgx.ErrNoRows
 	}
 	return store.GetPresentationDetail(ctx, id, false)
+}
+
+func nullableString(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func (store *Store) DeletePresentation(ctx context.Context, id string) error {
@@ -299,8 +312,8 @@ func (store *Store) DuplicatePresentation(ctx context.Context, sourceID, newID, 
 	defer tx.Rollback(ctx)
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO "Presentation"
-			("id","title","description","userId","templateId","skillId","status","sourceType","sourceContent","metadata","updatedAt")
-		SELECT $2,"title" || ' (Copy)',"description",$3,"templateId","skillId",'DRAFT',"sourceType","sourceContent","metadata",NOW()
+			("id","title","description","userId","templateId","status","sourceType","sourceContent","updatedAt")
+		SELECT $2,"title" || ' (Copy)',"description",$3,"templateId",'DRAFT',"sourceType","sourceContent",NOW()
 		FROM "Presentation" WHERE "id"=$1`, sourceID, newID, userID)
 	if err != nil {
 		return PresentationDetail{}, err

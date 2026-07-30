@@ -1,10 +1,12 @@
 package assets
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,6 +43,11 @@ func (service *Service) Upload(ctx context.Context, userID, filename, mimeType, 
 	if !assetTypes[assetType] {
 		return db.Asset{}, ErrBadRequest
 	}
+	detectedType, ok := allowedUploadType(assetType, filename, data)
+	if !ok {
+		return db.Asset{}, ErrBadRequest
+	}
+	mimeType = detectedType
 	id, err := assetID()
 	if err != nil {
 		return db.Asset{}, err
@@ -52,6 +59,12 @@ func (service *Service) Upload(ctx context.Context, userID, filename, mimeType, 
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return db.Asset{}, err
+	}
+	if symlink, err := pathHasSymlink(service.root, filepath.Dir(target)); err != nil || symlink {
+		if err != nil {
+			return db.Asset{}, err
+		}
+		return db.Asset{}, ErrBadRequest
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(target), ".upload-*")
 	if err != nil {
@@ -97,23 +110,37 @@ func (service *Service) Get(ctx context.Context, id string) (db.Asset, error) {
 }
 
 func (service *Service) Delete(ctx context.Context, id, userID string) error {
-	asset, err := service.store.DeleteAsset(ctx, id, userID)
+	asset, err := service.store.GetAsset(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
+	if asset.UserID == nil || *asset.UserID != userID {
+		return ErrNotFound
+	}
 	const prefix = "/uploads/"
 	if strings.HasPrefix(asset.URL, prefix) {
 		target, pathErr := localPath(service.root, strings.TrimPrefix(asset.URL, prefix))
-		if pathErr == nil {
-			if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if pathErr != nil {
+			return pathErr
+		}
+		if symlink, err := pathHasSymlink(service.root, target); err != nil || symlink {
+			if err != nil {
 				return err
 			}
+			return ErrBadRequest
+		}
+		if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
 	}
-	return nil
+	_, err = service.store.DeleteAsset(ctx, id, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }
 
 func localPath(root, key string) (string, error) {
@@ -142,6 +169,60 @@ func safeFilename(name string) bool {
 	return true
 }
 
+func pathHasSymlink(root, target string) (bool, error) {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(target))
+	if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) || relative == ".." {
+		return false, ErrBadRequest
+	}
+	current := filepath.Clean(root)
+	for _, part := range strings.Split(relative, string(os.PathSeparator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func allowedUploadType(assetType, filename string, data []byte) (string, bool) {
+	mimeType := detectedMediaType(data)
+	extension := strings.ToLower(filepath.Ext(filename))
+	allowedExtensions, exists := uploadMediaPolicy[assetType][mimeType]
+	if !exists {
+		return "", false
+	}
+	for _, allowed := range allowedExtensions {
+		if extension == allowed {
+			return mimeType, true
+		}
+	}
+	return "", false
+}
+
+func detectedMediaType(data []byte) string {
+	switch {
+	case bytes.HasPrefix(data, []byte{0x00, 0x01, 0x00, 0x00}),
+		bytes.HasPrefix(data, []byte("true")),
+		bytes.HasPrefix(data, []byte("typ1")):
+		return "font/ttf"
+	case bytes.HasPrefix(data, []byte("OTTO")):
+		return "font/otf"
+	case bytes.HasPrefix(data, []byte("wOFF")):
+		return "font/woff"
+	case bytes.HasPrefix(data, []byte("wOF2")):
+		return "font/woff2"
+	default:
+		return strings.Split(http.DetectContentType(data), ";")[0]
+	}
+}
+
 func assetID() (string, error) {
 	var value [16]byte
 	if _, err := rand.Read(value[:]); err != nil {
@@ -152,4 +233,24 @@ func assetID() (string, error) {
 
 var assetTypes = map[string]bool{
 	"IMAGE": true, "ICON": true, "LOGO": true, "BACKGROUND": true, "FONT": true,
+}
+
+var rasterMedia = map[string][]string{
+	"image/png":  {".png"},
+	"image/jpeg": {".jpg", ".jpeg"},
+	"image/gif":  {".gif"},
+	"image/webp": {".webp"},
+}
+
+var uploadMediaPolicy = map[string]map[string][]string{
+	"IMAGE":      rasterMedia,
+	"ICON":       rasterMedia,
+	"LOGO":       rasterMedia,
+	"BACKGROUND": rasterMedia,
+	"FONT": {
+		"font/ttf":   {".ttf"},
+		"font/otf":   {".otf"},
+		"font/woff":  {".woff"},
+		"font/woff2": {".woff2"},
+	},
 }

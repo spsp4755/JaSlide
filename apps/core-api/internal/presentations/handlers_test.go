@@ -61,6 +61,34 @@ func TestEndpointInventoryIncludesEveryNestPresentationSlideAndAssetRoute(t *tes
 			t.Errorf("missing endpoint %s", route)
 		}
 	}
+
+	actualRouter := chi.NewRouter()
+	actualRouter.Mount("/api/presentations", presentations.NewHandlers(nil, nil))
+	actualRouter.Mount("/api/assets", assets.NewHandlers(nil, nil))
+	actual := map[string]bool{"GET /uploads/{}": true}
+	if err := chi.Walk(actualRouter, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		actual[canonicalRoute(method+" "+route)] = true
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	expected := make(map[string]bool, len(endpoints))
+	for _, route := range endpoints {
+		expected[canonicalRoute(route.Method+" "+route.Path)] = true
+	}
+	if len(actual) != len(expected) {
+		t.Fatalf("registered route count = %d, want %d; actual=%v", len(actual), len(expected), actual)
+	}
+	for route := range expected {
+		if !actual[route] {
+			t.Errorf("fixture route is not registered: %s", route)
+		}
+	}
+	for route := range actual {
+		if !expected[route] {
+			t.Errorf("registered route is missing from fixture: %s", route)
+		}
+	}
 }
 
 func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
@@ -124,7 +152,7 @@ func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 
 	t.Run("presentation CRUD and ownership", func(t *testing.T) {
 		created := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations",
-			`{"title":"Weekly report","sourceType":"TEXT","content":"0730 report"}`, http.StatusCreated)
+			`{"title":"Weekly report","description":"clear me","sourceType":"TEXT","content":"0730 report"}`, http.StatusCreated)
 		presentationID := stringField(t, created, "id")
 		t.Cleanup(func() {
 			requestJSON(t, client, ownerToken, http.MethodDelete, server.URL+"/api/presentations/"+presentationID, "", http.StatusOK)
@@ -141,13 +169,54 @@ func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 		if updated["title"] != "0730 weekly report" {
 			t.Fatalf("updated title = %#v", updated["title"])
 		}
+		templateID := "go-template-" + suffix
+		if _, err := connection.Exec(ctx, `
+			INSERT INTO "Template" ("id","name","config","updatedAt")
+			VALUES ($1,'Nullable contract','{}'::jsonb,NOW())`, templateID); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			_, _ = connection.Exec(context.Background(), `DELETE FROM "Template" WHERE "id"=$1`, templateID)
+		})
+		if _, err := connection.Exec(ctx, `
+			UPDATE "Presentation" SET "templateId"=$2 WHERE "id"=$1`, presentationID, templateID); err != nil {
+			t.Fatal(err)
+		}
+		cleared := requestJSON(t, client, ownerToken, http.MethodPut, server.URL+"/api/presentations/"+presentationID,
+			`{"description":null,"templateId":null}`, http.StatusOK)
+		if cleared["description"] != nil || cleared["templateId"] != nil {
+			t.Fatalf("nullable fields after explicit null = description:%#v templateId:%#v, want nil",
+				cleared["description"], cleared["templateId"])
+		}
+		if cleared["title"] != "0730 weekly report" {
+			t.Fatalf("omitted title changed to %#v", cleared["title"])
+		}
 		share := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations/"+presentationID+"/share", `{}`, http.StatusCreated)
 		token := stringField(t, share, "shareToken")
 		requestJSON(t, client, "", http.MethodGet, server.URL+"/api/presentations/shared/"+token, "", http.StatusOK)
-		requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations/"+presentationID+"/duplicate", `{}`, http.StatusCreated)
+		skillID := "go-skill-" + suffix
+		if _, err := connection.Exec(ctx, `
+			INSERT INTO "PresentationSkill"
+				("id","name","category","audience","tone","purpose","outlineGuidance","recommendedSlideCount","updatedAt")
+			VALUES ($1,'Contract skill','test','test','test','test','test',1,NOW())`, skillID); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			_, _ = connection.Exec(context.Background(), `UPDATE "Presentation" SET "skillId"=NULL WHERE "skillId"=$1`, skillID)
+			_, _ = connection.Exec(context.Background(), `DELETE FROM "PresentationSkill" WHERE "id"=$1`, skillID)
+		})
+		if _, err := connection.Exec(ctx, `
+			UPDATE "Presentation" SET "skillId"=$2,"metadata"='{"private":9007199254740993123456789}'::jsonb
+			WHERE "id"=$1`, presentationID, skillID); err != nil {
+			t.Fatal(err)
+		}
+		duplicatePresentation := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations/"+presentationID+"/duplicate", `{}`, http.StatusCreated)
+		if duplicatePresentation["skillId"] != nil || duplicatePresentation["metadata"] != nil {
+			t.Fatalf("duplicate copied skillId/metadata: %#v", duplicatePresentation)
+		}
 
 		first := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations/"+presentationID+"/slides",
-			`{"type":"CONTENT","title":"first","content":{"html":"<div>first</div>"},"order":0}`, http.StatusCreated)
+			`{"type":"CONTENT","title":"first","content":{"html":"<div>first</div>","unrelated":{"large":9007199254740993123456789}},"order":0}`, http.StatusCreated)
 		second := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations/"+presentationID+"/slides",
 			`{"type":"CONTENT","title":"second","content":{"html":"<div>second</div>"},"order":1}`, http.StatusCreated)
 		firstID, secondID := stringField(t, first, "id"), stringField(t, second, "id")
@@ -160,7 +229,7 @@ func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 			server.URL+"/api/presentations/"+presentationID+"/slides/"+firstID, "", http.StatusOK)
 		requestJSON(t, client, ownerToken, http.MethodPut,
 			server.URL+"/api/presentations/"+presentationID+"/slides/"+firstID,
-			`{"title":"first updated","content":{"html":"<div>first</div>"}}`, http.StatusOK)
+			`{"title":"first updated","content":{"html":"<div>first</div>","unrelated":{"large":9007199254740993123456789}}}`, http.StatusOK)
 		requestJSONArray(t, client, ownerToken, http.MethodPost, server.URL+"/api/presentations/"+presentationID+"/slides/reorder",
 			fmt.Sprintf(`{"slideOrders":[{"slideId":%q,"order":1},{"slideId":%q,"order":0}]}`, firstID, secondID), http.StatusCreated)
 		slides := requestJSONArray(t, client, ownerToken, http.MethodGet, server.URL+"/api/presentations/"+presentationID+"/slides", "", http.StatusOK)
@@ -181,10 +250,26 @@ func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 		if loadedScene["version"] != float64(1) || loadedScene["width"] != float64(1920) {
 			t.Fatalf("scene did not survive reload: %#v", loadedScene)
 		}
+		var persisted json.RawMessage
+		if err := connection.QueryRow(ctx, `SELECT "content" FROM "Slide" WHERE "id"=$1`, firstID).Scan(&persisted); err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(persisted, &fields); err != nil {
+			t.Fatal(err)
+		}
+		var unrelated map[string]json.RawMessage
+		if err := json.Unmarshal(fields["unrelated"], &unrelated); err != nil {
+			t.Fatal(err)
+		}
+		if got := string(unrelated["large"]); got != "9007199254740993123456789" {
+			t.Fatalf("unrelated large integer = %s, want exact digits", got)
+		}
 	})
 
 	t.Run("multipart upload, download, ownership, and traversal rejection", func(t *testing.T) {
-		uploaded := upload(t, client, ownerToken, server.URL+"/api/assets/upload?type=IMAGE", "chart.png", []byte("png-data"), http.StatusCreated)
+		png := validPNG()
+		uploaded := upload(t, client, ownerToken, server.URL+"/api/assets/upload?type=IMAGE", "chart.png", png, http.StatusCreated)
 		assetID, assetURL := stringField(t, uploaded, "id"), stringField(t, uploaded, "url")
 		requestJSON(t, client, ownerToken, http.MethodGet, server.URL+"/api/assets/"+assetID, "", http.StatusOK)
 		requestJSONArray(t, client, ownerToken, http.MethodGet, server.URL+"/api/assets?type=IMAGE", "", http.StatusOK)
@@ -197,14 +282,33 @@ func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 			t.Fatalf("bar chart has no bars: %q", svg)
 		}
 		response := request(t, client, "", http.MethodGet, server.URL+assetURL, "", "", http.StatusOK)
-		if body, _ := io.ReadAll(response.Body); string(body) != "png-data" {
-			t.Fatalf("download body = %q", body)
+		if body, _ := io.ReadAll(response.Body); !bytes.Equal(body, png) {
+			t.Fatalf("download body = %x", body)
+		}
+		if got := response.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Fatalf("download X-Content-Type-Options = %q, want nosniff", got)
 		}
 		_ = response.Body.Close()
 		requestJSON(t, client, otherToken, http.MethodDelete, server.URL+"/api/assets/"+assetID, "", http.StatusNotFound)
 		requestJSON(t, client, ownerToken, http.MethodDelete, server.URL+"/api/assets/"+assetID, "", http.StatusOK)
 		upload(t, client, ownerToken, server.URL+"/api/assets/upload", "../escape.png", []byte("bad"), http.StatusBadRequest)
 		upload(t, client, ownerToken, server.URL+"/api/assets/upload", "report:secret.png", []byte("bad"), http.StatusBadRequest)
+		upload(t, client, ownerToken, server.URL+"/api/assets/upload?type=IMAGE", "script.png",
+			[]byte("<!doctype html><script>alert(document.domain)</script>"), http.StatusBadRequest)
+
+		darkChart := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/assets/chart",
+			`{"data":{"type":"bar","labels":["A"],"datasets":[{"label":"Done","data":[1]}]},"config":{"theme":"dark"}}`,
+			http.StatusCreated)
+		if svg := stringField(t, darkChart, "svgCode"); !strings.Contains(svg, `fill="#1F2937"`) {
+			t.Fatalf("dark chart has no dark theme background: %q", svg)
+		}
+		pieChart := requestJSON(t, client, ownerToken, http.MethodPost, server.URL+"/api/assets/chart",
+			`{"data":{"type":"pie","labels":["Pass","Fail"],"datasets":[{"label":"Series","data":[3,1]}]}}`,
+			http.StatusCreated)
+		pieSVG := stringField(t, pieChart, "svgCode")
+		if !strings.Contains(pieSVG, ">Pass</text>") || !strings.Contains(pieSVG, ">Fail</text>") {
+			t.Fatalf("pie chart legend does not use labels: %q", pieSVG)
+		}
 	})
 }
 
@@ -397,4 +501,30 @@ func stringField(t *testing.T, value map[string]any, key string) string {
 		t.Fatalf("%s = %#v, want non-empty string", key, value[key])
 	}
 	return result
+}
+
+func canonicalRoute(route string) string {
+	var result strings.Builder
+	for {
+		start := strings.Index(route, "{")
+		if start < 0 {
+			result.WriteString(route)
+			return strings.TrimSuffix(result.String(), "/")
+		}
+		end := strings.Index(route[start:], "}")
+		if end < 0 {
+			result.WriteString(route)
+			return strings.TrimSuffix(result.String(), "/")
+		}
+		result.WriteString(route[:start])
+		result.WriteString("{}")
+		route = route[start+end+1:]
+	}
+}
+
+func validPNG() []byte {
+	return []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+	}
 }
