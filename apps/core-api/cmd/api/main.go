@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/config"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpserver"
 )
 
@@ -23,9 +22,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	store, err := db.Open(context.Background(), config)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("close data store: %v", err)
+		}
+	}()
+
 	server := &http.Server{
 		Addr:              config.Address,
-		Handler:           httpserver.New(dependencyProbe{config: config, client: &http.Client{Timeout: 2 * time.Second}}),
+		Handler:           httpserver.New(dependencyProbe{config: config, store: store, client: &http.Client{Timeout: 2 * time.Second}}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -48,21 +57,13 @@ func main() {
 
 type dependencyProbe struct {
 	config config.Config
+	store  *db.Store
 	client *http.Client
 }
 
 func (probe dependencyProbe) Ready() error {
-	for _, dependency := range []struct {
-		name        string
-		rawURL      string
-		defaultPort string
-	}{
-		{"database", probe.config.DatabaseURL, "5432"},
-		{"redis", probe.config.RedisURL, "6379"},
-	} {
-		if err := probeTCP(dependency.rawURL, dependency.defaultPort); err != nil {
-			return fmt.Errorf("%s unavailable: %w", dependency.name, err)
-		}
+	if err := probe.store.Ready(); err != nil {
+		return err
 	}
 
 	request, err := http.NewRequest(http.MethodGet, strings.TrimRight(probe.config.RendererURL, "/")+"/health", nil)
@@ -78,24 +79,4 @@ func (probe dependencyProbe) Ready() error {
 		return fmt.Errorf("renderer status %d", response.StatusCode)
 	}
 	return nil
-}
-
-func probeTCP(rawURL, defaultPort string) error {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return err
-	}
-	host := parsed.Hostname()
-	if host == "" {
-		return fmt.Errorf("missing host")
-	}
-	port := parsed.Port()
-	if port == "" {
-		port = defaultPort
-	}
-	connection, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 2*time.Second)
-	if err != nil {
-		return err
-	}
-	return connection.Close()
 }
