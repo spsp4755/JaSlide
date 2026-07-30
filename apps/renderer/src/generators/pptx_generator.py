@@ -520,6 +520,14 @@ class PPTXGenerator:
     def _add_slide(self, slide_data: Any, template_index: int = 0, total_slides: int = 1):
         """Add a slide based on its type"""
         content = self._as_dict(getattr(slide_data, "content", {}))
+        # The scene editor is the same authoritative source the API's GetScene reads
+        # first (service.go checks content["scene"] before objectEdits/html too) — a
+        # manual edit here must reach the export instead of being silently overwritten
+        # by a fresh regeneration from content.heading/bullets.
+        scene = content.get("scene")
+        if isinstance(scene, dict) and scene.get("objects"):
+            self._add_scene_slide(scene)
+            return
         # A rendered screenshot matches the HTML exactly but exports one flat picture per
         # slide: nothing is selectable once the file leaves JaSlide. `editable` trades a
         # little fidelity for a deck the recipient can actually revise.
@@ -560,6 +568,15 @@ class PPTXGenerator:
             self._add_section_header_slide(slide_data)
         else:
             self._add_content_slide(slide_data)
+
+    def _add_scene_slide(self, scene: dict) -> None:
+        """A slide with no PPTX/HTML source, edited directly as a SlideScene. None of
+        its objects have a source PPTX shape, so every one is placed with the same
+        insert-only edit path scene_to_pptx uses for brand-new shapes."""
+        from ..services.scene_to_pptx import scene_to_edits
+        slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
+        for edit in scene_to_edits(scene):
+            self._apply_native_edit(edit, slide)
 
     def _add_editable_html_slide(self, objects: list[dict]) -> None:
         """Place every HTML object as a real shape or textbox, keeping its own text.

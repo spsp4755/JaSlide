@@ -598,6 +598,28 @@ def test_pptx_template_adds_native_shapes_and_lines():
     assert len(shapes) == 2 and shapes[0].auto_shape_type == MSO_SHAPE.ISOSCELES_TRIANGLE and shapes[1].shape_type == 9
 
 
+def test_a_manually_edited_generic_scene_reaches_the_export_instead_of_regenerated_bullets():
+    # generation.service.ts's default (no PPTX/HTML source) slides ship as heading/bullets;
+    # once GetScene/SaveScene records a manual edit as content.scene, export must place
+    # that scene's own objects rather than silently regenerating the heading/bullets layout.
+    scene = {
+        "width": 1920, "height": 1080,
+        "objects": [{
+            "id": "manual-text", "type": "text", "x": 77, "y": 88, "width": 400, "height": 100,
+            "rotation": 0, "paragraphs": [{"runs": [{"text": "saved edit", "fontSize": 24}]}],
+        }],
+    }
+    output = PPTXGenerator().generate(_presentation(_slide("CONTENT", "Generated heading", {
+        "heading": "Generated heading", "bullets": [{"text": "first point", "level": 0}], "scene": scene,
+    })))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    assert len(slide.shapes) == 1
+    shape = slide.shapes[0]
+    assert shape.text_frame.paragraphs[0].runs[0].text == "saved edit"
+    assert shape.left == Presentation(BytesIO(output)).slide_width * 77 // 1920
+
+
 def test_pptx_template_preserves_unedited_table_and_shape():
     source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
     table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(3), Inches(1)); table.table.cell(0, 0).text = "Keep"
