@@ -79,3 +79,41 @@
   produced through the renderer's PPTX-to-PDF (LibreOffice) path.
 - Isolated containers, network, and the verification-only renderer image were
   removed after verification.
+
+## P2 Template Fidelity Verification
+
+- Imported the real `박태지_0723_업무보고_AI엔지니어링.pptx` and
+  `ai-safety-red-team-report.zip` through the live admin API on a fresh
+  isolated stack (Postgres + Redis + a rebuilt renderer image).
+- **Table/merge/font/indent fidelity (PPTX):** loaded the weekly report's
+  table slide through `GetScene`, confirmed the 2x2 table's header fill
+  (`#D9D9D9`), Korean font names (나눔고딕, HY헤드라인M), and bullet indent
+  levels; a scene-level round trip (`scene_to_pptx` with no edits) reproduced
+  identical cell text, fill, indent levels, and fonts.
+- **Open, edit, and re-export an existing presentation:** created a
+  presentation from the imported template, loaded its scene, edited the
+  table's header cell text through `PATCH scene`, and re-exported PPTX — the
+  edit (`EDITED HEADER`) and the original Korean font (나눔고딕) both reached
+  the exported `slide1.xml` unchanged.
+- **HTML ZIP background/layout fidelity:** created a presentation from the
+  imported red-team ZIP template, exported its cover slide as both PDF and a
+  `/export/.../preview` PNG. Visually compared: background color, divider
+  lines, and title placement are pixel-identical between the two render
+  paths.
+- **Preview vs PPTX/PDF comparison:** confirmed for both decks — the PNG
+  preview and the PDF export of the same slide match; the PPTX export's XML
+  was checked structurally (table cells, run text, font names) since PPTX has
+  no direct visual preview path in this API.
+- **Closed-network Korean fonts:** `fc-list` inside the actual renderer image
+  shows 나눔고딕/NanumGothic (used by the real weekly-report deck) and the
+  full Noto Sans/Serif CJK KR families bundled — no network font fetch is
+  needed offline. The admin fidelity-check endpoint
+  (`GET /admin/templates/:id/fidelity`) against the imported weekly template
+  reported zero degraded objects but one **known, pre-existing gap**:
+  `missingFontFamilies: ["HY헤드라인M"]` — the deck's title uses a commercial
+  Hangul font not bundled in the image, so that one heading style falls back
+  to a substitute font offline. This is a font-licensing limitation, not a
+  migration regression (the same gap exists in the current NestJS/Next stack
+  too); documented here rather than fixed.
+- Isolated containers, network, and the verification-only renderer image were
+  removed after verification.
