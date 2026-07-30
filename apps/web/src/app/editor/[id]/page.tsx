@@ -7,7 +7,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Button } from '@/components/ui/button';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { presentationsApi, slidesApi, exportApi, generationApi, templatesApi } from '@/lib/api';
+import { presentationsApi, slidesApi, exportApi, generationApi, templatesApi, recentWorksApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { UndoRedoButtons } from '@/components/editor/undo-redo-buttons';
 import { VersionHistory } from '@/components/editor/version-history';
@@ -478,6 +478,9 @@ export default function EditorPage() {
             return;
         }
         fetchPresentation();
+        // Drives the home dashboard's "최근 작업" list — best-effort, the editor
+        // itself never needs to know whether this succeeded.
+        recentWorksApi.record(presentationId).catch(() => {});
     }, [presentationId, isAuthenticated, hasHydrated]);
 
     useEffect(() => {

@@ -245,6 +245,15 @@ export const favoritesApi = {
         api.post('/favorites/reorder', { resourceType, orderedIds }),
 };
 
+// Recent works — the home dashboard's "최근 작업" list. Recording is
+// fire-and-forget from the editor; nothing here waits on it.
+export const recentWorksApi = {
+    list: (limit = 10) => api.get('/recent-works', { params: { limit } }),
+    record: (presentationId: string) => api.post(`/recent-works/${presentationId}`),
+    remove: (presentationId: string) => api.delete(`/recent-works/${presentationId}`),
+    clear: () => api.delete('/recent-works'),
+};
+
 // Export Presets
 export const exportPresetsApi = {
     list: () => api.get('/export-presets'),

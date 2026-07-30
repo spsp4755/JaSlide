@@ -6,11 +6,11 @@ import { useDropzone } from 'react-dropzone';
 import { AppShell } from '@/components/layout/app-shell';
 import { Button as AstryxButton } from '@astryxdesign/core';
 import { useAuthStore, isAdminRole } from '@/stores/auth-store';
-import { generationApi, skillsApi, templatesApi } from '@/lib/api';
+import { generationApi, skillsApi, templatesApi, recentWorksApi, favoritesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { GenerationProgress } from '@/components/generation-progress';
 import {
-    Plus, Send, Settings2, X, FileText, Check, Loader2, ArrowUp, ArrowDown, Trash2,
+    Plus, Send, Settings2, X, FileText, Check, Loader2, ArrowUp, ArrowDown, Trash2, Star, Clock,
 } from 'lucide-react';
 
 interface Template {
@@ -44,6 +44,18 @@ interface Outline {
     slides: OutlineSlide[];
 }
 
+interface RecentWork {
+    presentationId: string;
+    presentation: { id: string; title: string; updatedAt: string };
+}
+
+// A template's own id doubles as its favorite resourceId — one favorite
+// entry per template, no separate join table to keep in sync.
+interface TemplateFavorite {
+    id: string;
+    resourceId: string;
+}
+
 function DashboardContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -69,6 +81,8 @@ function DashboardContent() {
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
     const [skills, setSkills] = useState<Skill[]>([]);
     const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+    const [recentWorks, setRecentWorks] = useState<RecentWork[]>([]);
+    const [templateFavorites, setTemplateFavorites] = useState<TemplateFavorite[]>([]);
 
     // Generation state
     const [jobId, setJobId] = useState<string | null>(null);
@@ -98,12 +112,16 @@ function DashboardContent() {
         (async () => {
             setLoadingTemplates(true);
             try {
-                const [apiRes, skillsRes] = await Promise.all([
+                const [apiRes, skillsRes, recentRes, favoritesRes] = await Promise.all([
                     templatesApi.list().catch(() => ({ data: [] })),
                     skillsApi.list().catch(() => ({ data: [] })),
+                    recentWorksApi.list(6).catch(() => ({ data: [] })),
+                    favoritesApi.list('template').catch(() => ({ data: [] })),
                 ]);
                 setTemplates(Array.isArray(apiRes.data) ? apiRes.data : []);
                 setSkills(Array.isArray(skillsRes.data) ? skillsRes.data : []);
+                setRecentWorks(Array.isArray(recentRes.data) ? recentRes.data : []);
+                setTemplateFavorites(Array.isArray(favoritesRes.data) ? favoritesRes.data : []);
             } catch (err) {
                 console.error('Failed to fetch templates:', err);
             } finally {
@@ -111,6 +129,21 @@ function DashboardContent() {
             }
         })();
     }, []);
+
+    const toggleTemplateFavorite = async (templateId: string) => {
+        const existing = templateFavorites.find((f) => f.resourceId === templateId);
+        try {
+            if (existing) {
+                await favoritesApi.remove(existing.id);
+                setTemplateFavorites((current) => current.filter((f) => f.id !== existing.id));
+            } else {
+                const { data } = await favoritesApi.add('template', templateId);
+                setTemplateFavorites((current) => [...current, { id: data.id, resourceId: data.resourceId }]);
+            }
+        } catch {
+            toast({ title: '오류', description: '즐겨찾기를 변경하지 못했습니다.', variant: 'destructive' });
+        }
+    };
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         const file = acceptedFiles[0];
@@ -603,6 +636,59 @@ function DashboardContent() {
                         )}
                 </div>
 
+                {/* Recent works */}
+                {recentWorks.length > 0 && (
+                    <section>
+                        <h2 className="text-xl font-bold text-foreground mb-4">최근 작업</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {recentWorks.map(({ presentationId, presentation }) => (
+                                <Link
+                                    key={presentationId}
+                                    href={`/editor/${presentationId}`}
+                                    className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-foreground/40 transition-colors"
+                                >
+                                    <Clock className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-foreground truncate">{presentation.title || '제목 없음'}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* Favorite templates */}
+                {templateFavorites.length > 0 && (
+                    <section>
+                        <h2 className="text-xl font-bold text-foreground mb-4">즐겨찾기 템플릿</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {templates
+                                .filter((template) => templateFavorites.some((f) => f.resourceId === template.id))
+                                .map((template) => (
+                                    <button
+                                        key={template.id}
+                                        type="button"
+                                        onClick={() => setSelectedTemplateId(template.id === selectedTemplateId ? null : template.id)}
+                                        className="relative text-left rounded-xl overflow-hidden border-2 border-border hover:border-foreground/40 transition-all"
+                                    >
+                                        <div
+                                            className="h-16 flex items-center justify-center text-2xl"
+                                            style={{
+                                                background:
+                                                    template.config?.backgrounds?.value ||
+                                                    template.config?.colors?.background ||
+                                                    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            }}
+                                        >
+                                            <span style={{ color: template.config?.colors?.primary || '#ffffff' }}>Aa</span>
+                                        </div>
+                                        <div className="p-2 bg-card">
+                                            <p className="text-xs font-medium text-foreground truncate">{template.name}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                        </div>
+                    </section>
+                )}
+
                 {/* Template gallery */}
                 <section>
                     <h2 className="text-xl font-bold text-foreground mb-4">템플릿</h2>
@@ -659,6 +745,34 @@ function DashboardContent() {
                                             <Check className="h-3 w-3 text-background" />
                                         </div>
                                     )}
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={
+                                            templateFavorites.some((f) => f.resourceId === template.id)
+                                                ? '즐겨찾기에서 제거'
+                                                : '즐겨찾기에 추가'
+                                        }
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            void toggleTemplateFavorite(template.id);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void toggleTemplateFavorite(template.id);
+                                        }}
+                                        className="absolute top-2 left-2 flex h-6 w-6 items-center justify-center rounded-full bg-background/80 hover:bg-background"
+                                    >
+                                        <Star
+                                            className={`h-3.5 w-3.5 ${
+                                                templateFavorites.some((f) => f.resourceId === template.id)
+                                                    ? 'fill-foreground text-foreground'
+                                                    : 'text-muted-foreground'
+                                            }`}
+                                        />
+                                    </span>
                                 </button>
                             ))}
                         </div>
