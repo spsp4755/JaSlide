@@ -30,3 +30,12 @@
 - Both records stored the expected `pptx` or `html_zip` source kind and storage
   key, produced valid JSON, and were available from the public template API.
 - The isolated containers, network, and volumes were removed after verification.
+
+## P1-4 OpenAI-Compatible LLM Generation
+
+- LM Studio's `qwen/qwen3.6-35b-a3b` model generated a four-slide Korean
+  outline and completed a four-slide presentation with titles and content.
+- The same model generated a ten-slide outline through the configured batching
+  path and completed ten uniquely ordered slides with titles and content.
+- The ten-slide job reported progress at 45, 60, 75, and 100 percent before
+  completing. Both generated presentations were retrievable through the API.
