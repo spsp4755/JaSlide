@@ -310,6 +310,9 @@ func (service *Service) GetScene(ctx context.Context, id, userID string) (json.R
 		return nil, ErrForbidden
 	}
 	content, config := rawFields(slide.Content), rawFields(slide.TemplateConfig)
+	if scene := content["scene"]; len(scene) > 0 && strings.TrimSpace(string(scene)) != "null" {
+		return json.Marshal(map[string]json.RawMessage{"scene": scene})
+	}
 	source := rawFields(config["source"])
 	sourceKind, _ := rawString(source["kind"])
 	if sourceKind == "pptx" {
@@ -327,16 +330,9 @@ func (service *Service) GetScene(ctx context.Context, id, userID string) (json.R
 			"objectEdits": rawOrEmptyArray(content["objectEdits"]),
 		})
 	}
-	html, _ := rawString(content["html"])
+	html := editableHTML(content, config)
 	if strings.TrimSpace(html) == "" {
-		index, ok := rawInteger(content["templateIndex"])
-		slides, _ := rawArray(config["htmlSlides"])
-		if ok && index >= 0 && index < len(slides) {
-			html, _ = rawString(slides[index])
-		}
-	}
-	if strings.TrimSpace(html) == "" {
-		return nil, fmt.Errorf("%w: slide has no editable content", ErrBadRequest)
+		return defaultScene(slide)
 	}
 	return service.renderer(ctx, "/api/scene/html/load", map[string]any{"html": html})
 }
@@ -364,7 +360,7 @@ func (service *Service) SaveScene(ctx context.Context, id, userID string, scene 
 			return db.Slide{}, fmt.Errorf("invalid renderer response")
 		}
 		content["objectEdits"] = result.ObjectEdits
-	} else {
+	} else if editableHTML(content, config) != "" {
 		response, err := service.renderer(ctx, "/api/scene/html/save", map[string]any{"scene": scene})
 		if err != nil {
 			return db.Slide{}, err
@@ -376,6 +372,8 @@ func (service *Service) SaveScene(ctx context.Context, id, userID string, scene 
 			return db.Slide{}, fmt.Errorf("invalid renderer response")
 		}
 		content["html"], _ = json.Marshal(result.HTML)
+	} else {
+		content["scene"] = scene
 	}
 	updated, err := json.Marshal(content)
 	if err != nil {
@@ -383,6 +381,51 @@ func (service *Service) SaveScene(ctx context.Context, id, userID string, scene 
 	}
 	result, err := service.store.UpdateSlideContent(ctx, id, updated)
 	return result, mapStoreError(err)
+}
+
+func editableHTML(content, config map[string]json.RawMessage) string {
+	html, _ := rawString(content["html"])
+	if strings.TrimSpace(html) != "" {
+		return html
+	}
+	index, ok := rawInteger(content["templateIndex"])
+	slides, _ := rawArray(config["htmlSlides"])
+	if ok && index >= 0 && index < len(slides) {
+		html, _ = rawString(slides[index])
+	}
+	return html
+}
+
+func defaultScene(slide db.SlideContext) (json.RawMessage, error) {
+	content := rawFields(slide.Content)
+	title := ""
+	if slide.Title != nil {
+		title = *slide.Title
+	}
+	if heading, ok := rawString(content["heading"]); ok && heading != "" {
+		title = heading
+	}
+	paragraphs := []map[string]any{}
+	if subheading, ok := rawString(content["subheading"]); ok && subheading != "" {
+		paragraphs = append(paragraphs, map[string]any{"runs": []map[string]any{{"text": subheading}}})
+	}
+	if bullets, ok := rawArray(content["bullets"]); ok {
+		for _, bullet := range bullets {
+			text, _ := rawString(rawFields(bullet)["text"])
+			if text != "" {
+				paragraphs = append(paragraphs, map[string]any{
+					"runs": []map[string]any{{"text": text}}, "bulleted": true,
+				})
+			}
+		}
+	}
+	scene := map[string]any{"width": 1920, "height": 1080, "objects": []map[string]any{
+		{"id": "title", "type": "text", "x": 120, "y": 100, "width": 1680, "height": 120,
+			"paragraphs": []map[string]any{{"runs": []map[string]any{{"text": title, "fontSize": 36, "bold": true}}}}},
+		{"id": "content", "type": "text", "x": 160, "y": 280, "width": 1600, "height": 680,
+			"paragraphs": paragraphs},
+	}}
+	return json.Marshal(map[string]any{"scene": scene})
 }
 
 func (service *Service) renderer(ctx context.Context, path string, body any) (json.RawMessage, error) {

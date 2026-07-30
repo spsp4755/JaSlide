@@ -21,7 +21,7 @@ test('offline deployment uses imported images and documents the required verific
     assert.match(compose, /image: jaslide\/core-api:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
     assert.match(compose, /image: jaslide\/web:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
     assert.match(compose, /image: jaslide\/renderer:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
-    assert.equal((compose.match(/pull_policy: never/g) || []).length, 5);
+    assert.equal((compose.match(/pull_policy: never/g) || []).length, 6);
     assert.match(guide, /build-amd64-images\.sh/);
     assert.doesNotMatch(guide, /pnpm (?:install|build)|nest build|prisma migrate/i);
     assert.match(releaseScript, /--platform linux\/amd64/);
@@ -38,5 +38,5 @@ test('offline deployment uses imported images and documents the required verific
     assert.match(manifest, new RegExp(`jaslide/core-api:v${escapedVersion}`));
     assert.match(manifest, new RegExp(`jaslide/web:v${escapedVersion}`));
     assert.match(manifest, new RegExp(`jaslide/renderer:v${escapedVersion}`));
-    assert.equal((manifest.match(/imagePullPolicy: Never/g) || []).length, 5);
+    assert.equal((manifest.match(/imagePullPolicy: Never/g) || []).length, 6);
 });

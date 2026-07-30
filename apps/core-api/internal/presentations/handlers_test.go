@@ -293,6 +293,27 @@ func TestPresentationSlideSceneAndAssetContracts(t *testing.T) {
 		if got := string(unrelated["large"]); got != "9007199254740993123456789" {
 			t.Fatalf("unrelated large integer = %s, want exact digits", got)
 		}
+
+		generic := requestJSON(t, client, ownerToken, http.MethodPost,
+			server.URL+"/api/presentations/"+presentationID+"/slides",
+			`{"type":"CONTENT","title":"editable generated slide","content":{"heading":"Generated heading","bullets":[{"text":"first point","level":0}]},"order":2}`,
+			http.StatusCreated)
+		genericID := stringField(t, generic, "id")
+		initialScene := requestJSON(t, client, ownerToken, http.MethodGet,
+			server.URL+"/api/presentations/"+presentationID+"/slides/"+genericID+"/scene", "", http.StatusOK)
+		if initialScene["scene"].(map[string]any)["width"] != float64(1920) {
+			t.Fatalf("generic scene = %#v", initialScene)
+		}
+		editedScene := `{"width":1920,"height":1080,"objects":[{"id":"manual-text","type":"text","x":77,"y":88,"width":400,"height":100,"paragraphs":[{"runs":[{"text":"saved edit","fontSize":24}]}]}]}`
+		requestJSON(t, client, ownerToken, http.MethodPatch,
+			server.URL+"/api/presentations/"+presentationID+"/slides/"+genericID+"/scene",
+			`{"scene":`+editedScene+`}`, http.StatusOK)
+		reloadedScene := requestJSON(t, client, ownerToken, http.MethodGet,
+			server.URL+"/api/presentations/"+presentationID+"/slides/"+genericID+"/scene", "", http.StatusOK)
+		objects := reloadedScene["scene"].(map[string]any)["objects"].([]any)
+		if objects[0].(map[string]any)["x"] != float64(77) {
+			t.Fatalf("generic scene edit did not survive reload: %#v", reloadedScene)
+		}
 	})
 
 	t.Run("multipart upload, download, ownership, and traversal rejection", func(t *testing.T) {
