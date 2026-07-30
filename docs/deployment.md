@@ -1,68 +1,82 @@
-# Closed-network deployment
+# Go API + React 배포
 
-1. Copy `.env.example` to `.env` and replace `POSTGRES_PASSWORD`, `JWT_SECRET`, and the Keycloak/LLM values. Keep `VITE_API_URL=/api` for the recommended same-origin deployment and set `CORS_ORIGIN` to the browser URL (for example `https://jaslide.example.internal`) before building.
-2. Make the internal OpenAI-compatible endpoint reachable from the `api` container through `OPENAI_BASE_URL`.
-3. Build and start the immutable images:
+운영 런타임은 Go core API, Nginx가 제공하는 Vite React 정적 파일, Python
+renderer, PostgreSQL, Redis입니다. NestJS와 Next.js 서버는 실행하지 않습니다.
+브라우저에는 web 포트만 공개되며 `/api`, `/uploads`, `/socket.io`는 Nginx가
+내부 `api:4000`으로 프록시합니다.
 
-```powershell
-docker compose --env-file .env build
-docker compose --env-file .env up -d
+## Docker Compose
+
+`.env.example`을 `.env`로 복사하고 최소한 `POSTGRES_PASSWORD`, `JWT_SECRET`,
+`CORS_ORIGIN`, `FRONTEND_URL`을 설정합니다. HTTPS 뒤에서 운영할 때는
+`NODE_ENV=production`으로 설정합니다. Keycloak을 사용하면 기존
+`KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`,
+`KEYCLOAK_REDIRECT_URI`, `KEYCLOAK_ADMIN_ROLES` 이름을 그대로 채웁니다.
+
+인터넷이 되는 빌드 환경에서 고정된 base image와 lockfile로 linux/amd64
+이미지를 만듭니다.
+
+```bash
+JASLIDE_VERSION=v0.6.1 docker compose --env-file .env build
+JASLIDE_VERSION=v0.6.1 docker compose --env-file .env up -d --no-build --pull never
+BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 ```
 
-The Compose file mounts PostgreSQL, Redis, and local uploaded assets as named volumes; application source is not mounted into production containers.
-The API applies committed Prisma migrations before it starts.
+`postgres_data`, `redis_data`, `assets_data` named volume은 재배포에도 유지됩니다.
+업로드 경로는 계속 `/app/apps/api/uploads`입니다. 새 PostgreSQL volume에는
+현재 스키마가 최초 initdb 때 적용되고, 기존 PostgreSQL volume은 변경하지
+않습니다. renderer와 API를 직접 공개해야 하는 진단 환경은
+`docker-compose.override.yml`의 로컬 포트만 사용하십시오.
 
-Check readiness:
+## 폐쇄망 Compose
 
-```powershell
-Invoke-WebRequest http://localhost:8000/health
-Invoke-WebRequest http://localhost:4000/api/health
+외부망에서 만든 release archive를 반입한 뒤:
+
+```bash
+sha256sum -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
+docker load -i jaslide-v0.6.1-linux-amd64-images.tar.gz
+export JASLIDE_VERSION=v0.6.1
+docker compose --project-name jaslide --env-file .env \
+  --file docker-compose.offline.yml up -d --no-build --pull never
+BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 ```
 
-The renderer image includes LibreOffice and Korean Noto font fallback for PPTX-to-PDF conversion. Client devices still need the selected font installed to edit PPTX files with identical typography.
+`docker-compose.offline.yml`은 `pull_policy: never`를 지정하므로 로드되지 않은
+이미지를 registry에서 받지 않고 즉시 실패합니다. 내부 Keycloak과
+OpenAI-compatible LLM 주소에는 사내망으로 접근할 수 있어야 합니다.
 
-After the first login, register the internal model in **Admin > Models** and run the connection test. Import example PPTX files in **Admin > Templates** before assigning them to generated presentations.
+## Kubernetes, registry 없이 배포
 
-## Kubernetes, no registry (closed network)
-
-Manifest: [deploy/k8s/jaslide-k8s.yaml](../deploy/k8s/jaslide-k8s.yaml), [namespace.yaml](../deploy/k8s/namespace.yaml). No Harbor, no `imagePullSecrets` — every worker node imports the image tar directly into containerd, and the build script already tags images exactly as the manifest references them (`jaslide/api:v0.6.1`, etc.), so there is no retagging step either. Replace every `CHANGE_ME` and the Ingress host before applying.
-
-**1. Build images on an internet-connected machine.** The release image defaults to relative `/api`, so it remains valid when the final Ingress hostname changes:
+외부망의 amd64 빌드 환경에서:
 
 ```bash
 ./scripts/release/build-amd64-images.sh v0.6.1
 ```
 
-**2. Save to tar and carry into the closed network:**
+생성물:
 
-The script produces `dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz` and its SHA-256 checksum. This one archive contains the API, web, renderer, PostgreSQL, and Redis images.
+- `dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz`
+- `dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256`
 
-**3. Import on every worker node (inside the closed network):**
+폐쇄망의 모든 worker node에서:
 
 ```bash
-shasum -a 256 -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
+sha256sum -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
 sudo ctr -n k8s.io images import jaslide-v0.6.1-linux-amd64-images.tar.gz
-sudo ctr -n k8s.io images ls | grep jaslide   # confirm all 5 images landed
+sudo ctr -n k8s.io images ls | grep jaslide
 ```
 
-Run this on **every** node the pods can schedule onto — `imagePullPolicy: IfNotPresent` means a node without the image locally will fail to start its pod rather than reaching out to a registry.
-
-**4. Deploy (from the master):**
+`deploy/k8s/jaslide-k8s.yaml`의 `CHANGE_ME`, Ingress host, Keycloak/LLM 값을
+수정한 뒤 master에서:
 
 ```bash
 kubectl apply -f deploy/k8s/namespace.yaml
 kubectl apply -f deploy/k8s/jaslide-k8s.yaml
 kubectl -n jaslide get pods -w
+curl --fail https://jaslide.internal/api/health/ready
+curl --fail https://jaslide.internal/login
 ```
 
-**5. Every later release:** repeat steps 1-3 for the new tag, edit the image tag (`v0.6.1` → `v0.6.1`) on the 5 `image:` lines in `jaslide-k8s.yaml`, then:
-
-```bash
-kubectl apply -f deploy/k8s/jaslide-k8s.yaml
-```
-
-No `kubectl rollout restart` needed — each release uses a distinct image tag, so Kubernetes detects the changed pod template and rolls the deployments automatically.
-
-Readiness: `curl https://jaslide.internal/api/health` once the Ingress resolves. The default web image uses `/api`; rebuild it only when an external API origin is deliberately configured.
-
-**Using a registry instead (e.g. Harbor):** change each `image:` to `<registry>/jaslide/<service>:v0.6.1`, add `imagePullSecrets: [{ name: <your-secret> }]` under each Deployment's pod spec, and create that secret once with `kubectl create secret docker-registry <name> --docker-server=... --dry-run=client -o yaml > secret.local.yaml && kubectl apply -f secret.local.yaml` (keep that file out of git — it holds real credentials).
+manifest의 다섯 image는 `imagePullPolicy: Never`이므로 worker에 image가 없으면
+외부 registry 접근 없이 실패합니다. Registry를 사용할 때만 image 경로를
+바꾸고 `imagePullPolicy: IfNotPresent`와 `imagePullSecrets`를 추가합니다.

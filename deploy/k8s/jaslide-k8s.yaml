@@ -12,8 +12,8 @@
 #   kubectl apply -f jaslide-k8s.yaml
 #
 # 아래에서 CHANGE_ME 와 Ingress host만 실제 값으로 바꾸면 됩니다.
-# Harbor 등 레지스트리를 쓰는 경우에만 image를 <레지스트리>/jaslide/api:v0.6.1 형태로
-# 바꾸고, 각 Deployment에 imagePullSecrets를 추가하세요.
+# Harbor 등 레지스트리를 쓰는 경우에만 image를 <레지스트리>/jaslide/core-api:v0.6.1
+# 형태로 바꾸고, imagePullPolicy와 imagePullSecrets를 함께 수정하세요.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -38,6 +38,7 @@ data:
   RENDERER_URL: http://jaslide-renderer:8000
   LOCAL_STORAGE_PATH: /app/apps/api/uploads
   CORS_ORIGIN: https://jaslide.internal          # 브라우저 접속 URL
+  FRONTEND_URL: https://jaslide.internal
   OPENAI_BASE_URL: http://CHANGE_ME:11434/v1     # 사내 Ollama/vLLM 엔드포인트
   OPENAI_MODEL: CHANGE_ME                        # 예: qwen2.5:14b
   KEYCLOAK_ISSUER: ""                            # 예: https://keycloak.internal/realms/company
@@ -45,7 +46,7 @@ data:
   KEYCLOAK_REDIRECT_URI: ""                      # 예: https://jaslide.internal/api/auth/keycloak/callback
   KEYCLOAK_ADMIN_ROLES: ""
 ---
-# NestJS API (Prisma 마이그레이션은 컨테이너 시작 시 자동 적용)
+# Go core API
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -61,8 +62,8 @@ spec:
     spec:
       containers:
         - name: api
-          image: jaslide/api:v0.6.1     # 워커에 import한 이미지 그대로 (빌드 스크립트가 이 태그로 만듦)
-          imagePullPolicy: IfNotPresent  # 노드에 있는 이미지 사용 (폐쇄망: 밖에서 pull 안 함)
+          image: jaslide/core-api:v0.6.1
+          imagePullPolicy: Never         # 워커에 import한 이미지만 사용
           ports: [{ containerPort: 4000 }]
           envFrom:
             - secretRef: { name: jaslide-secrets }
@@ -117,7 +118,7 @@ spec:
       containers:
         - name: web
           image: jaslide/web:v0.6.1
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports: [{ containerPort: 3000 }]
           readinessProbe:
             httpGet: { path: /login, port: 3000 }
@@ -152,7 +153,7 @@ spec:
       containers:
         - name: renderer
           image: jaslide/renderer:v0.6.1
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports: [{ containerPort: 8000 }]
           readinessProbe:
             httpGet: { path: /health, port: 8000 }
@@ -187,7 +188,7 @@ spec:
       containers:
         - name: redis
           image: jaslide/redis:v0.6.1
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           args: ["--appendonly", "yes"]   # 재시작 시 큐 유실 방지
           ports: [{ containerPort: 6379 }]
           volumeMounts:
@@ -235,7 +236,7 @@ spec:
       containers:
         - name: postgres
           image: jaslide/postgres:v0.6.1
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - { name: POSTGRES_USER, value: jaslide }
             - name: POSTGRES_PASSWORD

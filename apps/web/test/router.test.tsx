@@ -195,15 +195,15 @@ describe('Vite and production proxies', () => {
     it('allows deployment-sized uploads and proxies every API-owned path', () => {
         const webRoot = process.cwd();
         const repositoryRoot = path.resolve(webRoot, '../..');
-        const nginx = readFileSync(path.join(repositoryRoot, 'docker/web-nginx.conf'), 'utf8');
+        const nginx = readFileSync(path.join(repositoryRoot, 'docker/nginx.conf'), 'utf8');
         const dockerfile = readFileSync(path.join(repositoryRoot, 'docker/web.Dockerfile'), 'utf8');
         const kubernetes = readFileSync(path.join(repositoryRoot, 'deploy/k8s/jaslide-k8s.yaml'), 'utf8');
         const vite = readFileSync(path.join(webRoot, 'vite.config.ts'), 'utf8');
 
         expect(nginx).toMatch(/client_max_body_size\s+100m/);
         expect(nginx).toMatch(/try_files\s+\$uri\s+\$uri\/\s+\/index\.html/);
-        expect(nginx).toMatch(/location\s+\/api\//);
-        expect(nginx).toMatch(/location\s+\/uploads\//);
+        expect(nginx).toContain('location ~ ^/(?:api|uploads)(?:/|$)');
+        expect(nginx).toContain('location ~ ^/socket\\.io(?:/|$)');
         expect(vite).toMatch(/['"]\/uploads['"]\s*:/);
         expect(dockerfile).toContain('COPY --from=build /app/apps/web/dist');
         expect(kubernetes).toMatch(/path:\s*\/socket\.io[\s\S]{0,180}name:\s*jaslide-api/);

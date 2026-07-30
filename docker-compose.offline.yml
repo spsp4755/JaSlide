@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: jaslide/postgres:${JASLIDE_VERSION:-v0.6.1}
+    platform: linux/amd64
+    pull_policy: never
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -14,7 +16,9 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: jaslide/redis:${JASLIDE_VERSION:-v0.6.1}
+    platform: linux/amd64
+    pull_policy: never
     volumes:
       - redis_data:/data
     healthcheck:
@@ -23,39 +27,72 @@ services:
       timeout: 5s
       retries: 5
 
+  renderer:
+    image: jaslide/renderer:${JASLIDE_VERSION:-v0.6.1}
+    platform: linux/amd64
+    pull_policy: never
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   api:
-    image: jaslide/api:offline
+    image: jaslide/core-api:${JASLIDE_VERSION:-v0.6.1}
+    platform: linux/amd64
+    pull_policy: never
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-4096}
+      LLM_ALLOWED_ENDPOINTS: ${LLM_ALLOWED_ENDPOINTS:-}
+      LLM_ALLOWED_API_KEY_ENV_VARS: ${LLM_ALLOWED_API_KEY_ENV_VARS:-}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      KEYCLOAK_REDIRECT_URI: ${KEYCLOAK_REDIRECT_URI:-}
+      KEYCLOAK_ADMIN_ROLES: ${KEYCLOAK_ADMIN_ROLES:-}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       RENDERER_URL: http://renderer:8000
       LOCAL_STORAGE_PATH: /app/apps/api/uploads
-    ports:
-      - "4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      renderer:
+        condition: service_healthy
     volumes:
       - assets_data:/app/apps/api/uploads
 
   web:
-    image: jaslide/web:offline
+    image: jaslide/web:${JASLIDE_VERSION:-v0.6.1}
+    platform: linux/amd64
+    pull_policy: never
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - api
-
-  renderer:
-    image: jaslide/renderer:offline
-    ports:
-      - "8000:8000"
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login | grep -q 'id=\"root\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
 volumes:
   postgres_data:

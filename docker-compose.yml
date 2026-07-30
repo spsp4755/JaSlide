@@ -1,14 +1,15 @@
 services:
-  # PostgreSQL Database
   postgres:
-    image: postgres:16-alpine
+    image: jaslide/postgres:${JASLIDE_VERSION:-dev}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
     container_name: jaslide-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,12 +18,13 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis Cache
   redis:
-    image: redis:7-alpine
+    image: jaslide/redis:${JASLIDE_VERSION:-dev}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/redis.Dockerfile
     container_name: jaslide-redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -31,39 +33,67 @@ services:
       timeout: 5s
       retries: 5
 
-  # NestJS API
-  api:
+  renderer:
+    image: jaslide/renderer:${JASLIDE_VERSION:-dev}
+    platform: linux/amd64
     build:
       context: .
-      dockerfile: docker/api.Dockerfile
+      dockerfile: docker/renderer.Dockerfile
+    container_name: jaslide-renderer
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  api:
+    image: jaslide/core-api:${JASLIDE_VERSION:-dev}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/core-api.Dockerfile
     container_name: jaslide-api
     environment:
+      NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-      KEYCLOAK_REDIRECT_URI: ${KEYCLOAK_REDIRECT_URI}
-      KEYCLOAK_ADMIN_ROLES: ${KEYCLOAK_ADMIN_ROLES}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-4096}
+      LLM_ALLOWED_ENDPOINTS: ${LLM_ALLOWED_ENDPOINTS:-}
+      LLM_ALLOWED_API_KEY_ENV_VARS: ${LLM_ALLOWED_API_KEY_ENV_VARS:-}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      KEYCLOAK_REDIRECT_URI: ${KEYCLOAK_REDIRECT_URI:-}
+      KEYCLOAK_ADMIN_ROLES: ${KEYCLOAK_ADMIN_ROLES:-}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       RENDERER_URL: http://renderer:8000
       LOCAL_STORAGE_PATH: /app/apps/api/uploads
-    ports:
-      - "4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      renderer:
+        condition: service_healthy
     volumes:
       - assets_data:/app/apps/api/uploads
 
-  # Vite React SPA
   web:
+    image: jaslide/web:${JASLIDE_VERSION:-dev}
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/web.Dockerfile
@@ -71,18 +101,15 @@ services:
         VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: jaslide-web
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - api
-
-  # Python Renderer
-  renderer:
-    build:
-      context: .
-      dockerfile: docker/renderer.Dockerfile
-    container_name: jaslide-renderer
-    ports:
-      - "8000:8000"
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login | grep -q 'id=\"root\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
 volumes:
   postgres_data:

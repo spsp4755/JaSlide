@@ -18,12 +18,14 @@ test('offline deployment uses imported images and documents the required verific
     const releaseScript = fs.readFileSync(path.join(root, 'scripts', 'release', 'build-amd64-images.sh'), 'utf8');
 
     assert.doesNotMatch(compose, /^\s*build:/m);
-    assert.match(compose, /image: jaslide\/api:offline/);
-    assert.match(compose, /image: jaslide\/web:offline/);
-    assert.match(compose, /image: jaslide\/renderer:offline/);
+    assert.match(compose, /image: jaslide\/core-api:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
+    assert.match(compose, /image: jaslide\/web:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
+    assert.match(compose, /image: jaslide\/renderer:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
+    assert.equal((compose.match(/pull_policy: never/g) || []).length, 5);
     assert.match(guide, /build-amd64-images\.sh/);
-    assert.match(guide, /--offline --frozen-lockfile --trust-lockfile/);
+    assert.doesNotMatch(guide, /pnpm (?:install|build)|nest build|prisma migrate/i);
     assert.match(releaseScript, /--platform linux\/amd64/);
+    assert.match(releaseScript, /build_image core-api docker\/core-api\.Dockerfile/);
     assert.match(releaseScript, /jaslide\/postgres:\$\{release_version\}/);
     assert.match(releaseScript, /jaslide\/redis:\$\{release_version\}/);
     assert.match(guide, new RegExp(`jaslide-v${escapedVersion}-linux-amd64-images\\.tar\\.gz`));
@@ -33,7 +35,8 @@ test('offline deployment uses imported images and documents the required verific
     assert.match(guide, /ctr -n k8s\.io images import/);
     assert.match(kubernetesGuide, /kubectl apply -f deploy\/k8s\/jaslide-k8s\.yaml/);
     assert.match(namespaceManifest, /name: jaslide/);
-    assert.match(manifest, new RegExp(`jaslide/api:v${escapedVersion}`));
+    assert.match(manifest, new RegExp(`jaslide/core-api:v${escapedVersion}`));
     assert.match(manifest, new RegExp(`jaslide/web:v${escapedVersion}`));
     assert.match(manifest, new RegExp(`jaslide/renderer:v${escapedVersion}`));
+    assert.equal((manifest.match(/imagePullPolicy: Never/g) || []).length, 5);
 });

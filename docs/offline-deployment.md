@@ -1,72 +1,71 @@
 # 폐쇄망 배포
 
-폐쇄망에서는 소스 빌드나 패키지 설치를 수행하지 않습니다. Node, Python, APT 패키지와 컨테이너 기반 이미지는 모두 외부망 준비 환경에서 검증한 뒤 반입합니다.
+폐쇄망 대상 서버에서는 소스 빌드, npm/pnpm, Go module 다운로드, pip, APT,
+container registry pull을 수행하지 않습니다. 외부망 준비 환경에서 만든
+linux/amd64 image archive만 반입합니다.
 
-## 1. 외부망 준비 환경
+## 1. 외부망 준비
 
-신뢰하는 커밋과 lockfile에서 이미지를 빌드합니다. 이 단계만 네트워크 접근이 필요합니다.
-
-`linux/amd64` 이미지는 빌드 PC의 CPU와 무관하게 명시적으로 생성합니다. 웹은 기본적으로 동일 Ingress의 상대 경로 `/api`를 사용하므로 사내 도메인을 이미지에 고정하지 않습니다.
+신뢰하는 commit에서 다음 명령을 실행합니다. base image는 digest로 고정되어
+있고 Go/Vite/Python 의존성은 lockfile 또는 checksum으로 고정됩니다.
 
 ```bash
 ./scripts/release/build-amd64-images.sh v0.6.1
-# dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz
-# dist/release/jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
 ```
 
-개발 또는 빌드 재현용 pnpm 저장소를 함께 전달해야 한다면, 신뢰하는 lockfile과 준비된 저장소를 사용합니다.
+script는 아래 다섯 image가 모두 `linux/amd64`인지 검사하고 하나의 gzip
+archive와 SHA-256 파일을 생성합니다.
+
+- `jaslide/core-api:v0.6.1`
+- `jaslide/web:v0.6.1`
+- `jaslide/renderer:v0.6.1`
+- `jaslide/postgres:v0.6.1`
+- `jaslide/redis:v0.6.1`
+
+## 2. 반입 및 무결성 확인
 
 ```bash
-pnpm fetch --frozen-lockfile --trust-lockfile --store-dir ./pnpm-store
-tar -czf jaslide-pnpm-store.tar.gz pnpm-store
+sha256sum -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
 ```
 
-`--trust-lockfile`은 검토·서명된 lockfile에만 사용합니다. 이 옵션은 pnpm의 공급망 재검증으로 인한 레지스트리 조회를 막습니다.
-
-## 2. 폐쇄망 반입 및 실행
-
-1. `jaslide-v0.6.1-linux-amd64-images.tar.gz`와 SHA-256 파일을 반입해 무결성을 확인합니다.
-2. Kubernetes 배포 환경에서는 **레지스트리 없이** 각 워커 노드의 containerd로 직접 import합니다. 실제 `kubectl apply` 절차는 [Kubernetes 배포 문서](deployment.md#kubernetes-no-registry-closed-network)를 따릅니다.
+Kubernetes는 모든 worker node에서 직접 import합니다.
 
 ```bash
-shasum -a 256 -c jaslide-v0.6.1-linux-amd64-images.tar.gz.sha256
 sudo ctr -n k8s.io images import jaslide-v0.6.1-linux-amd64-images.tar.gz
-sudo ctr -n k8s.io images ls | grep jaslide   # 5개(api/web/renderer/postgres/redis) 모두 amd64인지 확인
+sudo ctr -n k8s.io images ls | grep jaslide
 ```
 
-Harbor 등 레지스트리를 쓰기로 했다면 대신 Podman으로 로드해 태그·푸시합니다:
+Docker Compose는 Docker engine에 한 번만 load합니다.
 
 ```bash
-podman load -i jaslide-v0.6.1-linux-amd64-images.tar.gz
-podman image inspect --format '{{.Architecture}}' jaslide/api:v0.6.1  # amd64
-podman tag jaslide/api:v0.6.1 <레지스트리>/jaslide/api:v0.6.1
-podman push <레지스트리>/jaslide/api:v0.6.1
+docker load -i jaslide-v0.6.1-linux-amd64-images.tar.gz
 ```
 
-`docker-compose.offline.yml`은 개발·스모크 테스트 전용이며 Docker 이미지 저장소를 사용합니다. Podman으로 로드한 이미지를 Docker Compose에 섞어 사용하지 않습니다. Compose 검증이 필요하면 별도의 Docker 환경에서 같은 아카이브를 `docker load -i`로 로드한 뒤 `jaslide/*:v0.6.1`을 `jaslide/*:offline`으로 태그하십시오. Compose 파일에는 `build:` 항목이 없습니다.
+## 3. 외부 registry 없이 실행
 
-## 3. 폐쇄망에서 소스 빌드가 필요한 경우
-
-준비 단계에서 반입한 pnpm 저장소를 지정해 설치합니다. 빈 저장소나 기본 저장소를 사용하면 pnpm이 레지스트리에 접근하려 하므로 금지합니다.
+`.env.example`을 기준으로 `.env`를 만들고 비밀번호, origin, Keycloak,
+OpenAI-compatible LLM 값을 설정합니다. HTTPS 운영은
+`NODE_ENV=production`, 로컬 HTTP 검증은 `NODE_ENV=development`를 사용합니다.
 
 ```bash
-CI=true pnpm install --offline --frozen-lockfile --trust-lockfile --store-dir /opt/jaslide/pnpm-store
+export JASLIDE_VERSION=v0.6.1
+docker compose --project-name jaslide --env-file .env \
+  --file docker-compose.offline.yml up -d --no-build --pull never
+BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 ```
 
-이 명령은 `downloaded 0`을 출력해야 합니다. 이후 Prisma 클라이언트를 로컬에서 생성하고 빌드합니다.
+`pull_policy: never`와 `--pull never` 때문에 image가 누락되면 registry에
+접속하지 않고 실패합니다. API와 renderer는 host port가 없고 web의 동일
+origin proxy로만 접근합니다. 사내 Keycloak/LLM endpoint는 폐쇄망 내부에서
+계속 접근 가능해야 합니다.
 
-```bash
-cd apps/api
-./node_modules/.bin/prisma generate --schema prisma/schema.prisma
-./node_modules/.bin/nest build
-cd ../web
-pnpm build
-```
+## 4. 점검표
 
-## 4. 배포 전 점검
-
-- 로컬 LLM 엔드포인트와 모델 파일이 사내에 준비되어 있다.
-- 이미지 tarball SHA-256이 준비 환경의 값과 일치한다.
-- 이미지 5개가 모두 워커 노드의 `ctr -n k8s.io images ls`(또는 Podman `image inspect`)에 존재하고 아키텍처가 `amd64`이다.
-- `docker compose ... up -d --no-build` 중 외부 DNS/레지스트리 요청이 없다.
-- 업로드 저장소, PostgreSQL, Redis 볼륨의 백업 정책이 적용되어 있다.
+- archive SHA-256이 외부망 준비 환경의 값과 일치한다.
+- 다섯 image가 모두 `linux/amd64`이며 올바른 release tag를 가진다.
+- `/login`이 React entry document를 반환한다.
+- `/api/health/ready`가 `200 {"status":"ok"}`를 반환한다.
+- 기존 `postgres_data`, `redis_data`, `assets_data` volume의 백업이 있다.
+- 업로드 mount가 `/app/apps/api/uploads`로 유지된다.
+- renderer service 이름과 Keycloak/OpenAI 환경 변수 이름이 유지된다.
+- 운영 시작 과정에서 build 또는 registry pull이 발생하지 않는다.
