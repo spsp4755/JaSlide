@@ -160,27 +160,42 @@ func (h *handlers) createBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	order := input.Order
-	if order == nil {
-		value := 0
-		if err := h.pool.QueryRow(r.Context(), `SELECT COALESCE(MAX("order")+1,0) FROM "Block" WHERE "slideId"=$1`, slideID).Scan(&value); err != nil {
-			writeError(w, err)
-			return
-		}
-		order = &value
-	}
 	if len(input.Content) == 0 {
 		input.Content = json.RawMessage(`{}`)
 	}
 	if len(input.Style) == 0 {
 		input.Style = json.RawMessage(`{}`)
 	}
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
 	id := newID()
-	value, err := scanBlock(h.pool.QueryRow(r.Context(), `
+	if input.Order == nil {
+		var lockedSlide string
+		if err := tx.QueryRow(r.Context(), `SELECT id FROM "Slide" WHERE id=$1 FOR UPDATE`, slideID).Scan(&lockedSlide); err != nil {
+			writeError(w, err)
+			return
+		}
+		value := 0
+		if err := tx.QueryRow(r.Context(), `SELECT COALESCE(MAX("order")+1,0) FROM "Block" WHERE "slideId"=$1`, slideID).Scan(&value); err != nil {
+			writeError(w, err)
+			return
+		}
+		order = &value
+	}
+	value, err := scanBlock(tx.QueryRow(r.Context(), `
 		INSERT INTO "Block"(id,"slideId",type,"order",content,style,"createdAt","updatedAt")
 		VALUES($1,$2,$3::"BlockType",$4,$5::jsonb,$6::jsonb,now(),now())
 		RETURNING id,"slideId",type::text,"order",content,style,"createdAt","updatedAt"`,
 		id, slideID, input.Type, *order, input.Content, input.Style))
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -313,17 +328,32 @@ func (h *handlers) duplicateBlock(w http.ResponseWriter, r *http.Request) {
 		writeForbidden(w, "Access denied")
 		return
 	}
-	var order int
-	if err := h.pool.QueryRow(r.Context(), `SELECT COALESCE(MAX("order")+1,0) FROM "Block" WHERE "slideId"=$1`, value.SlideID).Scan(&order); err != nil {
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
 		writeError(w, err)
 		return
 	}
-	duplicate, err := scanBlock(h.pool.QueryRow(r.Context(), `
+	defer tx.Rollback(r.Context())
+	var lockedSlide string
+	if err := tx.QueryRow(r.Context(), `SELECT id FROM "Slide" WHERE id=$1 FOR UPDATE`, value.SlideID).Scan(&lockedSlide); err != nil {
+		writeError(w, err)
+		return
+	}
+	var order int
+	if err := tx.QueryRow(r.Context(), `SELECT COALESCE(MAX("order")+1,0) FROM "Block" WHERE "slideId"=$1`, value.SlideID).Scan(&order); err != nil {
+		writeError(w, err)
+		return
+	}
+	duplicate, err := scanBlock(tx.QueryRow(r.Context(), `
 		INSERT INTO "Block"(id,"slideId",type,"order",content,style,"createdAt","updatedAt")
 		VALUES($1,$2,$3::"BlockType",$4,$5::jsonb,$6::jsonb,now(),now())
 		RETURNING id,"slideId",type::text,"order",content,style,"createdAt","updatedAt"`,
 		newID(), value.SlideID, value.Type, order, value.Content, value.Style))
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -401,6 +431,7 @@ func (h *handlers) listCollaborators(w http.ResponseWriter, r *http.Request) {
 		writeForbidden(w, "Access denied")
 		return
 	}
+	trustedRoster := ownerID == userID(r) || member
 	owner = map[string]any{"id": ownerID, "name": name, "email": email, "image": image}
 	rows, err := h.pool.Query(r.Context(), collaboratorSelect+` WHERE c."presentationId"=$1 ORDER BY c."joinedAt"`, presentationID)
 	if err != nil {
@@ -420,6 +451,14 @@ func (h *handlers) listCollaborators(w http.ResponseWriter, r *http.Request) {
 	if err := rows.Err(); err != nil {
 		writeError(w, err)
 		return
+	}
+	if !trustedRoster {
+		owner = map[string]any{"id": nil, "name": nil, "email": nil, "image": nil}
+		for index := range values {
+			values[index].UserID = ""
+			values[index].InvitedBy = ""
+			values[index].User = map[string]any{"id": nil, "name": nil, "email": nil, "image": nil}
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owner": owner, "collaborators": values})
 }
@@ -614,10 +653,21 @@ func (h *handlers) createFavorite(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, "Invalid resource type, resourceId, or order")
 		return
 	}
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
 	order := input.Order
 	if order == nil {
+		var lockedUser string
+		if err := tx.QueryRow(r.Context(), `SELECT id FROM "User" WHERE id=$1 FOR UPDATE`, userID(r)).Scan(&lockedUser); err != nil {
+			writeError(w, err)
+			return
+		}
 		value := 0
-		if err := h.pool.QueryRow(r.Context(), `
+		if err := tx.QueryRow(r.Context(), `
 			SELECT COALESCE(MAX("order")+1,0) FROM "Favorite" WHERE "userId"=$1 AND "resourceType"=$2`,
 			userID(r), input.ResourceType).Scan(&value); err != nil {
 			writeError(w, err)
@@ -625,7 +675,7 @@ func (h *handlers) createFavorite(w http.ResponseWriter, r *http.Request) {
 		}
 		order = &value
 	}
-	value, err := scanFavorite(h.pool.QueryRow(r.Context(), `
+	value, err := scanFavorite(tx.QueryRow(r.Context(), `
 		INSERT INTO "Favorite"(id,"userId","resourceType","resourceId","order","createdAt")
 		VALUES($1,$2,$3,$4,$5,now())
 		RETURNING id,"userId","resourceType","resourceId","order","createdAt"`,
@@ -635,6 +685,10 @@ func (h *handlers) createFavorite(w http.ResponseWriter, r *http.Request) {
 			writeBadRequest(w, "Already in favorites")
 			return
 		}
+		writeError(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -804,6 +858,9 @@ func (h *handlers) createExportPreset(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := h.pool.Begin(r.Context())
 	if err == nil && input.IsDefault {
+		_, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID(r)+"|"+input.Format)
+	}
+	if err == nil && input.IsDefault {
 		_, err = tx.Exec(r.Context(), `UPDATE "ExportPreset" SET "isDefault"=false,"updatedAt"=now() WHERE "userId"=$1 AND format=$2 AND "isDefault"=true`, userID(r), input.Format)
 	}
 	var value exportPreset
@@ -828,11 +885,6 @@ func (h *handlers) createExportPreset(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) updateExportPreset(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var currentFormat string
-	if err := h.pool.QueryRow(r.Context(), `SELECT format FROM "ExportPreset" WHERE id=$1 AND "userId"=$2`, id, userID(r)).Scan(&currentFormat); err != nil {
-		writeError(w, err)
-		return
-	}
 	var input struct {
 		Name      *string         `json:"name"`
 		Format    *string         `json:"format"`
@@ -847,12 +899,32 @@ func (h *handlers) updateExportPreset(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, "name, format, or config is invalid")
 		return
 	}
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var currentFormat string
+	var currentDefault bool
+	if err := tx.QueryRow(r.Context(), `
+		SELECT format,"isDefault" FROM "ExportPreset" WHERE id=$1 AND "userId"=$2 FOR UPDATE`,
+		id, userID(r)).Scan(&currentFormat, &currentDefault); err != nil {
+		writeError(w, err)
+		return
+	}
 	format := currentFormat
 	if input.Format != nil {
 		format = *input.Format
 	}
-	tx, err := h.pool.Begin(r.Context())
-	if err == nil && input.IsDefault != nil && *input.IsDefault {
+	willBeDefault := currentDefault
+	if input.IsDefault != nil {
+		willBeDefault = *input.IsDefault
+	}
+	if willBeDefault {
+		_, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID(r)+"|"+format)
+	}
+	if err == nil && willBeDefault {
 		_, err = tx.Exec(r.Context(), `
 			UPDATE "ExportPreset" SET "isDefault"=false,"updatedAt"=now()
 			WHERE "userId"=$1 AND format=$2 AND id<>$3 AND "isDefault"=true`, userID(r), format, id)
@@ -868,8 +940,6 @@ func (h *handlers) updateExportPreset(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil {
 		err = tx.Commit(r.Context())
-	} else if tx != nil {
-		_ = tx.Rollback(r.Context())
 	}
 	if err != nil {
 		writeError(w, err)
@@ -1050,8 +1120,23 @@ type recentWork struct {
 
 func (h *handlers) listRecentWorks(w http.ResponseWriter, r *http.Request) {
 	limit := parseLimit(r, 10)
+	if _, err := h.pool.Exec(r.Context(), `
+		DELETE FROM "RecentWork" rw
+		WHERE rw."userId"=$1 AND NOT EXISTS(
+			SELECT 1 FROM "Presentation" p WHERE p.id=rw."presentationId" AND
+			(p."userId"=$1 OR p."isPublic" OR EXISTS(
+				SELECT 1 FROM "Collaborator" c WHERE c."presentationId"=p.id AND c."userId"=$1
+			))
+		)`, userID(r)); err != nil {
+		writeError(w, err)
+		return
+	}
 	rows, err := h.pool.Query(r.Context(), recentWorkSelect+`
-		WHERE rw."userId"=$1 ORDER BY rw."accessedAt" DESC LIMIT $2`, userID(r), limit)
+		WHERE rw."userId"=$1 AND
+			(p."userId"=$1 OR p."isPublic" OR EXISTS(
+				SELECT 1 FROM "Collaborator" c WHERE c."presentationId"=p.id AND c."userId"=$1
+			))
+		ORDER BY rw."accessedAt" DESC LIMIT $2`, userID(r), limit)
 	if err != nil {
 		writeError(w, err)
 		return

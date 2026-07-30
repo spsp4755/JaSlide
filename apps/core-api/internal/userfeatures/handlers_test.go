@@ -128,15 +128,16 @@ func TestUserFeatureContractsAndOwnership(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	suffix := fmt.Sprint(time.Now().UnixNano())
-	orgID, ownerID, otherID := "routes-org-"+suffix, "routes-owner-"+suffix, "routes-other-"+suffix
+	orgID, ownerID, otherID, viewerID := "routes-org-"+suffix, "routes-owner-"+suffix, "routes-other-"+suffix, "routes-viewer-"+suffix
 	presentationID, slideID := "routes-presentation-"+suffix, "routes-slide-"+suffix
 	for _, setup := range []struct {
 		query string
 		args  []any
 	}{
 		{`INSERT INTO "Organization"(id,name,slug,"updatedAt") VALUES($1,'Routes',$2,now())`, []any{orgID, "routes-" + suffix}},
-		{`INSERT INTO "User"(id,email,"organizationId","updatedAt") VALUES($1,$2,$3,now()),($4,$5,NULL,now())`,
-			[]any{ownerID, "routes-owner-" + suffix + "@example.com", orgID, otherID, "routes-other-" + suffix + "@example.com"}},
+		{`INSERT INTO "User"(id,email,"organizationId","updatedAt") VALUES($1,$2,$3,now()),($4,$5,NULL,now()),($6,$7,NULL,now())`,
+			[]any{ownerID, "routes-owner-" + suffix + "@example.com", orgID, otherID, "routes-other-" + suffix + "@example.com",
+				viewerID, "routes-viewer-" + suffix + "@example.com"}},
 		{`INSERT INTO "Presentation"(id,title,"userId","sourceType","updatedAt") VALUES($1,'Routes',$2,'TEXT',now())`,
 			[]any{presentationID, ownerID}},
 		{`INSERT INTO "Slide"(id,"presentationId","order",type,content,"updatedAt") VALUES($1,$2,0,'CONTENT','{}'::jsonb,now())`,
@@ -147,7 +148,7 @@ func TestUserFeatureContractsAndOwnership(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() {
-		_, _ = store.Pool().Exec(context.Background(), `DELETE FROM "User" WHERE id=ANY($1)`, []string{ownerID, otherID})
+		_, _ = store.Pool().Exec(context.Background(), `DELETE FROM "User" WHERE id=ANY($1)`, []string{ownerID, otherID, viewerID})
 		_, _ = store.Pool().Exec(context.Background(), `DELETE FROM "Organization" WHERE id=$1`, orgID)
 	})
 
@@ -159,6 +160,7 @@ func TestUserFeatureContractsAndOwnership(t *testing.T) {
 	defer server.Close()
 	ownerToken, _ := sessions.Issue(auth.Principal{ID: ownerID, Email: "owner@example.com", Role: "USER"})
 	otherToken, _ := sessions.Issue(auth.Principal{ID: otherID, Email: "other@example.com", Role: "USER"})
+	viewerToken, _ := sessions.Issue(auth.Principal{ID: viewerID, Email: "viewer@example.com", Role: "USER"})
 
 	block := contractJSON(t, server.Client(), ownerToken, http.MethodPost, server.URL+"/api/slides/"+slideID+"/blocks",
 		`{"type":"TEXT","content":{"text":"hello"},"style":{"x":10}}`, http.StatusCreated)
@@ -184,6 +186,20 @@ func TestUserFeatureContractsAndOwnership(t *testing.T) {
 	}
 	contractJSON(t, server.Client(), otherToken, http.MethodGet,
 		server.URL+"/api/presentations/"+presentationID+"/collaborators", "", http.StatusOK)
+	if _, err := store.Pool().Exec(ctx, `UPDATE "Presentation" SET "isPublic"=true WHERE id=$1`, presentationID); err != nil {
+		t.Fatal(err)
+	}
+	publicRoster := contractJSON(t, server.Client(), viewerToken, http.MethodGet,
+		server.URL+"/api/presentations/"+presentationID+"/collaborators", "", http.StatusOK)
+	publicRaw, _ := json.Marshal(publicRoster)
+	for _, secret := range []string{ownerID, otherID, "routes-owner-" + suffix + "@example.com", "routes-other-" + suffix + "@example.com"} {
+		if bytes.Contains(publicRaw, []byte(secret)) {
+			t.Fatalf("public collaborator roster leaked %q: %s", secret, publicRaw)
+		}
+	}
+	if _, err := store.Pool().Exec(ctx, `UPDATE "Presentation" SET "isPublic"=false WHERE id=$1`, presentationID); err != nil {
+		t.Fatal(err)
+	}
 
 	favorite := contractJSON(t, server.Client(), ownerToken, http.MethodPost, server.URL+"/api/favorites",
 		`{"resourceType":"template","resourceId":"template-1"}`, http.StatusCreated)
@@ -209,6 +225,19 @@ func TestUserFeatureContractsAndOwnership(t *testing.T) {
 	}
 	contractJSON(t, server.Client(), otherToken, http.MethodPost,
 		server.URL+"/api/recent-works/"+presentationID, "", http.StatusCreated)
+	contractJSON(t, server.Client(), ownerToken, http.MethodDelete,
+		server.URL+"/api/collaborators/"+collaboratorID, "", http.StatusOK)
+	if recent := contractJSONArray(t, server.Client(), otherToken, http.MethodGet,
+		server.URL+"/api/recent-works", "", http.StatusOK); len(recent) != 0 {
+		t.Fatalf("revoked recent work remained visible: %#v", recent)
+	}
+	var recentCount int
+	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM "RecentWork" WHERE "userId"=$1`, otherID).Scan(&recentCount); err != nil {
+		t.Fatal(err)
+	}
+	if recentCount != 0 {
+		t.Fatalf("revoked recent work rows = %d, want 0", recentCount)
+	}
 	contractJSON(t, server.Client(), ownerToken, http.MethodPost,
 		server.URL+"/api/organizations/"+orgID+"/color-palettes",
 		`{"name":"Brand","colors":["#112233"],"isDefault":true}`, http.StatusCreated)
@@ -217,6 +246,94 @@ func TestUserFeatureContractsAndOwnership(t *testing.T) {
 	contractJSON(t, server.Client(), ownerToken, http.MethodPost,
 		server.URL+"/api/organizations/"+orgID+"/font-sets",
 		`{"name":"Korean","headingFont":"HY헤드라인M","bodyFont":"나눔고딕"}`, http.StatusCreated)
+
+	t.Run("concurrent automatic order and default allocation", func(t *testing.T) {
+		const parallel = 16
+		runConcurrentRequests := func(target string, bodies []string) {
+			t.Helper()
+			start := make(chan struct{})
+			results := make(chan error, len(bodies))
+			for _, body := range bodies {
+				go func(body string) {
+					<-start
+					request, _ := http.NewRequest(http.MethodPost, target, strings.NewReader(body))
+					request.Header.Set("Content-Type", "application/json")
+					request.AddCookie(&http.Cookie{Name: "jaslide_session", Value: ownerToken})
+					response, err := server.Client().Do(request)
+					if err == nil {
+						raw, readErr := io.ReadAll(response.Body)
+						response.Body.Close()
+						if readErr != nil {
+							err = readErr
+						} else if response.StatusCode != http.StatusCreated {
+							err = fmt.Errorf("status %d: %s", response.StatusCode, raw)
+						}
+					}
+					results <- err
+				}(body)
+			}
+			close(start)
+			for range bodies {
+				if err := <-results; err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		blockBodies := make([]string, parallel)
+		favoriteBodies := make([]string, parallel)
+		presetBodies := make([]string, parallel)
+		for index := 0; index < parallel; index++ {
+			blockBodies[index] = `{"type":"TEXT","content":{"text":"parallel"}}`
+			favoriteBodies[index] = fmt.Sprintf(`{"resourceType":"template","resourceId":"parallel-%d"}`, index)
+			presetBodies[index] = fmt.Sprintf(`{"name":"Parallel %d","format":"pdf","isDefault":true}`, index)
+		}
+		runConcurrentRequests(server.URL+"/api/slides/"+slideID+"/blocks", blockBodies)
+		assertUniqueOrders(t, store, `"Block"`, `"slideId"`, slideID)
+		runConcurrentRequests(server.URL+"/api/favorites", favoriteBodies)
+		assertUniqueOrders(t, store, `"Favorite"`, `"userId"`, ownerID)
+		runConcurrentRequests(server.URL+"/api/export-presets", presetBodies)
+		var defaults int
+		if err := store.Pool().QueryRow(ctx, `
+			SELECT COUNT(*) FROM "ExportPreset" WHERE "userId"=$1 AND format='pdf' AND "isDefault"`, ownerID).Scan(&defaults); err != nil {
+			t.Fatal(err)
+		}
+		if defaults != 1 {
+			t.Fatalf("concurrent default presets = %d, want 1", defaults)
+		}
+
+		start := make(chan struct{})
+		slideErrors := make(chan error, parallel)
+		for index := 0; index < parallel; index++ {
+			go func(index int) {
+				<-start
+				_, err := store.CreateSlide(ctx, db.SlideCreate{
+					ID: fmt.Sprintf("parallel-slide-%s-%d", suffix, index), PresentationID: presentationID,
+					Type: "CONTENT", Content: json.RawMessage(`{}`), Layout: "center",
+				})
+				slideErrors <- err
+			}(index)
+		}
+		close(start)
+		for index := 0; index < parallel; index++ {
+			if err := <-slideErrors; err != nil {
+				t.Fatal(err)
+			}
+		}
+		assertUniqueOrders(t, store, `"Slide"`, `"presentationId"`, presentationID)
+	})
+}
+
+func assertUniqueOrders(t *testing.T, store *db.Store, table, parentColumn, parentID string) {
+	t.Helper()
+	var rows, orders int
+	query := `SELECT COUNT(*),COUNT(DISTINCT "order") FROM ` + table + ` WHERE ` + parentColumn + `=$1`
+	if err := store.Pool().QueryRow(context.Background(), query, parentID).Scan(&rows, &orders); err != nil {
+		t.Fatal(err)
+	}
+	if rows != orders {
+		t.Fatalf("%s rows = %d, distinct orders = %d", table, rows, orders)
+	}
 }
 
 func contractJSON(t *testing.T, client *http.Client, token, method, target, body string, want int) map[string]any {

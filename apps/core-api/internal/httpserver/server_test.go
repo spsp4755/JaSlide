@@ -105,3 +105,24 @@ func TestHealthBaseAndMetricsRoutes(t *testing.T) {
 		}
 	}
 }
+
+func TestHealthMetricsUsesDependencyReadiness(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/health/metrics", nil)
+	response := httptest.NewRecorder()
+	New(unavailableProbe{}).ServeHTTP(response, request)
+
+	var body struct {
+		Status   string `json:"status"`
+		Services struct {
+			Dependencies struct {
+				Status string `json:"status"`
+			} `json:"dependencies"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Status != "degraded" || body.Services.Dependencies.Status != "down" {
+		t.Fatalf("metrics status = %#v, want degraded dependencies", body)
+	}
+}

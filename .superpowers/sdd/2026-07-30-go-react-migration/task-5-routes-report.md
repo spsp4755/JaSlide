@@ -8,6 +8,10 @@
 - Completed `GET /api/health` and `GET /api/health/metrics` while retaining liveness and readiness probes.
 - Confirmed the existing Go version endpoints include both `GET /api/versions/:id` and `GET /api/versions/:id1/compare/:id2`.
 - Preserved database ownership boundaries and additionally reject block/favorite reorder requests containing IDs outside the authenticated user's slide or collection.
+- Redacted owner and collaborator identifiers from public presentation rosters unless the requester is the owner or an active collaborator.
+- Recent-work reads now re-check current presentation access and purge entries after access is revoked.
+- Serialized automatic block, favorite, and slide ordering, plus per-user/per-format default export preset allocation.
+- Health metrics now report the actual aggregate database, Redis, and renderer dependency readiness instead of a constant healthy value.
 
 ## Route inventory
 
@@ -35,7 +39,10 @@ Google OAuth was not ported because the approved migration design retains local 
   - single-default export preset behavior;
   - input-prompt history;
   - collaborator recent-work access;
+  - public roster PII redaction and revoked recent-work removal;
+  - concurrent automatic order allocation and single-default preset allocation;
   - organization palette/font creation and cross-organization rejection.
+- Health regression tests cover healthy and unavailable dependency states for base, readiness, and metrics endpoints.
 - `go test ./...` with integration database and Redis: passed.
 - `go vet ./...`: passed.
 - `go build ./cmd/api`: passed.

@@ -397,18 +397,32 @@ func (store *Store) GetSlideContext(ctx context.Context, id string) (SlideContex
 }
 
 func (store *Store) CreateSlide(ctx context.Context, input SlideCreate) (Slide, error) {
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		return Slide{}, err
+	}
+	defer tx.Rollback(ctx)
 	order := 0
 	if input.Order != nil {
 		order = *input.Order
-	} else if err := store.pool.QueryRow(ctx, `
-		SELECT COALESCE(MAX("order")+1,0) FROM "Slide" WHERE "presentationId"=$1`, input.PresentationID).Scan(&order); err != nil {
-		return Slide{}, err
+	} else {
+		var lockedPresentation string
+		if err := tx.QueryRow(ctx, `SELECT id FROM "Presentation" WHERE id=$1 FOR UPDATE`, input.PresentationID).Scan(&lockedPresentation); err != nil {
+			return Slide{}, err
+		}
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(MAX("order")+1,0) FROM "Slide" WHERE "presentationId"=$1`, input.PresentationID).Scan(&order); err != nil {
+			return Slide{}, err
+		}
 	}
-	_, err := store.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO "Slide" ("id","presentationId","order","type","title","content","layout","notes","updatedAt")
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
 		input.ID, input.PresentationID, order, input.Type, input.Title, input.Content, input.Layout, input.Notes)
 	if err != nil {
+		return Slide{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return Slide{}, err
 	}
 	return store.GetSlide(ctx, input.ID)
@@ -484,7 +498,19 @@ func (store *Store) ReorderSlides(ctx context.Context, presentationID string, or
 }
 
 func (store *Store) DuplicateSlide(ctx context.Context, id, newID string) (Slide, error) {
-	tag, err := store.pool.Exec(ctx, `
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		return Slide{}, err
+	}
+	defer tx.Rollback(ctx)
+	var presentationID, lockedPresentation string
+	if err := tx.QueryRow(ctx, `SELECT "presentationId" FROM "Slide" WHERE id=$1`, id).Scan(&presentationID); err != nil {
+		return Slide{}, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT id FROM "Presentation" WHERE id=$1 FOR UPDATE`, presentationID).Scan(&lockedPresentation); err != nil {
+		return Slide{}, err
+	}
+	tag, err := tx.Exec(ctx, `
 		INSERT INTO "Slide" ("id","presentationId","order","type","title","content","layout","notes","updatedAt")
 		SELECT $2,"presentationId",
 			(SELECT COALESCE(MAX(s2."order")+1,0) FROM "Slide" s2 WHERE s2."presentationId"=s."presentationId"),
@@ -496,6 +522,9 @@ func (store *Store) DuplicateSlide(ctx context.Context, id, newID string) (Slide
 	}
 	if tag.RowsAffected() == 0 {
 		return Slide{}, pgx.ErrNoRows
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Slide{}, err
 	}
 	return store.GetSlide(ctx, newID)
 }

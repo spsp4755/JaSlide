@@ -17,11 +17,7 @@ type DependencyProbe interface {
 func New(probe DependencyProbe, routeGroups ...http.Handler) http.Handler {
 	router := chi.NewRouter()
 	router.Get("/api/health", func(writer http.ResponseWriter, _ *http.Request) {
-		status := "healthy"
-		dependencies := "up"
-		if probe != nil && probe.Ready() != nil {
-			status, dependencies = "degraded", "down"
-		}
+		status, dependencies := dependencyStatus(probe)
 		writeJSON(writer, http.StatusOK, map[string]any{
 			"status": status, "uptime": time.Since(startedAt).Seconds(), "timestamp": time.Now().UTC(),
 			"service": "taeslide-core-api", "services": map[string]any{"dependencies": map[string]string{"status": dependencies}},
@@ -40,13 +36,15 @@ func New(probe DependencyProbe, routeGroups ...http.Handler) http.Handler {
 	router.Get("/api/health/metrics", func(writer http.ResponseWriter, _ *http.Request) {
 		var memory runtime.MemStats
 		runtime.ReadMemStats(&memory)
+		status, dependencies := dependencyStatus(probe)
 		writeJSON(writer, http.StatusOK, map[string]any{
-			"status": "healthy", "uptime": time.Since(startedAt).Seconds(),
+			"status": status, "uptime": time.Since(startedAt).Seconds(),
 			"memory": map[string]uint64{
 				"heapUsed": memory.Alloc / 1024 / 1024, "heapTotal": memory.HeapSys / 1024 / 1024,
 				"rss": memory.Sys / 1024 / 1024,
 			},
 			"requests": map[string]any{"total": 0, "perMinute": 0, "errorRate": 0},
+			"services": map[string]any{"dependencies": map[string]string{"status": dependencies}},
 		})
 	})
 	if len(routeGroups) > 0 && routeGroups[0] != nil {
@@ -63,4 +61,11 @@ func New(probe DependencyProbe, routeGroups ...http.Handler) http.Handler {
 
 func writeStatus(writer http.ResponseWriter, status int, value string) {
 	writeJSON(writer, status, map[string]string{"status": value})
+}
+
+func dependencyStatus(probe DependencyProbe) (string, string) {
+	if probe != nil && probe.Ready() != nil {
+		return "degraded", "down"
+	}
+	return "healthy", "up"
 }
