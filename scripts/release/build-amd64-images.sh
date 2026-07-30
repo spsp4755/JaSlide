@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-release_version="${1:-v0.6.1}"
+release_version="${1:-v0.7.0}"
 web_api_url="${VITE_API_URL:-/api}"
 output_dir="${OUTPUT_DIR:-dist/release}"
 source_date_epoch="${SOURCE_DATE_EPOCH:-$(git log -1 --pretty=%ct 2>/dev/null || printf '0')}"

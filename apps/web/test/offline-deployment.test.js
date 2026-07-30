@@ -18,9 +18,9 @@ test('offline deployment uses imported images and documents the required verific
     const releaseScript = fs.readFileSync(path.join(root, 'scripts', 'release', 'build-amd64-images.sh'), 'utf8');
 
     assert.doesNotMatch(compose, /^\s*build:/m);
-    assert.match(compose, /image: jaslide\/core-api:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
-    assert.match(compose, /image: jaslide\/web:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
-    assert.match(compose, /image: jaslide\/renderer:\$\{JASLIDE_VERSION:-v0\.6\.1\}/);
+    assert.match(compose, new RegExp(`image: jaslide/core-api:\\$\\{JASLIDE_VERSION:-v${escapedVersion}\\}`));
+    assert.match(compose, new RegExp(`image: jaslide/web:\\$\\{JASLIDE_VERSION:-v${escapedVersion}\\}`));
+    assert.match(compose, new RegExp(`image: jaslide/renderer:\\$\\{JASLIDE_VERSION:-v${escapedVersion}\\}`));
     assert.equal((compose.match(/pull_policy: never/g) || []).length, 6);
     assert.match(guide, /build-amd64-images\.sh/);
     assert.doesNotMatch(guide, /pnpm (?:install|build)|nest build|prisma migrate/i);
