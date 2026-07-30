@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,14 +18,21 @@ import (
 )
 
 func main() {
-	config, err := config.Load()
+	if err := run(); err != nil {
+		log.Printf("core API stopped: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	store, err := db.Open(context.Background(), config)
+	store, err := db.Open(context.Background(), cfg)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() {
 		if err := store.Close(); err != nil {
@@ -33,36 +41,37 @@ func main() {
 	}()
 
 	server := &http.Server{
-		Addr:              config.Address,
-		Handler:           httpserver.New(dependencyProbe{config: config, store: store, client: &http.Client{Timeout: 2 * time.Second}}),
+		Addr:              cfg.Address,
+		Handler:           httpserver.New(dependencyProbe{config: cfg, store: store, client: &http.Client{Timeout: 2 * time.Second}}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	log.Printf("core API listening on %s", config.Address)
-	select {
-	case <-signalContext.Done():
-	case err := <-serve(server):
-		if err != nil && err != http.ErrServerClosed {
-			log.Printf("server stopped: %v", err)
-		}
-		return
-	}
-
-	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownContext); err != nil {
-		log.Printf("server shutdown: %v", err)
-	}
+	log.Printf("core API listening on %s", cfg.Address)
+	return runServer(signalContext, server)
 }
 
-func serve(server *http.Server) <-chan error {
+func runServer(signalContext context.Context, server *http.Server) error {
 	result := make(chan error, 1)
 	go func() {
 		result <- server.ListenAndServe()
 	}()
-	return result
+
+	select {
+	case <-signalContext.Done():
+		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownContext); err != nil {
+			return fmt.Errorf("server shutdown: %w", err)
+		}
+		return nil
+	case err := <-result:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("listen: %w", err)
+		}
+		return nil
+	}
 }
 
 type dependencyProbe struct {

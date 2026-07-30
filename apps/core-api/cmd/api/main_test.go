@@ -1,20 +1,17 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
 )
 
-func TestServeReportsListenError(t *testing.T) {
-	errors := serve(&http.Server{Addr: "not a valid address"})
+func TestRunServerReturnsListenError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	select {
-	case err := <-errors:
-		if err == nil {
-			t.Fatal("serve() error = nil")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serve() did not report listen error")
+	if err := runServer(ctx, &http.Server{Addr: "not a valid address"}); err == nil {
+		t.Fatal("runServer() error = nil")
 	}
 }
