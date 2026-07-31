@@ -99,3 +99,23 @@ func TestConfiguredLocalModelGeneratesTenSlideOutlineInBatches(t *testing.T) {
 		}
 	}
 }
+
+func TestParseSlideContentAcceptsTitleAsHeadingFallback(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{"title":"업무보고","body":"내용"}`), "CONTENT")
+	if err != nil {
+		t.Fatalf("expected fallback to title to succeed, got error: %v", err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if value["heading"] != "업무보고" {
+		t.Fatalf("expected heading %q, got %v", "업무보고", value["heading"])
+	}
+}
+
+func TestParseSlideContentStillRequiresHeadingOrTitle(t *testing.T) {
+	if _, err := parseSlideContent(json.RawMessage(`{"body":"내용"}`), "CONTENT"); err == nil {
+		t.Fatal("expected error when neither heading nor title is present")
+	}
+}

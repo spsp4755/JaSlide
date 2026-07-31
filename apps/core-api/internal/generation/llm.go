@@ -333,6 +333,11 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 	}
 	heading, ok := value["heading"].(string)
 	if !ok || strings.TrimSpace(heading) == "" {
+		// ponytail: some models (esp. small local ones) return "title" instead of the
+		// requested "heading" key; accept it as a fallback rather than failing generation.
+		heading, ok = value["title"].(string)
+	}
+	if !ok || strings.TrimSpace(heading) == "" {
 		return nil, errors.New("slide content requires heading")
 	}
 	result := map[string]any{"heading": heading}
