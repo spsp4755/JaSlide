@@ -554,14 +554,21 @@ class PPTXGenerator:
         slide_type = slide_data.type.upper()
         content = slide_data.content
 
+        # ponytail: small models often ignore an outline's requested slide type
+        # (e.g. picking CONTENT instead of the guided TWO_COLUMN) while still
+        # correctly producing a valid two-column "columns" content shape. Trust
+        # the content shape over the unreliable type label when it's present.
+        columns = content.get("columns") if isinstance(content, dict) else None
+        has_columns = isinstance(columns, list) and len(columns) == 2 and all(isinstance(item, dict) for item in columns)
+
         if slide_type == "TITLE":
             self._add_title_slide(slide_data)
+        elif has_columns or slide_type == "TWO_COLUMN":
+            self._add_two_column_slide(slide_data)
         elif slide_type == "CONTENT":
             self._add_content_slide(slide_data)
         elif slide_type == "BULLET_LIST":
             self._add_bullet_slide(slide_data)
-        elif slide_type == "TWO_COLUMN":
-            self._add_two_column_slide(slide_data)
         elif slide_type == "QUOTE":
             self._add_quote_slide(slide_data)
         elif slide_type == "SECTION_HEADER":

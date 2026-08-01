@@ -516,6 +516,23 @@ def test_two_column_slide_without_columns_still_splits_flat_bullets():
     assert any("둘째 항목" in text for text in texts)
 
 
+def test_content_typed_slide_with_valid_columns_still_renders_as_two_column():
+    # Regression test: small models sometimes label the outline slide CONTENT
+    # instead of the guided TWO_COLUMN, while still producing a valid 2-column
+    # "columns" shape. The dispatch must trust that shape over the type label.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "CONTENT", "업무보고", {"heading": "업무보고", "columns": [
+            {"header": "추진실적 (2026.07.27 ~ 2026.07.31)", "bullets": [{"text": "작성일: 2026.08.01", "level": 0}]},
+            {"header": "추진계획 (2026.08.03 ~ 2026.08.07)", "bullets": [{"text": "기간: 2026.08.03 ~ 2026.08.07", "level": 0}]},
+        ]},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "추진실적 (2026.07.27 ~ 2026.07.31)" in texts
+    assert "추진계획 (2026.08.03 ~ 2026.08.07)" in texts
+
+
 def test_html_template_without_font_family_uses_default_font():
     template = SimpleNamespace(config=SimpleNamespace(
         htmlTemplate='<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1200px;height:180px;font-size:48px">Title</div>',
