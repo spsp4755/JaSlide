@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
 )
@@ -472,6 +473,33 @@ func validTable(raw any) map[string]any {
 	return map[string]any{"headers": headers, "rows": rows}
 }
 
+// weekRanges returns "YYYY.MM.DD ~ YYYY.MM.DD" for the Monday-Friday of the
+// week containing now, and for the following week — computed once here so
+// the model never has to do date arithmetic itself. Sunday counts as the
+// last day of the preceding Monday-Friday week.
+func weekRanges(now time.Time) (thisWeek, nextWeek string) {
+	offset := (int(now.Weekday()) + 6) % 7
+	monday := now.AddDate(0, 0, -offset)
+	format := func(monday time.Time) string {
+		friday := monday.AddDate(0, 0, 4)
+		return monday.Format("2006.01.02") + " ~ " + friday.Format("2006.01.02")
+	}
+	return format(monday), format(monday.AddDate(0, 0, 7))
+}
+
+// dateGuidance is appended to every outline/content prompt so a skill that
+// needs "this week" / "next week" dates (e.g. a weekly report) can copy an
+// already-computed value instead of asking the model to calculate one.
+func dateGuidance() string {
+	now := time.Now()
+	thisWeek, nextWeek := weekRanges(now)
+	return fmt.Sprintf(
+		" Today is %s. This week (Mon-Fri): %s. Next week (Mon-Fri): %s. "+
+			"Use these dates unless the user explicitly states a different period.",
+		now.Format("2006.01.02"), thisWeek, nextWeek,
+	)
+}
+
 func outlinePrompt(input OutlineRequest) string {
 	catalog := ""
 	if len(input.TemplateSlides) > 0 {
@@ -487,8 +515,8 @@ func outlinePrompt(input OutlineRequest) string {
 	}
 	guidance := "\nChoose each slide's type by its content: TABLE for row/column data such as comparisons, schedules, or structured records; CHART for numeric trends or comparisons; BULLET_LIST for simple lists; TITLE for section covers; CONTENT for narrative slides."
 	return fmt.Sprintf(
-		"Create exactly %d presentation slides in %s from this source:\n%s%s%s%s\nReturn JSON only: {\"title\":\"Deck\",\"slides\":[{\"order\":1,\"title\":\"Title\",\"type\":\"CONTENT\",\"keyPoints\":[\"specific point\"],\"templateIndex\":0}]}",
-		input.SlideCount, input.Language, truncate(input.Content, 10000), catalog, continuation, guidance,
+		"Create exactly %d presentation slides in %s from this source:\n%s%s%s%s%s\nReturn JSON only: {\"title\":\"Deck\",\"slides\":[{\"order\":1,\"title\":\"Title\",\"type\":\"CONTENT\",\"keyPoints\":[\"specific point\"],\"templateIndex\":0}]}",
+		input.SlideCount, input.Language, truncate(input.Content, 10000), catalog, continuation, guidance, dateGuidance(),
 	)
 }
 
@@ -498,8 +526,9 @@ func slidePrompt(input SlideRequest) string {
 			"Return JSON only with heading, optional subheading/body, 3-5 bullets "+
 			"(each an object with text and level 0-2 for indentation), "+
 			"chart for CHART as {\"labels\":[\"...\"],\"values\":[0]}, "+
-			"and table for TABLE as {\"headers\":[\"...\"],\"rows\":[[\"...\"]]}.",
-		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "),
+			"table for TABLE as {\"headers\":[\"...\"],\"rows\":[[\"...\"]]}, "+
+			"and columns for TWO_COLUMN as exactly two {\"header\":\"...\",\"bullets\":[{\"text\":\"...\",\"level\":0}]} objects.%s",
+		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), dateGuidance(),
 	)
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/outboundpolicy"
 )
@@ -256,5 +257,37 @@ func TestParseSlideContentBuildsTableFromChartWhenModelUsesTheWrongKey(t *testin
 	first, ok := rows[0].([]any)
 	if !ok || first[0] != "개발팀" || first[1] != "90" {
 		t.Fatalf("expected first row [개발팀 90], got %v", rows[0])
+	}
+}
+
+func TestWeekRangesComputesMondayToFridayForThisAndNextWeek(t *testing.T) {
+	// 2026-08-05 is a Wednesday.
+	now := time.Date(2026, 8, 5, 15, 0, 0, 0, time.UTC)
+	thisWeek, nextWeek := weekRanges(now)
+	if thisWeek != "2026.08.03 ~ 2026.08.07" {
+		t.Fatalf("thisWeek = %q, want 2026.08.03 ~ 2026.08.07", thisWeek)
+	}
+	if nextWeek != "2026.08.10 ~ 2026.08.14" {
+		t.Fatalf("nextWeek = %q, want 2026.08.10 ~ 2026.08.14", nextWeek)
+	}
+}
+
+func TestWeekRangesTreatsSundayAsPartOfThePrecedingWeek(t *testing.T) {
+	// 2026-08-09 is a Sunday; its Monday-Friday week is 2026-08-03..2026-08-07.
+	now := time.Date(2026, 8, 9, 9, 0, 0, 0, time.UTC)
+	thisWeek, _ := weekRanges(now)
+	if thisWeek != "2026.08.03 ~ 2026.08.07" {
+		t.Fatalf("thisWeek = %q, want 2026.08.03 ~ 2026.08.07", thisWeek)
+	}
+}
+
+func TestOutlinePromptAndSlidePromptIncludeDateGuidance(t *testing.T) {
+	outline := outlinePrompt(OutlineRequest{Content: "source", Language: "ko", SlideCount: 1})
+	if !strings.Contains(outline, "This week") || !strings.Contains(outline, "Next week") {
+		t.Fatalf("expected outline prompt to include week guidance, got: %s", outline)
+	}
+	slide := slidePrompt(SlideRequest{Title: "t", Type: "CONTENT", Language: "ko"})
+	if !strings.Contains(slide, "This week") || !strings.Contains(slide, "Next week") {
+		t.Fatalf("expected slide prompt to include week guidance, got: %s", slide)
 	}
 }
