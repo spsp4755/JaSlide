@@ -687,6 +687,9 @@ class PPTXGenerator:
         if str(getattr(slide_data, "type", "")).upper() == "CHART" and self._add_chart(slide, content, content_slots):
             return
 
+        if str(getattr(slide_data, "type", "")).upper() == "TABLE" and self._add_table(slide, content, content_slots):
+            return
+
         slot_text = [item if isinstance(item, str) else item.get("text", "") for item in content.get("bullets", [])] or [content.get("body", "")]
         if len(slot_text) > 1:
             compact_slots = [slot for slot in content_slots if slot["w"] < 8]
@@ -810,6 +813,26 @@ class PPTXGenerator:
         graphic = slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(x), Inches(y), Inches(w), Inches(h), data)
         graphic.chart.has_legend = False
         graphic.chart.value_axis.has_major_gridlines = True
+        return True
+
+    def _add_table(self, slide: Any, content: dict, slots: list[dict] | None = None) -> bool:
+        table = content.get("table") if isinstance(content.get("table"), dict) else {}
+        headers, rows = table.get("headers"), table.get("rows")
+        if not (isinstance(headers, list) and 1 <= len(headers) <= 8 and all(isinstance(header, str) and header.strip() for header in headers)):
+            return False
+        if not (isinstance(rows, list) and 1 <= len(rows) <= 12):
+            return False
+        for row in rows:
+            if not (isinstance(row, list) and len(row) == len(headers) and all(isinstance(cell, str) for cell in row)):
+                return False
+        light_slots = [slot for slot in slots or [] if not self._is_dark(slot.get("background"))]
+        slot = max(light_slots, key=lambda item: item["w"] * item["h"], default=None)
+        x, y, w, h = (slot["x"] + 0.25, slot["y"] + 0.35, max(slot["w"] - 0.5, 2), max(slot["h"] - 0.7, 1.5)) if slot else (1.0, 2.0, 11.3, 4.6)
+        row_height = max(h / (len(rows) + 1), 0.3)
+        widths = [w / len(headers)] * len(headers)
+        self._add_table_row(slide, headers, x, y, widths, row_height, header=True)
+        for index, row in enumerate(rows):
+            self._add_table_row(slide, row, x, y + row_height * (index + 1), widths, row_height, shaded=index % 2 == 1)
         return True
 
     @staticmethod

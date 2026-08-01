@@ -405,6 +405,18 @@ def test_html_template_renders_chart_data_for_chart_slides():
     assert any(shape.has_chart for shape in Presentation(BytesIO(output)).slides[0].shapes)
 
 
+def test_html_template_renders_table_data_for_table_slides():
+    output = PPTXGenerator(SimpleNamespace(config=SimpleNamespace(htmlSlides=[
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:#FFFFFF"></div>'
+    ]))).generate(_presentation(_slide(
+        "TABLE", "실적", {"heading": "실적", "table": {"headers": ["기간", "실적"], "rows": [["7/20-7/24", "완료"]]}},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "기간" in texts and "실적" in texts and "완료" in texts
+
+
 def test_html_template_without_font_family_uses_default_font():
     template = SimpleNamespace(config=SimpleNamespace(
         htmlTemplate='<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1200px;height:180px;font-size:48px">Title</div>',
