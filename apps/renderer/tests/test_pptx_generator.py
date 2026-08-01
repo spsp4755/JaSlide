@@ -533,6 +533,24 @@ def test_content_typed_slide_with_valid_columns_still_renders_as_two_column():
     assert "추진계획 (2026.08.03 ~ 2026.08.07)" in texts
 
 
+def test_table_slide_keeps_its_table_even_if_it_also_carries_columns():
+    # Regression test: a model that sloppily emits both a "table" and a
+    # "columns" shape on a TABLE slide must not have its table silently
+    # dropped in favor of a two-column render.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TABLE", "실적", {"heading": "실적", "table": {"headers": ["기간", "실적"], "rows": [["7/20-7/24", "완료"]]},
+                        "columns": [
+                            {"header": "col a", "bullets": [{"text": "x", "level": 0}]},
+                            {"header": "col b", "bullets": [{"text": "y", "level": 0}]},
+                        ]},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "기간" in texts and "완료" in texts
+    assert "col a" not in texts and "col b" not in texts
+
+
 def test_html_template_without_font_family_uses_default_font():
     template = SimpleNamespace(config=SimpleNamespace(
         htmlTemplate='<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1200px;height:180px;font-size:48px">Title</div>',

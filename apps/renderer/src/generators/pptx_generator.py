@@ -559,7 +559,16 @@ class PPTXGenerator:
         # correctly producing a valid two-column "columns" content shape. Trust
         # the content shape over the unreliable type label when it's present.
         columns = content.get("columns") if isinstance(content, dict) else None
-        has_columns = isinstance(columns, list) and len(columns) == 2 and all(isinstance(item, dict) for item in columns)
+        # A table/chart shape always wins over columns: parseSlideContent (Go)
+        # attaches "columns" unconditionally regardless of slideType, and a
+        # TABLE/CHART slide always carries a real or placeholder table/chart —
+        # without this guard, a model that (sloppily) emits both shapes on a
+        # TABLE/CHART slide would have its table/chart silently dropped.
+        has_columns = (
+            isinstance(columns, list) and len(columns) == 2
+            and all(isinstance(item, dict) for item in columns)
+            and not content.get("table") and not content.get("chart")
+        )
 
         if slide_type == "TITLE":
             self._add_title_slide(slide_data)
