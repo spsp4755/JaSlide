@@ -140,3 +140,55 @@ func TestOutlinePromptExplainsWhenToUseEachSlideType(t *testing.T) {
 		}
 	}
 }
+
+func TestValidTableAcceptsWellFormedHeadersAndRows(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(
+		`{"heading":"실적","table":{"headers":["기간","실적"],"rows":[["7/20-7/24","완료"]]}}`,
+	), "TABLE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	table, ok := value["table"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected a table field, got %v", value["table"])
+	}
+	if table["isExample"] != nil {
+		t.Fatal("expected a well-formed table to not be marked as an example")
+	}
+}
+
+func TestParseSlideContentFillsExampleTableWhenModelOmitsIt(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{"heading":"실적"}`), "TABLE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	table, ok := value["table"].(map[string]any)
+	if !ok || table["isExample"] != true {
+		t.Fatalf("expected an example table fallback, got %v", value["table"])
+	}
+}
+
+func TestValidTableRejectsRowsWithWrongColumnCount(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(
+		`{"heading":"실적","table":{"headers":["기간","실적"],"rows":[["7/20-7/24"]]}}`,
+	), "TABLE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	table, ok := value["table"].(map[string]any)
+	if !ok || table["isExample"] != true {
+		t.Fatalf("expected mismatched row/column counts to fall back to the example table, got %v", value["table"])
+	}
+}

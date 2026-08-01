@@ -379,6 +379,13 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 			"series": "Example", "isExample": true,
 		}
 	}
+	if table := validTable(value["table"]); table != nil {
+		result["table"] = table
+	} else if slideType == "TABLE" {
+		result["table"] = map[string]any{
+			"headers": []string{"항목", "값"}, "rows": [][]string{{"예시", "-"}}, "isExample": true,
+		}
+	}
 	return json.Marshal(result)
 }
 
@@ -405,6 +412,43 @@ func validChart(raw any) map[string]any {
 	return chart
 }
 
+func validTable(raw any) map[string]any {
+	table, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rawHeaders, headersOK := table["headers"].([]any)
+	rawRows, rowsOK := table["rows"].([]any)
+	if !headersOK || !rowsOK || len(rawHeaders) < 1 || len(rawHeaders) > 8 || len(rawRows) < 1 || len(rawRows) > 12 {
+		return nil
+	}
+	headers := make([]string, len(rawHeaders))
+	for index, value := range rawHeaders {
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return nil
+		}
+		headers[index] = text
+	}
+	rows := make([][]string, len(rawRows))
+	for rowIndex, rawRow := range rawRows {
+		cells, ok := rawRow.([]any)
+		if !ok || len(cells) != len(headers) {
+			return nil
+		}
+		row := make([]string, len(cells))
+		for cellIndex, value := range cells {
+			text, ok := value.(string)
+			if !ok {
+				return nil
+			}
+			row[cellIndex] = text
+		}
+		rows[rowIndex] = row
+	}
+	return map[string]any{"headers": headers, "rows": rows}
+}
+
 func outlinePrompt(input OutlineRequest) string {
 	catalog := ""
 	if len(input.TemplateSlides) > 0 {
@@ -427,7 +471,11 @@ func outlinePrompt(input OutlineRequest) string {
 
 func slidePrompt(input SlideRequest) string {
 	return fmt.Sprintf(
-		"Create concise slide content in %s. Title: %s. Type: %s. Key points: %s. Return JSON only with heading, optional subheading/body, 3-5 bullets and chart for CHART.",
+		"Create concise slide content in %s. Title: %s. Type: %s. Key points: %s. "+
+			"Return JSON only with heading, optional subheading/body, 3-5 bullets "+
+			"(each an object with text and level 0-2 for indentation), "+
+			"chart for CHART as {\"labels\":[\"...\"],\"values\":[0]}, "+
+			"and table for TABLE as {\"headers\":[\"...\"],\"rows\":[[\"...\"]]}.",
 		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "),
 	)
 }
