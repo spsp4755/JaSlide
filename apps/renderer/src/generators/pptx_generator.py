@@ -914,6 +914,17 @@ class PPTXGenerator:
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
 
+        # ponytail: _add_table/_add_chart were only wired into the HTML-template
+        # dispatch (_add_html_template_slide); a presentation with no template
+        # attached — the common case — fell all the way through to this generic
+        # content slide, which never looked at content["table"]/content["chart"]
+        # at all, silently dropping real table/chart data down to just the title.
+        slide_type = str(getattr(slide_data, "type", "")).upper()
+        if slide_type == "TABLE" and self._add_table(slide, content):
+            return
+        if slide_type == "CHART" and self._add_chart(slide, content):
+            return
+
         # Content area
         content_top = Inches(1.3)
         content_height = Inches(5.7)

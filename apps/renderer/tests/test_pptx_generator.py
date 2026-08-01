@@ -48,6 +48,32 @@ def test_default_tokens_style_korean_title_content_and_quote_slides():
             assert _rgb(run.font.color) == "1E293B"
 
 
+def test_table_slide_renders_a_real_table_with_no_template_attached():
+    # Regression test: _add_table was only wired into the HTML-template dispatch
+    # path (_add_html_template_slide). A presentation with no template attached —
+    # the common case, just typing a prompt — fell through to _add_content_slide,
+    # which never looked at content["table"] at all, silently dropping it.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TABLE", "부서별 실적",
+        {"heading": "부서별 실적", "table": {
+            "headers": ["부서", "실적"],
+            "rows": [["개발팀", "90%"], ["기획팀", "85%"], ["영업팀", "78%"]],
+        }},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "부서" in texts and "개발팀" in texts and "90%" in texts
+
+
+def test_chart_slide_renders_a_real_chart_with_no_template_attached():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "CHART", "실적 추이", {"heading": "실적 추이", "chart": {"labels": ["Before", "After"], "values": [48, 11]}},
+    )))
+
+    assert any(shape.has_chart for shape in Presentation(BytesIO(output)).slides[0].shapes)
+
+
 def test_template_colors_apply_to_all_slide_text_and_background_with_invalid_values_falling_back():
     template = SimpleNamespace(
         config=SimpleNamespace(
