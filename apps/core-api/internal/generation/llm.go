@@ -347,30 +347,8 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 			result[field] = text
 		}
 	}
-	if rawBullets, ok := value["bullets"].([]any); ok {
-		var bullets []map[string]any
-		for _, item := range rawBullets {
-			if len(bullets) == 5 {
-				break
-			}
-			switch bullet := item.(type) {
-			case string:
-				if strings.TrimSpace(bullet) != "" {
-					bullets = append(bullets, map[string]any{"text": bullet, "level": 0})
-				}
-			case map[string]any:
-				if text, ok := bullet["text"].(string); ok && strings.TrimSpace(text) != "" {
-					level := 0
-					if raw, ok := bullet["level"].(float64); ok && raw == float64(int(raw)) && raw >= 0 && raw <= 4 {
-						level = int(raw)
-					}
-					bullets = append(bullets, map[string]any{"text": text, "level": level})
-				}
-			}
-		}
-		if len(bullets) > 0 {
-			result["bullets"] = bullets
-		}
+	if bullets := parseBullets(value["bullets"], 5); len(bullets) > 0 {
+		result["bullets"] = bullets
 	}
 	if chart := validChart(value["chart"]); chart != nil {
 		result["chart"] = chart
@@ -394,7 +372,41 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 			}
 		}
 	}
+	if columns := validColumns(value["columns"]); columns != nil {
+		result["columns"] = columns
+	}
 	return json.Marshal(result)
+}
+
+// parseBullets extracts up to `limit` well-formed bullets ({text, level})
+// from raw. Shared by the top-level "bullets" field and each TWO_COLUMN
+// column's own bullets so both follow the exact same rules.
+func parseBullets(raw any, limit int) []map[string]any {
+	rawBullets, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	var bullets []map[string]any
+	for _, item := range rawBullets {
+		if len(bullets) == limit {
+			break
+		}
+		switch bullet := item.(type) {
+		case string:
+			if strings.TrimSpace(bullet) != "" {
+				bullets = append(bullets, map[string]any{"text": bullet, "level": 0})
+			}
+		case map[string]any:
+			if text, ok := bullet["text"].(string); ok && strings.TrimSpace(text) != "" {
+				level := 0
+				if raw, ok := bullet["level"].(float64); ok && raw == float64(int(raw)) && raw >= 0 && raw <= 4 {
+					level = int(raw)
+				}
+				bullets = append(bullets, map[string]any{"text": text, "level": level})
+			}
+		}
+	}
+	return bullets
 }
 
 func validChart(raw any) map[string]any {
@@ -471,6 +483,38 @@ func validTable(raw any) map[string]any {
 		rows[rowIndex] = row
 	}
 	return map[string]any{"headers": headers, "rows": rows}
+}
+
+// maxColumnBullets caps how many bullets a single TWO_COLUMN column can
+// carry — generous enough for a real weekly report's ~11-item list.
+const maxColumnBullets = 20
+
+// validColumns requires exactly two columns, each with a non-empty header
+// and at least one bullet, for TWO_COLUMN slides like a weekly report's
+// "this week" / "next week" layout. Returns nil (no error, no placeholder)
+// for anything else — the caller falls back to the flat "bullets" field.
+func validColumns(raw any) []map[string]any {
+	rawColumns, ok := raw.([]any)
+	if !ok || len(rawColumns) != 2 {
+		return nil
+	}
+	columns := make([]map[string]any, 2)
+	for index, rawColumn := range rawColumns {
+		column, ok := rawColumn.(map[string]any)
+		if !ok {
+			return nil
+		}
+		header, ok := column["header"].(string)
+		if !ok || strings.TrimSpace(header) == "" {
+			return nil
+		}
+		bullets := parseBullets(column["bullets"], maxColumnBullets)
+		if len(bullets) == 0 {
+			return nil
+		}
+		columns[index] = map[string]any{"header": header, "bullets": bullets}
+	}
+	return columns
 }
 
 // weekRanges returns "YYYY.MM.DD ~ YYYY.MM.DD" for the Monday-Friday of the

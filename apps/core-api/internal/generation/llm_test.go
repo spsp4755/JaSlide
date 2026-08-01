@@ -291,3 +291,62 @@ func TestOutlinePromptAndSlidePromptIncludeDateGuidance(t *testing.T) {
 		t.Fatalf("expected slide prompt to include week guidance, got: %s", slide)
 	}
 }
+
+func TestValidColumnsAcceptsExactlyTwoWellFormedColumns(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"주간업무 추진실적 및 계획",
+		"columns":[
+			{"header":"추진실적 (2026.08.03 ~ 2026.08.07)","bullets":[{"text":"IT 운영","level":0},{"text":"NL2SQL","level":1}]},
+			{"header":"추진계획 (2026.08.10 ~ 2026.08.14)","bullets":[{"text":"IT 운영","level":0}]}
+		]
+	}`), "TWO_COLUMN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	columns, ok := value["columns"].([]any)
+	if !ok || len(columns) != 2 {
+		t.Fatalf("expected 2 columns, got %v", value["columns"])
+	}
+	first := columns[0].(map[string]any)
+	if first["header"] != "추진실적 (2026.08.03 ~ 2026.08.07)" {
+		t.Fatalf("unexpected first header: %v", first["header"])
+	}
+}
+
+func TestValidColumnsRejectsAnythingOtherThanExactlyTwoColumns(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"columns":[{"header":"only one","bullets":[{"text":"x","level":0}]}]
+	}`), "TWO_COLUMN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["columns"]; ok {
+		t.Fatalf("expected columns to be omitted for a single-column response, got %v", value["columns"])
+	}
+}
+
+func TestParseSlideContentStillFallsBackToFlatBulletsWithoutColumns(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{"heading":"h","bullets":["a","b"]}`), "TWO_COLUMN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["columns"]; ok {
+		t.Fatal("expected no columns field when the model didn't provide any")
+	}
+	if _, ok := value["bullets"]; !ok {
+		t.Fatal("expected the flat bullets field to still be present as a fallback")
+	}
+}
