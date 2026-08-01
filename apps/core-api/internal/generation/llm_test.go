@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -117,5 +118,25 @@ func TestParseSlideContentAcceptsTitleAsHeadingFallback(t *testing.T) {
 func TestParseSlideContentStillRequiresHeadingOrTitle(t *testing.T) {
 	if _, err := parseSlideContent(json.RawMessage(`{"body":"내용"}`), "CONTENT"); err == nil {
 		t.Fatal("expected error when neither heading nor title is present")
+	}
+}
+
+func TestParseOutlinePreservesTableSlideType(t *testing.T) {
+	raw := json.RawMessage(`{"title":"Deck","slides":[{"order":1,"title":"실적","type":"TABLE","keyPoints":["7/20-7/24 실적"]}]}`)
+	outline, err := parseOutline(raw, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outline.Slides) != 1 || outline.Slides[0].Type != "TABLE" {
+		t.Fatalf("expected a TABLE slide, got %+v", outline.Slides)
+	}
+}
+
+func TestOutlinePromptExplainsWhenToUseEachSlideType(t *testing.T) {
+	prompt := outlinePrompt(OutlineRequest{Content: "source", Language: "ko", SlideCount: 3})
+	for _, want := range []string{"TABLE", "CHART", "BULLET_LIST"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected outline prompt to mention %s, got: %s", want, prompt)
+		}
 	}
 }

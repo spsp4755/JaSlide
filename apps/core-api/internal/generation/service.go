@@ -847,6 +847,6 @@ func newID() (string, error) {
 var sourceTypes = map[string]bool{"TEXT": true, "DOCX": true, "PDF": true, "MARKDOWN": true, "CSV": true, "URL": true}
 var slideTypes = map[string]bool{
 	"TITLE": true, "CONTENT": true, "BULLET_LIST": true, "TWO_COLUMN": true,
-	"IMAGE": true, "CHART": true, "QUOTE": true, "COMPARISON": true,
+	"IMAGE": true, "CHART": true, "TABLE": true, "QUOTE": true, "COMPARISON": true,
 	"SECTION_HEADER": true, "BLANK": true,
 }

@@ -418,9 +418,10 @@ func outlinePrompt(input OutlineRequest) string {
 	if len(input.PriorTitles) > 0 {
 		continuation = "\nContinue after these titles without repetition: " + strings.Join(input.PriorTitles, "; ")
 	}
+	guidance := "\nChoose each slide's type by its content: TABLE for row/column data such as comparisons, schedules, or structured records; CHART for numeric trends or comparisons; BULLET_LIST for simple lists; TITLE for section covers; CONTENT for narrative slides."
 	return fmt.Sprintf(
-		"Create exactly %d presentation slides in %s from this source:\n%s%s%s\nReturn JSON only: {\"title\":\"Deck\",\"slides\":[{\"order\":1,\"title\":\"Title\",\"type\":\"CONTENT\",\"keyPoints\":[\"specific point\"],\"templateIndex\":0}]}",
-		input.SlideCount, input.Language, truncate(input.Content, 10000), catalog, continuation,
+		"Create exactly %d presentation slides in %s from this source:\n%s%s%s%s\nReturn JSON only: {\"title\":\"Deck\",\"slides\":[{\"order\":1,\"title\":\"Title\",\"type\":\"CONTENT\",\"keyPoints\":[\"specific point\"],\"templateIndex\":0}]}",
+		input.SlideCount, input.Language, truncate(input.Content, 10000), catalog, continuation, guidance,
 	)
 }
 
