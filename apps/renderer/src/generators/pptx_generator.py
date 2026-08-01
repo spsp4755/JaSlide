@@ -828,7 +828,7 @@ class PPTXGenerator:
         light_slots = [slot for slot in slots or [] if not self._is_dark(slot.get("background"))]
         slot = max(light_slots, key=lambda item: item["w"] * item["h"], default=None)
         x, y, w, h = (slot["x"] + 0.25, slot["y"] + 0.35, max(slot["w"] - 0.5, 2), max(slot["h"] - 0.7, 1.5)) if slot else (1.0, 2.0, 11.3, 4.6)
-        row_height = max(h / (len(rows) + 1), 0.3)
+        row_height = h / (len(rows) + 1)
         widths = [w / len(headers)] * len(headers)
         self._add_table_row(slide, headers, x, y, widths, row_height, header=True)
         for index, row in enumerate(rows):
