@@ -423,8 +423,12 @@ def test_table_with_many_rows_in_small_slot_does_not_overflow():
     # minimum that, for many rows in a small slot, pushed the table's bottom edge
     # well past the slot's bottom edge. Fixed by removing the floor so row height
     # is always exactly h / (len(rows) + 1).
+    #
+    # The slot is 400x400px (~2.78"x2.78") so that _add_table's own unrelated,
+    # pre-existing `max(slot_h - 0.7, 1.5)` floor (shared with _add_chart, out of
+    # scope for this fix) never binds here — this isolates the row-height bug.
     output = PPTXGenerator(SimpleNamespace(config=SimpleNamespace(htmlSlides=[
-        '<div data-object="true" data-object-type="shape" style="position:absolute;left:100px;top:100px;width:400px;height:250px;background:#FFFFFF"></div>'
+        '<div data-object="true" data-object-type="shape" style="position:absolute;left:100px;top:100px;width:400px;height:400px;background:#FFFFFF"></div>'
     ]))).generate(_presentation(_slide(
         "TABLE", "Large Table in Small Slot",
         {"heading": "Large Table", "table": {
