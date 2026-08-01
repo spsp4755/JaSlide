@@ -192,3 +192,44 @@ func TestValidTableRejectsRowsWithWrongColumnCount(t *testing.T) {
 		t.Fatalf("expected mismatched row/column counts to fall back to the example table, got %v", value["table"])
 	}
 }
+
+func TestParseSlideContentPreservesBulletIndentLevelsUpToFour(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(
+		`{"heading":"실적","bullets":[{"text":"상위","level":0},{"text":"하위","level":3}]}`,
+	), "CONTENT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value struct {
+		Bullets []struct {
+			Text  string `json:"text"`
+			Level int    `json:"level"`
+		} `json:"bullets"`
+	}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if len(value.Bullets) != 2 || value.Bullets[1].Level != 3 {
+		t.Fatalf("expected second bullet at level 3, got %+v", value.Bullets)
+	}
+}
+
+func TestParseSlideContentClampsOutOfRangeBulletLevelToZero(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(
+		`{"heading":"실적","bullets":[{"text":"과도한 들여쓰기","level":9}]}`,
+	), "CONTENT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value struct {
+		Bullets []struct {
+			Level int `json:"level"`
+		} `json:"bullets"`
+	}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if len(value.Bullets) != 1 || value.Bullets[0].Level != 0 {
+		t.Fatalf("expected out-of-range level to clamp to 0, got %+v", value.Bullets)
+	}
+}

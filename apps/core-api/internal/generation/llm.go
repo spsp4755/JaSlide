@@ -360,8 +360,8 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 			case map[string]any:
 				if text, ok := bullet["text"].(string); ok && strings.TrimSpace(text) != "" {
 					level := 0
-					if bullet["level"] == float64(1) {
-						level = 1
+					if raw, ok := bullet["level"].(float64); ok && raw == float64(int(raw)) && raw >= 0 && raw <= 4 {
+						level = int(raw)
 					}
 					bullets = append(bullets, map[string]any{"text": text, "level": level})
 				}
