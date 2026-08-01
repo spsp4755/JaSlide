@@ -1001,7 +1001,6 @@ class PPTXGenerator:
 
         content = slide_data.content
         title = content.get("heading", slide_data.title or "")
-        bullets = content.get("bullets", [])
 
         # Title
         title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
@@ -1011,44 +1010,48 @@ class PPTXGenerator:
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
 
-        # Split bullets into two columns
+        columns = content.get("columns")
+        if isinstance(columns, list) and len(columns) == 2 and all(isinstance(item, dict) for item in columns):
+            for index, column in enumerate(columns):
+                x = 0.5 + index * 6.4
+                header = str(column.get("header", "")).strip()
+                bullets_top = 1.3
+                if header:
+                    header_box = self._add_layout_textbox(slide, {"x": x, "y": 1.15, "w": 5.9, "h": 0.45})
+                    header_paragraph = header_box.text_frame.paragraphs[0]
+                    header_paragraph.text = header
+                    self._style_paragraph(header_paragraph, 16, self.tokens["body_font"], bold=True)
+                    bullets_top = 1.7
+                bullets = column.get("bullets") if isinstance(column.get("bullets"), list) else []
+                self._add_column_bullets(slide, bullets, x, bullets_top, 1.3 + 5.7 - bullets_top)
+            return
+
+        # No columns: fall back to splitting a flat bullets array in half.
+        bullets = content.get("bullets", [])
         mid = len(bullets) // 2
         left_bullets = bullets[:mid] if mid > 0 else bullets
         right_bullets = bullets[mid:] if mid > 0 else []
+        self._add_column_bullets(slide, left_bullets, 0.5, 1.3, 5.7)
+        self._add_column_bullets(slide, right_bullets, 6.9, 1.3, 5.7)
 
-        # Left column
-        if left_bullets:
-            left_box = slide.shapes.add_textbox(
-                Inches(0.5), Inches(1.3), Inches(5.9), Inches(5.7)
-            )
-            tf = left_box.text_frame
-            tf.word_wrap = True
-            for i, bullet in enumerate(left_bullets):
-                text = bullet.get("text", str(bullet)) if isinstance(bullet, dict) else str(bullet)
-                if i == 0:
-                    p = tf.paragraphs[0]
-                else:
-                    p = tf.add_paragraph()
-                p.text = f"• {text}"
-                self._style_paragraph(p, 18, self.tokens["body_font"])
-                p.space_before = Pt(10)
-
-        # Right column
-        if right_bullets:
-            right_box = slide.shapes.add_textbox(
-                Inches(6.9), Inches(1.3), Inches(5.9), Inches(5.7)
-            )
-            tf = right_box.text_frame
-            tf.word_wrap = True
-            for i, bullet in enumerate(right_bullets):
-                text = bullet.get("text", str(bullet)) if isinstance(bullet, dict) else str(bullet)
-                if i == 0:
-                    p = tf.paragraphs[0]
-                else:
-                    p = tf.add_paragraph()
-                p.text = f"• {text}"
-                self._style_paragraph(p, 18, self.tokens["body_font"])
-                p.space_before = Pt(10)
+    def _add_column_bullets(self, slide: Any, bullets: list, x: float, top: float, height: float) -> None:
+        if not bullets:
+            return
+        box = slide.shapes.add_textbox(Inches(x), Inches(top), Inches(5.9), Inches(height))
+        tf = box.text_frame
+        tf.word_wrap = True
+        for index, bullet in enumerate(bullets):
+            if isinstance(bullet, dict):
+                text = bullet.get("text", str(bullet))
+                level = bullet.get("level", 0)
+            else:
+                text = str(bullet)
+                level = 0
+            paragraph = tf.paragraphs[0] if index == 0 else tf.add_paragraph()
+            paragraph.text = f"• {text}"
+            self._style_paragraph(paragraph, 18, self.tokens["body_font"])
+            paragraph.level = level if isinstance(level, int) else 0
+            paragraph.space_before = Pt(10)
 
     def _add_quote_slide(self, slide_data: Any):
         """Add quote slide"""

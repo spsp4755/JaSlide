@@ -480,6 +480,42 @@ def test_table_with_many_rows_in_small_slot_does_not_overflow():
     )
 
 
+def test_two_column_slide_renders_headers_and_level_aware_bullets():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TWO_COLUMN", "주간업무 추진실적 및 계획",
+        {"heading": "주간업무 추진실적 및 계획", "columns": [
+            {"header": "추진실적 (2026.08.03 ~ 2026.08.07)", "bullets": [
+                {"text": "IT 운영 및 AI 연구", "level": 0},
+                {"text": "프로젝트 관리 및 지원", "level": 1},
+            ]},
+            {"header": "추진계획 (2026.08.10 ~ 2026.08.14)", "bullets": [
+                {"text": "IT 운영 및 AI 연구", "level": 0},
+            ]},
+        ]},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "추진실적 (2026.08.03 ~ 2026.08.07)" in texts
+    assert "추진계획 (2026.08.10 ~ 2026.08.14)" in texts
+    assert any("프로젝트 관리 및 지원" in text for text in texts)
+
+    paragraphs = [p for shape in slide.shapes if shape.has_text_frame for p in shape.text_frame.paragraphs]
+    nested = next(p for p in paragraphs if "프로젝트 관리 및 지원" in p.text)
+    assert nested.level == 1
+
+
+def test_two_column_slide_without_columns_still_splits_flat_bullets():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TWO_COLUMN", "제목", {"heading": "제목", "bullets": ["첫 항목", "둘째 항목"]},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert any("첫 항목" in text for text in texts)
+    assert any("둘째 항목" in text for text in texts)
+
+
 def test_html_template_without_font_family_uses_default_font():
     template = SimpleNamespace(config=SimpleNamespace(
         htmlTemplate='<div data-object="true" data-object-type="textbox" style="position:absolute;left:120px;top:120px;width:1200px;height:180px;font-size:48px">Title</div>',
