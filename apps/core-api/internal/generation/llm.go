@@ -382,8 +382,15 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 	if table := validTable(value["table"]); table != nil {
 		result["table"] = table
 	} else if slideType == "TABLE" {
-		result["table"] = map[string]any{
-			"headers": []string{"항목", "값"}, "rows": [][]string{{"예시", "-"}}, "isExample": true,
+		if chartTable := tableFromChart(value["chart"]); chartTable != nil {
+			// Some models (esp. small local ones) put real tabular data under
+			// "chart" instead of the requested "table" key; reuse it rather than
+			// discarding it for a placeholder.
+			result["table"] = chartTable
+		} else {
+			result["table"] = map[string]any{
+				"headers": []string{"항목", "값"}, "rows": [][]string{{"예시", "-"}}, "isExample": true,
+			}
 		}
 	}
 	return json.Marshal(result)
@@ -410,6 +417,22 @@ func validChart(raw any) map[string]any {
 		}
 	}
 	return chart
+}
+
+// tableFromChart turns a valid chart's labels/values into a two-column table,
+// for models that put real data under "chart" when asked for "table".
+func tableFromChart(raw any) map[string]any {
+	chart := validChart(raw)
+	if chart == nil {
+		return nil
+	}
+	labels := chart["labels"].([]any)
+	values := chart["values"].([]any)
+	rows := make([][]string, len(labels))
+	for index := range labels {
+		rows[index] = []string{labels[index].(string), fmt.Sprintf("%g", values[index].(float64))}
+	}
+	return map[string]any{"headers": []string{"항목", "값"}, "rows": rows}
 }
 
 func validTable(raw any) map[string]any {

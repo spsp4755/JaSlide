@@ -233,3 +233,28 @@ func TestParseSlideContentClampsOutOfRangeBulletLevelToZero(t *testing.T) {
 		t.Fatalf("expected out-of-range level to clamp to 0, got %+v", value.Bullets)
 	}
 }
+
+func TestParseSlideContentBuildsTableFromChartWhenModelUsesTheWrongKey(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(
+		`{"heading":"실적","chart":{"labels":["개발팀","기획팀"],"values":[90,85]}}`,
+	), "TABLE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	table, ok := value["table"].(map[string]any)
+	if !ok || table["isExample"] != nil {
+		t.Fatalf("expected a real (non-example) table built from chart data, got %v", value["table"])
+	}
+	rows, ok := table["rows"].([]any)
+	if !ok || len(rows) != 2 {
+		t.Fatalf("expected 2 rows from the chart's 2 labels, got %v", table["rows"])
+	}
+	first, ok := rows[0].([]any)
+	if !ok || first[0] != "개발팀" || first[1] != "90" {
+		t.Fatalf("expected first row [개발팀 90], got %v", rows[0])
+	}
+}
