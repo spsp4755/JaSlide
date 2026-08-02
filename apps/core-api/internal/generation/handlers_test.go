@@ -334,12 +334,49 @@ func TestProcessAppliesEditWhenCritiqueRequestsChanges(t *testing.T) {
 	if llm.editCalls != 1 {
 		t.Fatalf("edit calls = %d, want 1 when critique requests changes", llm.editCalls)
 	}
+	// Final whole-branch review: lock in the "never re-critique, never loop"
+	// bound the plan promises -- Critique runs exactly once per slide.
+	if llm.critiqueCalls != 1 {
+		t.Fatalf("critique calls = %d, want exactly 1 (no re-critique of the revision)", llm.critiqueCalls)
+	}
 	if len(repo.slides) != 1 {
 		t.Fatalf("persisted slides = %d, want 1", len(repo.slides))
 	}
 	heading, _ := rawObject(repo.slides[0].Content)["heading"].(string)
 	if heading != "Revised" {
 		t.Fatalf("expected the Edit result stored, got heading %q", heading)
+	}
+}
+
+func TestProcessFallsBackToOriginalContentWhenEditFailsAfterCritiqueRejects(t *testing.T) {
+	// Final whole-branch review: the critique-error fallback (tested above)
+	// short-circuits before Edit is ever called; this covers the other
+	// fallback path, where Edit itself is the one that fails.
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":1,"language":"en"}`),
+	}
+	llm := &reviewLLM{
+		critiqueFeedback: "Add the missing key point",
+		editErr:          errors.New("edit network error"),
+	}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.editCalls != 1 {
+		t.Fatalf("edit calls = %d, want 1 (edit is attempted even though it will fail)", llm.editCalls)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1 (generation must not fail on an edit error)", len(repo.slides))
+	}
+	heading, _ := rawObject(repo.slides[0].Content)["heading"].(string)
+	if heading != "Slide" {
+		t.Fatalf("expected original content preserved when edit fails, got heading %q", heading)
 	}
 }
 

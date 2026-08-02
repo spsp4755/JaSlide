@@ -37,6 +37,15 @@ This bounds cost to at most one extra LLM call for an approved slide, two
 for a revised one — not an iterate-until-approved loop, and not a review of
 the outline as a whole (a separate, not-yet-scoped possibility for later).
 
+**Accepted latency tradeoff:** `Process`'s per-slide loop is strictly
+sequential, so this call-count bound is also a wall-clock multiplier — a
+1-3x increase in generation time per slide (2-3x for the PPTX-template path,
+which previously made one call per slide; 1.5-2x for the HTML-template path,
+which already made two). For a multi-slide deck this is a real, felt
+increase (roughly double the wait on a local model), accepted as the cost of
+catching low-quality content before it reaches the user. There is no config
+flag to disable it — revisit if it proves too slow in practice.
+
 ## Architecture
 
 Reuse `OpenAIClient.Edit` (`llm.go:92`), which already takes a slide's

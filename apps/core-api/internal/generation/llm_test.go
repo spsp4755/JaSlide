@@ -656,6 +656,31 @@ func TestOpenAIClientCritiqueReturnsFeedbackWhenRejected(t *testing.T) {
 	}
 }
 
+func TestOpenAIClientCritiqueIgnoresFeedbackWhenApproved(t *testing.T) {
+	// Final whole-branch review: models routinely fill both fields even when
+	// approved is true; feedback must be ignored in that case.
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		raw, _ := json.Marshal(map[string]any{"approved": true, "feedback": "minor nit, ignore"})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	feedback, err := llm.Critique(context.Background(), CritiqueRequest{
+		Content: json.RawMessage(`{"heading":"h"}`), Title: "h", KeyPoints: []string{"x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feedback != "" {
+		t.Fatalf("expected empty feedback when approved is true, got %q", feedback)
+	}
+}
+
 func TestOpenAIClientCritiqueRetriesOnRejectionWithoutFeedback(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
