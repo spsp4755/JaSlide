@@ -520,7 +520,7 @@ func (service *Service) AIEdit(ctx context.Context, userID string, input AIEditI
 						continue
 					}
 					if _, ok := object["text"]; ok && len(lines) > 0 {
-						object["text"] = lines[min(index, len(lines)-1)]
+						object["text"] = lines[min(index, len(lines)-1)].Text
 					}
 				}
 			}
@@ -645,7 +645,16 @@ func chooseTemplateIndex(requested *int, order int, capable []int) int {
 	return capable[order%len(capable)]
 }
 
-func pptxObjectEdits(objects []map[string]any, slide int, title string, lines []string) []map[string]any {
+// contentLine is one line of generated body/bullet content together with its
+// indentation depth, so a native PPTX edit can carry that depth through to
+// the exported (and previewed) paragraph instead of losing it the moment the
+// lines are flattened into a single newline-joined string.
+type contentLine struct {
+	Text  string
+	Level int
+}
+
+func pptxObjectEdits(objects []map[string]any, slide int, title string, lines []contentLine) []map[string]any {
 	var texts, tables []map[string]any
 	for _, object := range objects {
 		switch object["kind"] {
@@ -662,12 +671,14 @@ func pptxObjectEdits(objects []map[string]any, slide int, title string, lines []
 		textLimit = min(len(texts), 1)
 	}
 	for index := 0; index < textLimit; index++ {
-		text := strings.Join(lines, "\n")
 		if index == 0 {
-			text = title
+			edits = append(edits, map[string]any{
+				"objectId": texts[index]["id"], "slide": slide, "text": title,
+			})
+			continue
 		}
 		edits = append(edits, map[string]any{
-			"objectId": texts[index]["id"], "slide": slide, "text": text,
+			"objectId": texts[index]["id"], "slide": slide, "paragraphs": paragraphsFromLines(lines),
 		})
 	}
 	for _, table := range tables {
@@ -677,28 +688,51 @@ func pptxObjectEdits(objects []map[string]any, slide int, title string, lines []
 		})
 	}
 	if len(edits) == 0 {
+		texts := make([]string, len(lines))
+		for index, line := range lines {
+			texts[index] = line.Text
+		}
 		edits = append(edits, map[string]any{
 			"objectId": fmt.Sprintf("generated-title-%d", slide), "slide": slide,
-			"kind": "text", "addText": title, "text": strings.Join(append([]string{title}, lines...), "\n"),
+			"kind": "text", "addText": title, "text": strings.Join(append([]string{title}, texts...), "\n"),
 			"left": 140, "top": 120, "width": 1640, "height": 560, "fontSize": 34, "color": "#1A1A1A",
 		})
 	}
 	return edits
 }
 
-func populateCells(raw any, lines []string) [][]string {
+// paragraphsFromLines is the structured {paragraphs: [...]} shape
+// _apply_native_edit (pptx_generator.py) and apply_edits_to_scene
+// (pptx_scene.py) already both understand for a text or table-cell edit —
+// unlike a plain joined string, each line keeps its own indentation level.
+func paragraphsFromLines(lines []contentLine) []map[string]any {
+	paragraphs := make([]map[string]any, len(lines))
+	for index, line := range lines {
+		paragraphs[index] = map[string]any{
+			"level": line.Level, "align": "left",
+			"runs": []map[string]any{{"text": line.Text}},
+		}
+	}
+	return paragraphs
+}
+
+func populateCells(raw any, lines []contentLine) [][]any {
 	rows, ok := raw.([]any)
 	if !ok {
 		return nil
 	}
-	result := make([][]string, len(rows))
+	result := make([][]any, len(rows))
+	isLabel := make([][]bool, len(rows))
 	slots := 0
 	for rowIndex, rawRow := range rows {
 		cells, _ := rawRow.([]any)
-		result[rowIndex] = make([]string, len(cells))
+		result[rowIndex] = make([]any, len(cells))
+		isLabel[rowIndex] = make([]bool, len(cells))
 		for cellIndex, rawCell := range cells {
-			result[rowIndex][cellIndex], _ = rawCell.(string)
-			if !isTableLabel(result[rowIndex][cellIndex]) {
+			text, _ := rawCell.(string)
+			result[rowIndex][cellIndex] = text
+			isLabel[rowIndex][cellIndex] = isTableLabel(text)
+			if !isLabel[rowIndex][cellIndex] {
 				slots++
 			}
 		}
@@ -706,13 +740,13 @@ func populateCells(raw any, lines []string) [][]string {
 	size := max(1, (len(lines)+max(slots, 1)-1)/max(slots, 1))
 	next := 0
 	for rowIndex := range result {
-		for cellIndex, text := range result[rowIndex] {
-			if isTableLabel(text) {
+		for cellIndex := range result[rowIndex] {
+			if isLabel[rowIndex][cellIndex] {
 				continue
 			}
 			end := min(len(lines), next+size)
 			if next < end {
-				result[rowIndex][cellIndex] = strings.Join(lines[next:end], "\n")
+				result[rowIndex][cellIndex] = map[string]any{"paragraphs": paragraphsFromLines(lines[next:end])}
 			}
 			next = end
 		}
@@ -725,22 +759,28 @@ func isTableLabel(value string) bool {
 	return value != "" && !strings.Contains(value, "\n") && len([]rune(value)) <= 60
 }
 
-func slideLines(fields map[string]any, fallback []string) []string {
-	var result []string
+func slideLines(fields map[string]any, fallback []string) []contentLine {
+	var result []contentLine
 	if body, ok := fields["body"].(string); ok && strings.TrimSpace(body) != "" {
-		result = append(result, body)
+		result = append(result, contentLine{Text: body})
 	}
 	if bullets, ok := fields["bullets"].([]any); ok {
 		for _, item := range bullets {
 			if bullet, ok := item.(map[string]any); ok {
 				if text, ok := bullet["text"].(string); ok && strings.TrimSpace(text) != "" {
-					result = append(result, text)
+					level := 0
+					if raw, ok := bullet["level"].(float64); ok && raw == float64(int(raw)) && raw >= 0 && raw <= 4 {
+						level = int(raw)
+					}
+					result = append(result, contentLine{Text: text, Level: level})
 				}
 			}
 		}
 	}
 	if len(result) == 0 {
-		result = append(result, fallback...)
+		for _, text := range fallback {
+			result = append(result, contentLine{Text: text})
+		}
 	}
 	return result
 }
