@@ -848,5 +848,5 @@ var sourceTypes = map[string]bool{"TEXT": true, "DOCX": true, "PDF": true, "MARK
 var slideTypes = map[string]bool{
 	"TITLE": true, "CONTENT": true, "BULLET_LIST": true, "TWO_COLUMN": true,
 	"IMAGE": true, "CHART": true, "TABLE": true, "QUOTE": true, "COMPARISON": true,
-	"SECTION_HEADER": true, "BLANK": true,
+	"SECTION_HEADER": true, "BLANK": true, "TIMELINE": true, "PROCESS": true, "KPI": true,
 }

@@ -569,11 +569,42 @@ class PPTXGenerator:
             and all(isinstance(item, dict) for item in columns)
             and not content.get("table") and not content.get("chart")
         )
+        timeline = content.get("timeline") if isinstance(content, dict) else None
+        has_timeline = (
+            isinstance(timeline, dict) and isinstance(timeline.get("items"), list)
+            and 3 <= len(timeline["items"]) <= 8
+            and not content.get("table") and not content.get("chart")
+        )
+        process = content.get("process") if isinstance(content, dict) else None
+        has_process = (
+            isinstance(process, dict) and isinstance(process.get("steps"), list)
+            and 2 <= len(process["steps"]) <= 6
+            and not content.get("table") and not content.get("chart")
+        )
+        comparison = content.get("comparison") if isinstance(content, dict) else None
+        has_comparison = (
+            isinstance(comparison, dict) and isinstance(comparison.get("left"), dict) and isinstance(comparison.get("right"), dict)
+            and not content.get("table") and not content.get("chart")
+        )
+        metrics = content.get("metrics") if isinstance(content, dict) else None
+        has_kpi = (
+            isinstance(metrics, dict) and isinstance(metrics.get("metrics"), list)
+            and 2 <= len(metrics["metrics"]) <= 6
+            and not content.get("table") and not content.get("chart")
+        )
 
         if slide_type == "TITLE":
             self._add_title_slide(slide_data)
         elif has_columns or slide_type == "TWO_COLUMN":
             self._add_two_column_slide(slide_data)
+        elif has_timeline:
+            self._add_timeline_slide(slide_data)
+        elif has_process:
+            self._add_process_slide(slide_data)
+        elif has_comparison:
+            self._add_comparison_slide(slide_data)
+        elif has_kpi:
+            self._add_kpi_slide(slide_data)
         elif slide_type == "CONTENT":
             self._add_content_slide(slide_data)
         elif slide_type == "BULLET_LIST":
@@ -1068,6 +1099,184 @@ class PPTXGenerator:
             self._style_paragraph(paragraph, 18, self.tokens["body_font"])
             paragraph.level = level if isinstance(level, int) else 0
             paragraph.space_before = Pt(10)
+
+    def _add_timeline_slide(self, slide_data: Any):
+        """Add a horizontal timeline/roadmap slide."""
+        blank_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
+
+        content = slide_data.content
+        title = content.get("heading", slide_data.title or "")
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
+        tf = title_box.text_frame
+        tf.paragraphs[0].text = title
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+
+        items = content["timeline"]["items"]
+        count = len(items)
+        left, right, line_y = 1.0, 12.333, 3.6
+        line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(line_y), Inches(right - left), Inches(0.04))
+        line.fill.solid()
+        line.fill.fore_color.rgb = self.tokens["text"]
+        line.line.fill.background()
+
+        slot_w = (right - left) / count
+        for index, item in enumerate(items):
+            cx = left + slot_w * index + slot_w / 2
+            marker = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(cx - 0.09), Inches(line_y - 0.07), Inches(0.18), Inches(0.18))
+            marker.fill.solid()
+            marker.fill.fore_color.rgb = self.tokens["text"]
+            marker.line.fill.background()
+
+            date = str(item.get("date", "")).strip()
+            if date:
+                date_box = self._add_layout_textbox(slide, {"x": cx - slot_w / 2 + 0.05, "y": line_y - 0.55, "w": slot_w - 0.1, "h": 0.4})
+                date_box.text_frame.word_wrap = True
+                date_paragraph = date_box.text_frame.paragraphs[0]
+                date_paragraph.text = date
+                self._style_paragraph(date_paragraph, 11, self.tokens["body_font"], bold=True)
+                date_paragraph.alignment = PP_ALIGN.CENTER
+                self._shrink_text_to_fit(date_box)
+
+            label = str(item.get("label", "")).strip()
+            description = str(item.get("description", "")).strip()
+            text_box = self._add_layout_textbox(slide, {"x": cx - slot_w / 2 + 0.05, "y": line_y + 0.3, "w": slot_w - 0.1, "h": 1.8})
+            text_box.text_frame.word_wrap = True
+            label_paragraph = text_box.text_frame.paragraphs[0]
+            label_paragraph.text = label
+            self._style_paragraph(label_paragraph, 13, self.tokens["body_font"], bold=True)
+            label_paragraph.alignment = PP_ALIGN.CENTER
+            if description:
+                description_paragraph = text_box.text_frame.add_paragraph()
+                description_paragraph.text = description
+                self._style_paragraph(description_paragraph, 11, self.tokens["body_font"])
+                description_paragraph.alignment = PP_ALIGN.CENTER
+            self._shrink_text_to_fit(text_box)
+
+    def _add_process_slide(self, slide_data: Any):
+        """Add a left-to-right numbered process/step-flow slide."""
+        blank_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
+
+        content = slide_data.content
+        title = content.get("heading", slide_data.title or "")
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
+        tf = title_box.text_frame
+        tf.paragraphs[0].text = title
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+
+        steps = content["process"]["steps"]
+        count = len(steps)
+        left, right, y, h, gap = 0.7, 12.633, 2.8, 1.8, 0.4
+        box_w = (right - left - gap * (count - 1)) / count
+        for index, step in enumerate(steps):
+            x = left + index * (box_w + gap)
+            box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(box_w), Inches(h))
+            box.fill.solid()
+            box.fill.fore_color.rgb = self.tokens["background"]
+            box.line.color.rgb = self.tokens["text"]
+            box_tf = box.text_frame
+            box_tf.word_wrap = True
+            number_paragraph = box_tf.paragraphs[0]
+            number_paragraph.text = f"{index + 1}. {step.get('label', '')}"
+            self._style_paragraph(number_paragraph, 14, self.tokens["body_font"], bold=True)
+            number_paragraph.alignment = PP_ALIGN.CENTER
+            description = str(step.get("description", "")).strip()
+            if description:
+                description_paragraph = box_tf.add_paragraph()
+                description_paragraph.text = description
+                self._style_paragraph(description_paragraph, 11, self.tokens["body_font"])
+                description_paragraph.alignment = PP_ALIGN.CENTER
+            self._shrink_text_to_fit(box)
+            if index < count - 1:
+                arrow = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(x + box_w), Inches(y + h / 2 - 0.15), Inches(gap), Inches(0.3))
+                arrow.fill.solid()
+                arrow.fill.fore_color.rgb = self.tokens["text"]
+                arrow.line.fill.background()
+
+    def _add_comparison_slide(self, slide_data: Any):
+        """Add a two-sided VS comparison slide."""
+        blank_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
+
+        content = slide_data.content
+        title = content.get("heading", slide_data.title or "")
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
+        tf = title_box.text_frame
+        tf.paragraphs[0].text = title
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+
+        comparison = content["comparison"]
+        for side_key, x in (("left", 0.5), ("right", 6.9)):
+            side = comparison[side_key]
+            header_box = self._add_layout_textbox(slide, {"x": x, "y": 1.3, "w": 5.9, "h": 0.5})
+            header_paragraph = header_box.text_frame.paragraphs[0]
+            header_paragraph.text = str(side.get("title", ""))
+            self._style_paragraph(header_paragraph, 20, self.tokens["body_font"], bold=True)
+            header_paragraph.alignment = PP_ALIGN.CENTER
+            self._add_column_bullets(slide, side.get("bullets", []), x, 1.9, 5.1)
+
+        badge = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(6.267), Inches(1.35), Inches(0.8), Inches(0.8))
+        badge.fill.solid()
+        badge.fill.fore_color.rgb = self.tokens["text"]
+        badge.line.fill.background()
+        badge_paragraph = badge.text_frame.paragraphs[0]
+        badge_paragraph.text = "VS"
+        self._style_paragraph(badge_paragraph, 16, self.tokens["body_font"], bold=True)
+        badge_paragraph.alignment = PP_ALIGN.CENTER
+        for run in badge_paragraph.runs:
+            run.font.color.rgb = self._rgb("#FFFFFF", self.DEFAULT_COLORS["text"])
+
+    def _add_kpi_slide(self, slide_data: Any):
+        """Add a grid of KPI metric cards."""
+        blank_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
+
+        content = slide_data.content
+        title = content.get("heading", slide_data.title or "")
+        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
+        title_box = self._add_layout_textbox(slide, title_layout)
+        tf = title_box.text_frame
+        tf.paragraphs[0].text = title
+        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
+        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+
+        metrics = content["metrics"]["metrics"]
+        count = len(metrics)
+        columns = 3 if count > 4 else 2
+        rows = math.ceil(count / columns)
+        left, top, right, bottom, gap = 0.7, 1.6, 12.633, 6.9, 0.3
+        card_w = (right - left - gap * (columns - 1)) / columns
+        card_h = (bottom - top - gap * (rows - 1)) / rows
+        for index, metric in enumerate(metrics):
+            col, row = index % columns, index // columns
+            x = left + col * (card_w + gap)
+            y = top + row * (card_h + gap)
+            card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(card_w), Inches(card_h))
+            card.fill.solid()
+            card.fill.fore_color.rgb = self.tokens["background"]
+            card.line.color.rgb = self.tokens["text"]
+            card_tf = card.text_frame
+            card_tf.word_wrap = True
+            value_paragraph = card_tf.paragraphs[0]
+            value_paragraph.text = str(metric.get("value", ""))
+            self._style_paragraph(value_paragraph, 32, self.tokens["body_font"], bold=True)
+            value_paragraph.alignment = PP_ALIGN.CENTER
+            label_paragraph = card_tf.add_paragraph()
+            label_paragraph.text = str(metric.get("label", ""))
+            self._style_paragraph(label_paragraph, 13, self.tokens["body_font"])
+            label_paragraph.alignment = PP_ALIGN.CENTER
+            self._shrink_text_to_fit(card)
 
     def _add_quote_slide(self, slide_data: Any):
         """Add quote slide"""

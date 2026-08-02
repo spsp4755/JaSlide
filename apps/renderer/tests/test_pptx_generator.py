@@ -1144,3 +1144,167 @@ def test_pptx_table_edits_keep_cell_text_style():
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(table.shape_id), "cells": [["Updated"]]}]})))
     updated = Presentation(BytesIO(output)).slides[0].shapes[0].table.cell(0, 0).text_frame.paragraphs[0].runs[0]
     assert updated.font.size == Pt(18) and updated.font.bold
+
+
+def test_timeline_slide_renders_markers_dates_and_labels_in_order():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TIMELINE", "로드맵",
+        {"heading": "로드맵", "timeline": {"items": [
+            {"date": "2026 Q1", "label": "기획", "description": "요구사항 정의"},
+            {"date": "2026 Q2", "label": "개발", "description": "핵심 기능 구현"},
+            {"date": "2026 Q3", "label": "출시", "description": "정식 런칭"},
+        ]}},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert texts.index("기획") < texts.index("개발") < texts.index("출시")
+    assert "2026 Q1" in texts and "요구사항 정의" in texts
+    def is_oval(shape):
+        try:
+            return shape.auto_shape_type == MSO_SHAPE.OVAL
+        except (ValueError, AttributeError):
+            return False
+    markers = [shape for shape in slide.shapes if is_oval(shape)]
+    assert len(markers) == 3
+
+
+def test_timeline_slide_is_reachable_with_no_type_label_via_content_shape():
+    # Mirrors the TWO_COLUMN mislabeling fix: trust the content shape even if
+    # the outline mislabeled this CONTENT.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "CONTENT", "로드맵",
+        {"heading": "로드맵", "timeline": {"items": [
+            {"label": "기획"}, {"label": "개발"}, {"label": "출시"},
+        ]}},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "기획" in texts and "개발" in texts and "출시" in texts
+
+
+def test_timeline_slide_keeps_its_table_even_if_it_also_carries_a_timeline():
+    # Regression guard for the exact collision class fixed for columns: a
+    # table/chart shape must always win over the new layout keys too.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TABLE", "실적",
+        {
+            "heading": "실적",
+            "table": {"headers": ["부서", "실적"], "rows": [["개발팀", "90%"]]},
+            "timeline": {"items": [{"label": "a"}, {"label": "b"}, {"label": "c"}]},
+        },
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "개발팀" in texts and "90%" in texts
+
+
+def test_process_slide_renders_numbered_steps_with_connecting_arrows():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "PROCESS", "승인 절차",
+        {"heading": "승인 절차", "process": {"steps": [
+            {"label": "접수", "description": "요청 접수"},
+            {"label": "검토", "description": "내용 검토"},
+            {"label": "승인", "description": "최종 승인"},
+        ]}},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = " ".join(run.text for run in _runs(slide))
+    assert "접수" in texts and "검토" in texts and "승인" in texts
+    def is_arrow(shape):
+        try:
+            return shape.auto_shape_type == MSO_SHAPE.RIGHT_ARROW
+        except (ValueError, AttributeError):
+            return False
+    arrows = [shape for shape in slide.shapes if is_arrow(shape)]
+    assert len(arrows) == 2  # one fewer than the number of steps
+
+
+def test_process_slide_keeps_its_chart_even_if_it_also_carries_a_process():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "CHART", "실적 추이",
+        {
+            "heading": "실적 추이",
+            "chart": {"labels": ["Before", "After"], "values": [48, 11]},
+            "process": {"steps": [{"label": "a"}, {"label": "b"}]},
+        },
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    assert any(shape.has_chart for shape in slide.shapes)
+
+
+def test_comparison_slide_renders_both_sides_with_a_vs_badge():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "COMPARISON", "플랜 비교",
+        {"heading": "플랜 비교", "comparison": {
+            "left": {"title": "기본형", "bullets": [{"text": "가격 저렴", "level": 0}]},
+            "right": {"title": "프리미엄", "bullets": [{"text": "전체 기능", "level": 0}]},
+        }},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "기본형" in texts and "프리미엄" in texts
+    assert any("가격 저렴" in text for text in texts) and any("전체 기능" in text for text in texts)
+    assert "VS" in texts
+
+
+def test_comparison_slide_keeps_its_table_even_if_it_also_carries_a_comparison():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TABLE", "실적",
+        {
+            "heading": "실적",
+            "table": {"headers": ["부서", "실적"], "rows": [["개발팀", "90%"]]},
+            "comparison": {
+                "left": {"title": "a", "bullets": [{"text": "x", "level": 0}]},
+                "right": {"title": "b", "bullets": [{"text": "y", "level": 0}]},
+            },
+        },
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "개발팀" in texts and "90%" in texts
+
+
+def test_kpi_slide_renders_a_card_per_metric_in_a_grid():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "KPI", "핵심 지표",
+        {"heading": "핵심 지표", "metrics": {"metrics": [
+            {"value": "120%", "label": "목표 달성률"},
+            {"value": "3.2억", "label": "매출"},
+            {"value": "15", "label": "신규 계약"},
+        ]}},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "120%" in texts and "목표 달성률" in texts
+    assert "3.2억" in texts and "매출" in texts
+    assert "15" in texts and "신규 계약" in texts
+    cards = []
+    for shape in slide.shapes:
+        try:
+            if shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE:
+                cards.append(shape)
+        except ValueError:
+            pass
+    assert len(cards) == 3
+
+
+def test_kpi_slide_keeps_its_chart_even_if_it_also_carries_metrics():
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "CHART", "실적 추이",
+        {
+            "heading": "실적 추이",
+            "chart": {"labels": ["Before", "After"], "values": [48, 11]},
+            "metrics": {"metrics": [{"value": "1", "label": "a"}, {"value": "2", "label": "b"}]},
+        },
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    assert any(shape.has_chart for shape in slide.shapes)

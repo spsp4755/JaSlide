@@ -350,3 +350,260 @@ func TestParseSlideContentStillFallsBackToFlatBulletsWithoutColumns(t *testing.T
 		t.Fatal("expected the flat bullets field to still be present as a fallback")
 	}
 }
+
+func TestValidTimelineAcceptsThreeToEightWellFormedItems(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"로드맵",
+		"timeline":{"items":[
+			{"date":"2026 Q1","label":"기획","description":"요구사항 정의"},
+			{"date":"2026 Q2","label":"개발","description":"핵심 기능 구현"},
+			{"date":"2026 Q3","label":"출시","description":"정식 런칭"}
+		]}
+	}`), "TIMELINE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	timeline, ok := value["timeline"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected a timeline field, got %v", value["timeline"])
+	}
+	items, ok := timeline["items"].([]any)
+	if !ok || len(items) != 3 {
+		t.Fatalf("expected 3 timeline items, got %v", timeline["items"])
+	}
+	first := items[0].(map[string]any)
+	if first["label"] != "기획" {
+		t.Fatalf("unexpected first label: %v", first["label"])
+	}
+}
+
+func TestValidTimelineRejectsFewerThanThreeOrMoreThanEightItems(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"timeline":{"items":[{"date":"d","label":"only one","description":"x"}]}
+	}`), "TIMELINE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["timeline"]; ok {
+		t.Fatalf("expected timeline with only 1 item to be rejected, got %v", value["timeline"])
+	}
+}
+
+func TestValidTimelineRejectsItemsMissingALabel(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"timeline":{"items":[
+			{"date":"d1","label":"a"},
+			{"date":"d2","label":"b"},
+			{"date":"d3"}
+		]}
+	}`), "TIMELINE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["timeline"]; ok {
+		t.Fatalf("expected timeline with a missing label to be rejected, got %v", value["timeline"])
+	}
+}
+
+func TestValidProcessAcceptsTwoToSixWellFormedSteps(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"절차",
+		"process":{"steps":[
+			{"label":"접수","description":"요청 접수"},
+			{"label":"검토","description":"내용 검토"},
+			{"label":"승인","description":"최종 승인"}
+		]}
+	}`), "PROCESS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	process, ok := value["process"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected a process field, got %v", value["process"])
+	}
+	steps, ok := process["steps"].([]any)
+	if !ok || len(steps) != 3 {
+		t.Fatalf("expected 3 process steps, got %v", process["steps"])
+	}
+}
+
+func TestValidProcessRejectsFewerThanTwoOrMoreThanSixSteps(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"process":{"steps":[
+			{"label":"1"},{"label":"2"},{"label":"3"},
+			{"label":"4"},{"label":"5"},{"label":"6"},{"label":"7"}
+		]}
+	}`), "PROCESS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["process"]; ok {
+		t.Fatalf("expected process with 7 steps to be rejected, got %v", value["process"])
+	}
+}
+
+func TestOutlinePromptAndSlidePromptMentionTimelineAndProcess(t *testing.T) {
+	outline := outlinePrompt(OutlineRequest{Content: "source", Language: "ko", SlideCount: 1})
+	if !strings.Contains(outline, "TIMELINE") || !strings.Contains(outline, "PROCESS") {
+		t.Fatalf("expected outline prompt to mention TIMELINE and PROCESS, got: %s", outline)
+	}
+	slide := slidePrompt(SlideRequest{Title: "t", Type: "TIMELINE", Language: "ko"})
+	if !strings.Contains(slide, "timeline") || !strings.Contains(slide, "process") {
+		t.Fatalf("expected slide prompt to mention timeline and process shapes, got: %s", slide)
+	}
+}
+
+func TestValidComparisonAcceptsTwoWellFormedSides(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"플랜 비교",
+		"comparison":{
+			"left":{"title":"기본형","bullets":["가격 저렴","기능 제한"]},
+			"right":{"title":"프리미엄","bullets":["가격 높음","전체 기능"]}
+		}
+	}`), "COMPARISON")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	comparison, ok := value["comparison"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected a comparison field, got %v", value["comparison"])
+	}
+	left, ok := comparison["left"].(map[string]any)
+	if !ok || left["title"] != "기본형" {
+		t.Fatalf("unexpected left side: %v", comparison["left"])
+	}
+	bullets, ok := left["bullets"].([]any)
+	if !ok || len(bullets) != 2 {
+		t.Fatalf("expected 2 left bullets, got %v", left["bullets"])
+	}
+}
+
+func TestValidComparisonRejectsASideMissingATitle(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"comparison":{
+			"left":{"bullets":["x"]},
+			"right":{"title":"프리미엄","bullets":["y"]}
+		}
+	}`), "COMPARISON")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["comparison"]; ok {
+		t.Fatalf("expected comparison missing a title to be rejected, got %v", value["comparison"])
+	}
+}
+
+func TestValidComparisonRejectsASideWithNoBullets(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"comparison":{
+			"left":{"title":"기본형","bullets":[]},
+			"right":{"title":"프리미엄","bullets":["y"]}
+		}
+	}`), "COMPARISON")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["comparison"]; ok {
+		t.Fatalf("expected comparison with an empty side to be rejected, got %v", value["comparison"])
+	}
+}
+
+func TestValidKPIAcceptsTwoToSixWellFormedMetrics(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"핵심 지표",
+		"metrics":{"metrics":[
+			{"value":"120%","label":"목표 달성률"},
+			{"value":"3.2억","label":"매출"},
+			{"value":"15","label":"신규 계약"}
+		]}
+	}`), "KPI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	metrics, ok := value["metrics"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected a metrics field, got %v", value["metrics"])
+	}
+	list, ok := metrics["metrics"].([]any)
+	if !ok || len(list) != 3 {
+		t.Fatalf("expected 3 metric cards, got %v", metrics["metrics"])
+	}
+}
+
+func TestValidKPIRejectsFewerThanTwoOrMoreThanSixMetrics(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"metrics":{"metrics":[{"value":"1","label":"only one"}]}
+	}`), "KPI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["metrics"]; ok {
+		t.Fatalf("expected metrics with only 1 card to be rejected, got %v", value["metrics"])
+	}
+}
+
+func TestValidKPIRejectsAMetricMissingAValue(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{
+		"heading":"h",
+		"metrics":{"metrics":[
+			{"value":"1","label":"a"},
+			{"label":"missing value"}
+		]}
+	}`), "KPI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := value["metrics"]; ok {
+		t.Fatalf("expected metrics with a missing value to be rejected, got %v", value["metrics"])
+	}
+}

@@ -375,6 +375,18 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 	if columns := validColumns(value["columns"]); columns != nil {
 		result["columns"] = columns
 	}
+	if timeline := validTimeline(value["timeline"]); timeline != nil {
+		result["timeline"] = timeline
+	}
+	if process := validProcess(value["process"]); process != nil {
+		result["process"] = process
+	}
+	if comparison := validComparison(value["comparison"]); comparison != nil {
+		result["comparison"] = comparison
+	}
+	if kpi := validKPI(value["metrics"]); kpi != nil {
+		result["metrics"] = kpi
+	}
 	return json.Marshal(result)
 }
 
@@ -517,6 +529,124 @@ func validColumns(raw any) []map[string]any {
 	return columns
 }
 
+// validTimeline requires 3-8 items, each with a non-empty label. date and
+// description are optional strings, kept as-is when present.
+func validTimeline(raw any) map[string]any {
+	timeline, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rawItems, ok := timeline["items"].([]any)
+	if !ok || len(rawItems) < 3 || len(rawItems) > 8 {
+		return nil
+	}
+	items := make([]map[string]any, len(rawItems))
+	for index, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			return nil
+		}
+		label, ok := item["label"].(string)
+		if !ok || strings.TrimSpace(label) == "" {
+			return nil
+		}
+		entry := map[string]any{"label": label}
+		if date, ok := item["date"].(string); ok && strings.TrimSpace(date) != "" {
+			entry["date"] = date
+		}
+		if description, ok := item["description"].(string); ok && strings.TrimSpace(description) != "" {
+			entry["description"] = description
+		}
+		items[index] = entry
+	}
+	return map[string]any{"items": items}
+}
+
+// validProcess requires 2-6 steps, each with a non-empty label.
+func validProcess(raw any) map[string]any {
+	process, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rawSteps, ok := process["steps"].([]any)
+	if !ok || len(rawSteps) < 2 || len(rawSteps) > 6 {
+		return nil
+	}
+	steps := make([]map[string]any, len(rawSteps))
+	for index, rawStep := range rawSteps {
+		step, ok := rawStep.(map[string]any)
+		if !ok {
+			return nil
+		}
+		label, ok := step["label"].(string)
+		if !ok || strings.TrimSpace(label) == "" {
+			return nil
+		}
+		entry := map[string]any{"label": label}
+		if description, ok := step["description"].(string); ok && strings.TrimSpace(description) != "" {
+			entry["description"] = description
+		}
+		steps[index] = entry
+	}
+	return map[string]any{"steps": steps}
+}
+
+// validComparison requires both "left" and "right" sides, each with a
+// non-empty title and at least one bullet (reusing parseBullets so a side's
+// bullets follow the exact same string-or-object rules as everywhere else).
+func validComparison(raw any) map[string]any {
+	comparison, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	sides := make(map[string]map[string]any, 2)
+	for _, key := range []string{"left", "right"} {
+		rawSide, ok := comparison[key].(map[string]any)
+		if !ok {
+			return nil
+		}
+		title, ok := rawSide["title"].(string)
+		if !ok || strings.TrimSpace(title) == "" {
+			return nil
+		}
+		bullets := parseBullets(rawSide["bullets"], 6)
+		if len(bullets) == 0 {
+			return nil
+		}
+		sides[key] = map[string]any{"title": title, "bullets": bullets}
+	}
+	return map[string]any{"left": sides["left"], "right": sides["right"]}
+}
+
+// validKPI requires 2-6 metric cards, each with a non-empty value and label.
+func validKPI(raw any) map[string]any {
+	kpi, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rawMetrics, ok := kpi["metrics"].([]any)
+	if !ok || len(rawMetrics) < 2 || len(rawMetrics) > 6 {
+		return nil
+	}
+	metrics := make([]map[string]any, len(rawMetrics))
+	for index, rawMetric := range rawMetrics {
+		metric, ok := rawMetric.(map[string]any)
+		if !ok {
+			return nil
+		}
+		value, ok := metric["value"].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil
+		}
+		label, ok := metric["label"].(string)
+		if !ok || strings.TrimSpace(label) == "" {
+			return nil
+		}
+		metrics[index] = map[string]any{"value": value, "label": label}
+	}
+	return map[string]any{"metrics": metrics}
+}
+
 // weekRanges returns "YYYY.MM.DD ~ YYYY.MM.DD" for the Monday-Friday of the
 // week containing now, and for the following week — computed once here so
 // the model never has to do date arithmetic itself. Sunday counts as the
@@ -557,7 +687,7 @@ func outlinePrompt(input OutlineRequest) string {
 	if len(input.PriorTitles) > 0 {
 		continuation = "\nContinue after these titles without repetition: " + strings.Join(input.PriorTitles, "; ")
 	}
-	guidance := "\nChoose each slide's type by its content: TABLE for row/column data such as comparisons, schedules, or structured records; CHART for numeric trends or comparisons; BULLET_LIST for simple lists; TITLE for section covers; CONTENT for narrative slides."
+	guidance := "\nChoose each slide's type by its content: TABLE for row/column data such as comparisons, schedules, or structured records; CHART for numeric trends or comparisons; BULLET_LIST for simple lists; TITLE for section covers; CONTENT for narrative slides; TIMELINE for chronological roadmaps or schedules; PROCESS for sequential step-by-step flows; COMPARISON for two-sided comparisons; KPI for a dashboard of key metrics."
 	return fmt.Sprintf(
 		"Create exactly %d presentation slides in %s from this source:\n%s%s%s%s%s\nReturn JSON only: {\"title\":\"Deck\",\"slides\":[{\"order\":1,\"title\":\"Title\",\"type\":\"CONTENT\",\"keyPoints\":[\"specific point\"],\"templateIndex\":0}]}",
 		input.SlideCount, input.Language, truncate(input.Content, 10000), catalog, continuation, guidance, dateGuidance(),
@@ -571,7 +701,11 @@ func slidePrompt(input SlideRequest) string {
 			"(each an object with text and level 0-2 for indentation), "+
 			"chart for CHART as {\"labels\":[\"...\"],\"values\":[0]}, "+
 			"table for TABLE as {\"headers\":[\"...\"],\"rows\":[[\"...\"]]}, "+
-			"and columns for TWO_COLUMN as exactly two {\"header\":\"...\",\"bullets\":[{\"text\":\"...\",\"level\":0}]} objects.%s",
+			"columns for TWO_COLUMN as exactly two {\"header\":\"...\",\"bullets\":[{\"text\":\"...\",\"level\":0}]} objects, "+
+			"timeline for TIMELINE as {\"items\":[{\"date\":\"...\",\"label\":\"...\",\"description\":\"...\"}]} with 3-8 items, "+
+			"process for PROCESS as {\"steps\":[{\"label\":\"...\",\"description\":\"...\"}]} with 2-6 steps, "+
+			"comparison for COMPARISON as {\"left\":{\"title\":\"...\",\"bullets\":[\"...\"]},\"right\":{\"title\":\"...\",\"bullets\":[\"...\"]}}, "+
+			"and metrics for KPI as {\"metrics\":[{\"value\":\"...\",\"label\":\"...\"}]} with 2-6 cards.%s",
 		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), dateGuidance(),
 	)
 }
