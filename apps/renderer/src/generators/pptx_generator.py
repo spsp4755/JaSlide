@@ -569,28 +569,33 @@ class PPTXGenerator:
             and all(isinstance(item, dict) for item in columns)
             and not content.get("table") and not content.get("chart")
         )
+        # table/chart/columns all outrank the four layouts below, for the same
+        # reason table/chart outranks columns above: parseSlideContent (Go)
+        # attaches each of these shapes unconditionally whenever it validates,
+        # regardless of slideType, so a model that emits more than one shape on
+        # the same slide must not have the "later" shape silently dropped.
         timeline = content.get("timeline") if isinstance(content, dict) else None
         has_timeline = (
             isinstance(timeline, dict) and isinstance(timeline.get("items"), list)
             and 3 <= len(timeline["items"]) <= 8
-            and not content.get("table") and not content.get("chart")
+            and not content.get("table") and not content.get("chart") and not has_columns
         )
         process = content.get("process") if isinstance(content, dict) else None
         has_process = (
             isinstance(process, dict) and isinstance(process.get("steps"), list)
             and 2 <= len(process["steps"]) <= 6
-            and not content.get("table") and not content.get("chart")
+            and not content.get("table") and not content.get("chart") and not has_columns
         )
         comparison = content.get("comparison") if isinstance(content, dict) else None
         has_comparison = (
             isinstance(comparison, dict) and isinstance(comparison.get("left"), dict) and isinstance(comparison.get("right"), dict)
-            and not content.get("table") and not content.get("chart")
+            and not content.get("table") and not content.get("chart") and not has_columns
         )
         metrics = content.get("metrics") if isinstance(content, dict) else None
         has_kpi = (
             isinstance(metrics, dict) and isinstance(metrics.get("metrics"), list)
             and 2 <= len(metrics["metrics"]) <= 6
-            and not content.get("table") and not content.get("chart")
+            and not content.get("table") and not content.get("chart") and not has_columns
         )
 
         if slide_type == "TITLE":
@@ -1234,7 +1239,9 @@ class PPTXGenerator:
         self._style_paragraph(badge_paragraph, 16, self.tokens["body_font"], bold=True)
         badge_paragraph.alignment = PP_ALIGN.CENTER
         for run in badge_paragraph.runs:
-            run.font.color.rgb = self._rgb("#FFFFFF", self.DEFAULT_COLORS["text"])
+            # The badge fill is tokens["text"] (dark by default) so its own text
+            # needs to contrast against that fill, not the slide background.
+            run.font.color.rgb = self.tokens["background"]
 
     def _add_kpi_slide(self, slide_data: Any):
         """Add a grid of KPI metric cards."""

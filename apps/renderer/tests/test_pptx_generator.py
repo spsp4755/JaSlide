@@ -1201,6 +1201,28 @@ def test_timeline_slide_keeps_its_table_even_if_it_also_carries_a_timeline():
     assert "개발팀" in texts and "90%" in texts
 
 
+def test_timeline_slide_keeps_its_columns_even_if_it_also_carries_a_timeline():
+    # Final whole-branch review: table/chart winning over the new layouts
+    # (test above) was tested for all four, but columns was not -- a model
+    # emitting both a valid "columns" and a valid "timeline" on the same
+    # slide must not have its columns silently dropped either.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TWO_COLUMN", "비교",
+        {
+            "heading": "비교",
+            "columns": [
+                {"header": "왼쪽", "bullets": [{"text": "왼쪽 항목", "level": 0}]},
+                {"header": "오른쪽", "bullets": [{"text": "오른쪽 항목", "level": 0}]},
+            ],
+            "timeline": {"items": [{"label": "a"}, {"label": "b"}, {"label": "c"}]},
+        },
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    texts = [run.text for run in _runs(slide)]
+    assert "왼쪽" in texts and "오른쪽" in texts
+
+
 def test_process_slide_renders_numbered_steps_with_connecting_arrows():
     output = PPTXGenerator().generate(_presentation(_slide(
         "PROCESS", "승인 절차",
@@ -1291,7 +1313,7 @@ def test_kpi_slide_renders_a_card_per_metric_in_a_grid():
         try:
             if shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE:
                 cards.append(shape)
-        except ValueError:
+        except (ValueError, AttributeError):
             pass
     assert len(cards) == 3
 
