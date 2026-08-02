@@ -207,6 +207,10 @@ func (*maliciousHTMLLLM) Critique(context.Context, CritiqueRequest) (string, err
 	return "", nil
 }
 
+func (*maliciousHTMLLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
+	return Outline{}, false, nil
+}
+
 func (*maliciousHTMLLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
 	return nil, errors.New("unexpected edit call")
 }
@@ -237,6 +241,10 @@ func (*cancellableLLM) SlideContent(context.Context, SlideRequest) (json.RawMess
 
 func (*cancellableLLM) Critique(context.Context, CritiqueRequest) (string, error) {
 	return "", errors.New("unexpected critique call")
+}
+
+func (*cancellableLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
+	return Outline{}, false, nil
 }
 
 func (*cancellableLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
@@ -273,6 +281,10 @@ func (*reviewLLM) SlideContent(context.Context, SlideRequest) (json.RawMessage, 
 func (llm *reviewLLM) Critique(context.Context, CritiqueRequest) (string, error) {
 	llm.critiqueCalls++
 	return llm.critiqueFeedback, llm.critiqueErr
+}
+
+func (*reviewLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
+	return Outline{}, false, nil
 }
 
 func (llm *reviewLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {

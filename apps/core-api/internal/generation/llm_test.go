@@ -713,3 +713,110 @@ func TestOpenAIClientCritiqueRetriesOnRejectionWithoutFeedback(t *testing.T) {
 		t.Fatalf("expected feedback from the retried response, got %q", feedback)
 	}
 }
+
+func TestOpenAIClientCritiqueOutlineApprovesWellFormedOutline(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		raw, _ := json.Marshal(map[string]any{"approved": true})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	original := Outline{Title: "Deck", Slides: []OutlineSlide{
+		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
+	}}
+	outline, changed, err := llm.CritiqueOutline(context.Background(), original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("expected changed = false for an approved outline")
+	}
+	if outline.Title != original.Title || len(outline.Slides) != len(original.Slides) {
+		t.Fatalf("expected the original outline back unchanged, got %+v", outline)
+	}
+}
+
+func TestOpenAIClientCritiqueOutlineReturnsCorrectedOutlineWhenRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		raw, _ := json.Marshal(map[string]any{
+			"approved": false,
+			"outline": map[string]any{
+				"title": "Deck",
+				"slides": []map[string]any{
+					{"order": 1, "title": "Intro", "type": "CONTENT", "keyPoints": []string{"Hello"}},
+					{"order": 2, "title": "Details", "type": "CONTENT", "keyPoints": []string{"World"}},
+				},
+			},
+		})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	original := Outline{Title: "Deck", Slides: []OutlineSlide{
+		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
+	}}
+	outline, changed, err := llm.CritiqueOutline(context.Background(), original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected changed = true for a rejected outline")
+	}
+	if len(outline.Slides) != 2 || outline.Slides[1].Title != "Details" {
+		t.Fatalf("expected the corrected 2-slide outline, got %+v", outline)
+	}
+}
+
+func TestOpenAIClientCritiqueOutlineRetriesOnInvalidCorrection(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		call := calls.Add(1)
+		var raw []byte
+		if call == 1 {
+			// Rejected but the "outline" field has no title -- parseOutline will
+			// reject this, forcing a retry.
+			raw, _ = json.Marshal(map[string]any{"approved": false, "outline": map[string]any{"slides": []any{}}})
+		} else {
+			raw, _ = json.Marshal(map[string]any{
+				"approved": false,
+				"outline": map[string]any{
+					"title": "Deck",
+					"slides": []map[string]any{
+						{"order": 1, "title": "Intro", "type": "CONTENT", "keyPoints": []string{"Hello"}},
+					},
+				},
+			})
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	original := Outline{Title: "Deck", Slides: []OutlineSlide{
+		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
+	}}
+	_, changed, err := llm.CritiqueOutline(context.Background(), original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2 (retry after an invalid correction)", calls.Load())
+	}
+	if !changed {
+		t.Fatal("expected changed = true once the retried response validates")
+	}
+}
