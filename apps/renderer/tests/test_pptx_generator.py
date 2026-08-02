@@ -1318,6 +1318,33 @@ def test_kpi_slide_renders_a_card_per_metric_in_a_grid():
     assert len(cards) == 3
 
 
+def test_kpi_slide_centers_a_ragged_last_row():
+    # 5 cards over 3 columns leaves a 2-card last row; it should be centered
+    # rather than flush left with an empty gap on the right.
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "KPI", "핵심 지표",
+        {"heading": "핵심 지표", "metrics": {"metrics": [
+            {"value": "1", "label": "a"}, {"value": "2", "label": "b"},
+            {"value": "3", "label": "c"}, {"value": "4", "label": "d"},
+            {"value": "5", "label": "e"},
+        ]}},
+    )))
+
+    slide = Presentation(BytesIO(output)).slides[0]
+    cards = []
+    for shape in slide.shapes:
+        try:
+            if shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE:
+                cards.append(shape)
+        except (ValueError, AttributeError):
+            pass
+    assert len(cards) == 5
+    last_row = sorted(cards, key=lambda shape: shape.top)[3:]
+    last_row_left = min(shape.left for shape in last_row)
+    first_row_left = min(shape.left for shape in cards[:3])
+    assert last_row_left > first_row_left
+
+
 def test_kpi_slide_keeps_its_chart_even_if_it_also_carries_metrics():
     output = PPTXGenerator().generate(_presentation(_slide(
         "CHART", "실적 추이",

@@ -1105,13 +1105,8 @@ class PPTXGenerator:
             paragraph.level = level if isinstance(level, int) else 0
             paragraph.space_before = Pt(10)
 
-    def _add_timeline_slide(self, slide_data: Any):
-        """Add a horizontal timeline/roadmap slide."""
-        blank_layout = self.prs.slide_layouts[6]
-        slide = self.prs.slides.add_slide(blank_layout)
-        self._apply_background(slide)
-
-        content = slide_data.content
+    def _add_slide_title(self, slide: Any, slide_data: Any, content: dict) -> None:
+        """Draw the standard top title textbox shared by the four new layouts."""
         title = content.get("heading", slide_data.title or "")
         title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
         title_box = self._add_layout_textbox(slide, title_layout)
@@ -1119,6 +1114,15 @@ class PPTXGenerator:
         tf.paragraphs[0].text = title
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+
+    def _add_timeline_slide(self, slide_data: Any):
+        """Add a horizontal timeline/roadmap slide."""
+        blank_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(blank_layout)
+        self._apply_background(slide)
+
+        content = slide_data.content
+        self._add_slide_title(slide, slide_data, content)
 
         items = content["timeline"]["items"]
         count = len(items)
@@ -1168,13 +1172,7 @@ class PPTXGenerator:
         self._apply_background(slide)
 
         content = slide_data.content
-        title = content.get("heading", slide_data.title or "")
-        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
-        title_box = self._add_layout_textbox(slide, title_layout)
-        tf = title_box.text_frame
-        tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
-        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._add_slide_title(slide, slide_data, content)
 
         steps = content["process"]["steps"]
         count = len(steps)
@@ -1212,13 +1210,7 @@ class PPTXGenerator:
         self._apply_background(slide)
 
         content = slide_data.content
-        title = content.get("heading", slide_data.title or "")
-        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
-        title_box = self._add_layout_textbox(slide, title_layout)
-        tf = title_box.text_frame
-        tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
-        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._add_slide_title(slide, slide_data, content)
 
         comparison = content["comparison"]
         for side_key, x in (("left", 0.5), ("right", 6.9)):
@@ -1250,13 +1242,7 @@ class PPTXGenerator:
         self._apply_background(slide)
 
         content = slide_data.content
-        title = content.get("heading", slide_data.title or "")
-        title_layout = self._layout("title", {"x": 0.5, "y": 0.3, "w": 12.333, "h": 0.8, "fontSize": 36})
-        title_box = self._add_layout_textbox(slide, title_layout)
-        tf = title_box.text_frame
-        tf.paragraphs[0].text = title
-        self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
-        self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._add_slide_title(slide, slide_data, content)
 
         metrics = content["metrics"]["metrics"]
         count = len(metrics)
@@ -1267,7 +1253,11 @@ class PPTXGenerator:
         card_h = (bottom - top - gap * (rows - 1)) / rows
         for index, metric in enumerate(metrics):
             col, row = index % columns, index // columns
-            x = left + col * (card_w + gap)
+            # Center a ragged last row (e.g. 5 cards over 3 columns) instead of
+            # leaving its cards flush left with an empty gap on the right.
+            row_count = min(columns, count - row * columns)
+            row_offset = (columns - row_count) * (card_w + gap) / 2
+            x = left + row_offset + col * (card_w + gap)
             y = top + row * (card_h + gap)
             card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(card_w), Inches(card_h))
             card.fill.solid()
