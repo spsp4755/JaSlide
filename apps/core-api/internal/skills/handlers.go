@@ -183,9 +183,9 @@ func (handler *handlers) createImported(
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO "Template"
-			("id","name","category","config","isPublic","organizationId","updatedAt")
-		VALUES ($1,$2,'BUSINESS',$3,FALSE,$4,NOW())`,
-		templateID, name, config, user.OrganizationID,
+			("id","name","category","config","isPublic","userId","organizationId","updatedAt")
+		VALUES ($1,$2,'BUSINESS',$3,FALSE,$4,$5,NOW())`,
+		templateID, name, config, user.ID, user.OrganizationID,
 	); err != nil {
 		return nil, err
 	}

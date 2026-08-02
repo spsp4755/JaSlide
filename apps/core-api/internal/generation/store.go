@@ -55,7 +55,8 @@ func (store *SQLStore) VisibleTemplateConfig(ctx context.Context, id, userID str
 		SELECT t."config" FROM "Template" t
 		WHERE t."id"=$1 AND (
 			t."isPublic" OR
-			t."organizationId"=(SELECT u."organizationId" FROM "User" u WHERE u."id"=$2)
+			t."userId"=$2 OR
+			(t."organizationId" IS NOT NULL AND t."organizationId"=(SELECT u."organizationId" FROM "User" u WHERE u."id"=$2))
 		)`, id, userID).Scan(&raw)
 	return raw, err
 }

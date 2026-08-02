@@ -25,6 +25,7 @@ type memoryRepository struct {
 type memoryTemplate struct {
 	config         json.RawMessage
 	public         bool
+	userID         string
 	organizationID *string
 }
 
@@ -53,12 +54,17 @@ func (repo *memoryRepository) VisibleSkill(_ context.Context, id, userID string,
 
 func (repo *memoryRepository) VisibleTemplateConfig(_ context.Context, id, userID string) (json.RawMessage, error) {
 	template, ok := repo.templates[id]
-	user := repo.users[userID]
-	if !ok || (!template.public &&
-		(template.organizationID == nil || user.OrganizationID == nil || *template.organizationID != *user.OrganizationID)) {
+	if !ok {
 		return nil, errors.New("not found")
 	}
-	return template.config, nil
+	if template.public || template.userID == userID {
+		return template.config, nil
+	}
+	user := repo.users[userID]
+	if template.organizationID != nil && user.OrganizationID != nil && *template.organizationID == *user.OrganizationID {
+		return template.config, nil
+	}
+	return nil, errors.New("not found")
 }
 
 func (repo *memoryRepository) CreateGeneration(_ context.Context, presentation Presentation, job Job) error {
@@ -623,6 +629,71 @@ func TestStartAndOutlineRejectPrivateTemplateOutsideOrganization(t *testing.T) {
 		Content: "AI security", SlideCount: pointerTo(1), TemplateID: &templateID,
 	}); !errors.Is(err, ErrBadInput) {
 		t.Fatalf("GenerateOutline() error = %v, want ErrBadInput", err)
+	}
+}
+
+func TestGenerateOutlineAllowsOrganizationlessUserToSeeTheirOwnPrivateTemplate(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["own-template"] = memoryTemplate{
+		config: json.RawMessage(`{}`), userID: "user-1",
+	}
+	templateID := "own-template"
+	service := NewService(repo, new(maliciousHTMLLLM), new(recordingQueue))
+
+	if _, err := service.GenerateOutline(context.Background(), Principal{ID: "user-1"}, OutlineInput{
+		Content: "AI security", SlideCount: pointerTo(1), TemplateID: &templateID,
+	}); err != nil {
+		t.Fatalf("GenerateOutline() error = %v, want nil", err)
+	}
+}
+
+func TestGenerateOutlineAllowsSameOrganizationColleagueToSeeASharedTemplate(t *testing.T) {
+	repo := newMemoryRepository()
+	sharedOrg := "org-1"
+	repo.users["colleague"] = db.User{ID: "colleague", OrganizationID: &sharedOrg}
+	repo.templates["team-template"] = memoryTemplate{
+		config: json.RawMessage(`{}`), userID: "owner", organizationID: &sharedOrg,
+	}
+	templateID := "team-template"
+	service := NewService(repo, new(maliciousHTMLLLM), new(recordingQueue))
+
+	if _, err := service.GenerateOutline(context.Background(), Principal{ID: "colleague", OrganizationID: &sharedOrg}, OutlineInput{
+		Content: "AI security", SlideCount: pointerTo(1), TemplateID: &templateID,
+	}); err != nil {
+		t.Fatalf("GenerateOutline() error = %v, want nil", err)
+	}
+}
+
+func TestGenerateOutlineRejectsAnotherOrganizationlessUsersPrivateTemplate(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["stranger"] = db.User{ID: "stranger"}
+	repo.templates["someone-elses-template"] = memoryTemplate{
+		config: json.RawMessage(`{}`), userID: "owner",
+	}
+	templateID := "someone-elses-template"
+	service := NewService(repo, new(maliciousHTMLLLM), new(recordingQueue))
+
+	if _, err := service.GenerateOutline(context.Background(), Principal{ID: "stranger"}, OutlineInput{
+		Content: "AI security", SlideCount: pointerTo(1), TemplateID: &templateID,
+	}); !errors.Is(err, ErrBadInput) {
+		t.Fatalf("GenerateOutline() error = %v, want ErrBadInput", err)
+	}
+}
+
+func TestGenerateOutlineAllowsAnyoneToSeeAPublicTemplate(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["anyone"] = db.User{ID: "anyone"}
+	repo.templates["public-template"] = memoryTemplate{
+		config: json.RawMessage(`{}`), userID: "owner", public: true,
+	}
+	templateID := "public-template"
+	service := NewService(repo, new(maliciousHTMLLLM), new(recordingQueue))
+
+	if _, err := service.GenerateOutline(context.Background(), Principal{ID: "anyone"}, OutlineInput{
+		Content: "AI security", SlideCount: pointerTo(1), TemplateID: &templateID,
+	}); err != nil {
+		t.Fatalf("GenerateOutline() error = %v, want nil", err)
 	}
 }
 
