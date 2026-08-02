@@ -207,8 +207,8 @@ func (*maliciousHTMLLLM) Critique(context.Context, CritiqueRequest) (string, err
 	return "", nil
 }
 
-func (*maliciousHTMLLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
-	return Outline{}, false, nil
+func (*maliciousHTMLLLM) CritiqueOutline(_ context.Context, outline Outline) (Outline, bool, error) {
+	return outline, false, nil
 }
 
 func (*maliciousHTMLLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
@@ -244,7 +244,7 @@ func (*cancellableLLM) Critique(context.Context, CritiqueRequest) (string, error
 }
 
 func (*cancellableLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
-	return Outline{}, false, nil
+	return Outline{}, false, errors.New("unexpected critique outline call")
 }
 
 func (*cancellableLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
@@ -266,6 +266,10 @@ type reviewLLM struct {
 	editErr          error
 	critiqueCalls    int
 	editCalls        int
+
+	critiqueOutline      Outline
+	critiqueOutlineErr   error
+	critiqueOutlineCalls int
 }
 
 func (*reviewLLM) Outline(context.Context, OutlineRequest) (Outline, error) {
@@ -283,8 +287,15 @@ func (llm *reviewLLM) Critique(context.Context, CritiqueRequest) (string, error)
 	return llm.critiqueFeedback, llm.critiqueErr
 }
 
-func (*reviewLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
-	return Outline{}, false, nil
+func (llm *reviewLLM) CritiqueOutline(_ context.Context, outline Outline) (Outline, bool, error) {
+	llm.critiqueOutlineCalls++
+	if llm.critiqueOutlineErr != nil {
+		return Outline{}, false, llm.critiqueOutlineErr
+	}
+	if len(llm.critiqueOutline.Slides) == 0 {
+		return outline, false, nil
+	}
+	return llm.critiqueOutline, true, nil
 }
 
 func (llm *reviewLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
@@ -649,6 +660,103 @@ func TestProcessSanitizesTemplateAndGeneratedHTMLBeforePersistence(t *testing.T)
 	}
 	if !strings.Contains(html, `data-object="true"`) {
 		t.Fatalf("persisted HTML lost template structure: %s", html)
+	}
+}
+
+func TestProcessUsesOriginalOutlineWhenCritiqueOutlineApproves(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":1,"language":"en"}`),
+	}
+	llm := &reviewLLM{}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.critiqueOutlineCalls != 1 {
+		t.Fatalf("critique outline calls = %d, want 1", llm.critiqueOutlineCalls)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1", len(repo.slides))
+	}
+	title := repo.slides[0].Title
+	if title == nil || *title != "Slide" {
+		t.Fatalf("expected the original outline's slide title, got %v", title)
+	}
+}
+
+func TestProcessUsesCorrectedOutlineWhenCritiqueOutlineRejects(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":2,"language":"en"}`),
+	}
+	llm := &reviewLLM{critiqueOutline: Outline{Title: "Deck", Slides: []OutlineSlide{
+		{Order: 1, Title: "Corrected One", Type: "CONTENT", KeyPoints: []string{"A"}},
+		{Order: 2, Title: "Corrected Two", Type: "CONTENT", KeyPoints: []string{"B"}},
+	}}}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if len(repo.slides) != 2 {
+		t.Fatalf("persisted slides = %d, want 2 (the corrected outline)", len(repo.slides))
+	}
+	first := repo.slides[0].Title
+	if first == nil || *first != "Corrected One" {
+		t.Fatalf("expected the corrected outline's first slide title, got %v", first)
+	}
+}
+
+func TestProcessFallsBackToOriginalOutlineWhenCritiqueOutlineFails(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":1,"language":"en"}`),
+	}
+	llm := &reviewLLM{critiqueOutlineErr: errors.New("outline critique unavailable")}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1 (fallback to the original outline)", len(repo.slides))
+	}
+	title := repo.slides[0].Title
+	if title == nil || *title != "Slide" {
+		t.Fatalf("expected the original outline's slide title after a critique failure, got %v", title)
+	}
+}
+
+func TestProcessSkipsCritiqueOutlineForCallerSuppliedOutline(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","language":"en","outline":{"title":"Deck","slides":[{"order":1,"title":"Given","type":"CONTENT","keyPoints":["P"]}]}}`),
+	}
+	llm := &reviewLLM{}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.critiqueOutlineCalls != 0 {
+		t.Fatalf("critique outline calls = %d, want 0 for a caller-supplied outline", llm.critiqueOutlineCalls)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1", len(repo.slides))
 	}
 }
 

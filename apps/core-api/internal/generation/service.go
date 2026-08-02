@@ -350,6 +350,9 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 			service.fail(ctx, jobID, err)
 			return
 		}
+		if revised, changed, critiqueErr := service.llm.CritiqueOutline(ctx, outline); critiqueErr == nil && changed {
+			outline = revised
+		}
 	}
 	if err := service.updateStatus(ctx, jobID, "GENERATING_CONTENT", 30); err != nil {
 		return
