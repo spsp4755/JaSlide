@@ -1560,3 +1560,24 @@ def test_two_column_slide_repositions_from_an_uploaded_templates_slot():
     slide = Presentation(BytesIO(output)).slides[0]
     header = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == "왼쪽")
     assert header.left == Inches(1)
+
+
+def test_two_column_slide_keeps_bullet_boxes_on_slide_when_the_template_widens_columns():
+    # Final whole-branch review: _add_column_bullets used to hardcode its box
+    # width to 5.9in regardless of the overridden rect, so a template
+    # widening the columns pushed the right column's bullets off the
+    # 13.333in slide. The bullet box width must scale with column_w.
+    template = SimpleNamespace(config=SimpleNamespace(htmlTemplate=(
+        '<div data-jaslide-slot="columns" data-x="3" data-y="2" data-w="10" data-h="4"></div>'
+    )))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "TWO_COLUMN", "비교",
+        {"heading": "비교", "columns": [
+            {"header": "왼쪽", "bullets": [{"text": "항목", "level": 0}]},
+            {"header": "오른쪽", "bullets": [{"text": "항목", "level": 0}]},
+        ]},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    bullet_shapes = [shape for shape in slide.shapes if shape.has_text_frame and "항목" in shape.text_frame.text]
+    rightmost = max(bullet_shapes, key=lambda shape: shape.left)
+    assert rightmost.left + rightmost.width <= Inches(13.333)

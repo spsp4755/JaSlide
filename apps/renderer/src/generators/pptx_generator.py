@@ -1091,7 +1091,7 @@ class PPTXGenerator:
                     bullets_top = rect["y"] + 0.55
                     self._shrink_text_to_fit(header_box)
                 bullets = column.get("bullets") if isinstance(column.get("bullets"), list) else []
-                self._add_column_bullets(slide, bullets, x, bullets_top, bottom - bullets_top)
+                self._add_column_bullets(slide, bullets, x, bullets_top, bottom - bullets_top, column_w)
             return
 
         # No columns: fall back to splitting a flat bullets array in half.
@@ -1099,13 +1099,13 @@ class PPTXGenerator:
         mid = len(bullets) // 2
         left_bullets = bullets[:mid] if mid > 0 else bullets
         right_bullets = bullets[mid:] if mid > 0 else []
-        self._add_column_bullets(slide, left_bullets, rect["x"], no_header_top, bottom - no_header_top)
-        self._add_column_bullets(slide, right_bullets, rect["x"] + column_w + gutter, no_header_top, bottom - no_header_top)
+        self._add_column_bullets(slide, left_bullets, rect["x"], no_header_top, bottom - no_header_top, column_w)
+        self._add_column_bullets(slide, right_bullets, rect["x"] + column_w + gutter, no_header_top, bottom - no_header_top, column_w)
 
-    def _add_column_bullets(self, slide: Any, bullets: list, x: float, top: float, height: float) -> None:
+    def _add_column_bullets(self, slide: Any, bullets: list, x: float, top: float, height: float, width: float = 5.9) -> None:
         if not bullets:
             return
-        box = slide.shapes.add_textbox(Inches(x), Inches(top), Inches(5.9), Inches(height))
+        box = slide.shapes.add_textbox(Inches(x), Inches(top), Inches(width), Inches(height))
         tf = box.text_frame
         tf.word_wrap = True
         for index, bullet in enumerate(bullets):
@@ -1146,9 +1146,9 @@ class PPTXGenerator:
         count = len(items)
         rect = self._layout("timeline", {"x": 1.0, "y": 3.05, "w": 11.333, "h": 2.65})
         left, right = rect["x"], rect["x"] + rect["w"]
-        line_y = rect["y"] + rect["h"] * 0.2075
-        date_top, date_h = rect["y"], rect["h"] * 0.150943
-        text_top, text_h = rect["y"] + rect["h"] * 0.320755, rect["h"] * 0.679245
+        line_y = rect["y"] + rect["h"] * (0.55 / 2.65)
+        date_top, date_h = rect["y"], rect["h"] * (0.4 / 2.65)
+        text_top, text_h = rect["y"] + rect["h"] * (0.85 / 2.65), rect["h"] * (1.8 / 2.65)
         line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(line_y), Inches(right - left), Inches(0.04))
         line.fill.solid()
         line.fill.fore_color.rgb = self.tokens["text"]
@@ -1247,7 +1247,7 @@ class PPTXGenerator:
             self._style_paragraph(header_paragraph, 20, self.tokens["body_font"], bold=True)
             header_paragraph.alignment = PP_ALIGN.CENTER
             bullets_top = rect["y"] + 0.6
-            self._add_column_bullets(slide, side.get("bullets", []), x, bullets_top, rect["y"] + rect["h"] - bullets_top)
+            self._add_column_bullets(slide, side.get("bullets", []), x, bullets_top, rect["y"] + rect["h"] - bullets_top, column_w)
 
         badge_x = rect["x"] + column_w + gutter / 2 - 0.4
         badge_y = rect["y"] + 0.05

@@ -8,7 +8,7 @@ JaSlide reads the string as layout metadata only: it does not execute JavaScript
 <p data-jaslide-slot="body" data-x="0.7" data-y="1.6" data-w="11.9" data-h="4.8" data-font-size="20"></p>
 ```
 
-Each tag represents a text-box slot. Tag names and inner HTML are ignored. The supported slots are `title`, `subtitle`, `body`, and `bullets`. The current renderer applies `title` and `subtitle` to title/content slides, `body` to content slides, and `bullets` to content/bullet-list slides; other specialized slide types retain their built-in layout.
+Each tag represents a text-box slot. Tag names and inner HTML are ignored. The supported slots are `title`, `subtitle`, `body`, `bullets`, `timeline`, `process`, `comparison`, `kpi`, and `columns`. The current renderer applies `title` and `subtitle` to title/content slides, `body` to content slides, `bullets` to content/bullet-list slides, and each of `timeline`/`process`/`comparison`/`kpi`/`columns` repositions the whole content area of its matching slide type (timeline, process, comparison, KPI-card, and two-column layouts respectively) — the slide's title still comes from the `title` slot. `data-font-size` and `data-align` are recognized on every slot but only applied by the slots that already read them (`title`, `subtitle`, `body`, `bullets`); the five newer slots use their own fixed internal styling regardless of these attributes.
 
 | Attribute | Required | Meaning |
 | --- | --- | --- |
