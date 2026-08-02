@@ -1071,21 +1071,27 @@ class PPTXGenerator:
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
         self._shrink_text_to_fit(title_box)
 
+        rect = self._layout("columns", {"x": 0.5, "y": 1.15, "w": 12.3, "h": 5.85})
+        gutter = 0.5
+        column_w = (rect["w"] - gutter) / 2
+        no_header_top = rect["y"] + 0.15
+        bottom = rect["y"] + rect["h"]
+
         columns = content.get("columns")
         if isinstance(columns, list) and len(columns) == 2 and all(isinstance(item, dict) for item in columns):
             for index, column in enumerate(columns):
-                x = 0.5 + index * 6.4
+                x = rect["x"] + index * (column_w + gutter)
                 header = str(column.get("header", "")).strip()
-                bullets_top = 1.3
+                bullets_top = no_header_top
                 if header:
-                    header_box = self._add_layout_textbox(slide, {"x": x, "y": 1.15, "w": 5.9, "h": 0.45})
+                    header_box = self._add_layout_textbox(slide, {"x": x, "y": rect["y"], "w": column_w, "h": 0.45})
                     header_paragraph = header_box.text_frame.paragraphs[0]
                     header_paragraph.text = header
                     self._style_paragraph(header_paragraph, 16, self.tokens["body_font"], bold=True)
-                    bullets_top = 1.7
+                    bullets_top = rect["y"] + 0.55
                     self._shrink_text_to_fit(header_box)
                 bullets = column.get("bullets") if isinstance(column.get("bullets"), list) else []
-                self._add_column_bullets(slide, bullets, x, bullets_top, 1.3 + 5.7 - bullets_top)
+                self._add_column_bullets(slide, bullets, x, bullets_top, bottom - bullets_top)
             return
 
         # No columns: fall back to splitting a flat bullets array in half.
@@ -1093,8 +1099,8 @@ class PPTXGenerator:
         mid = len(bullets) // 2
         left_bullets = bullets[:mid] if mid > 0 else bullets
         right_bullets = bullets[mid:] if mid > 0 else []
-        self._add_column_bullets(slide, left_bullets, 0.5, 1.3, 5.7)
-        self._add_column_bullets(slide, right_bullets, 6.9, 1.3, 5.7)
+        self._add_column_bullets(slide, left_bullets, rect["x"], no_header_top, bottom - no_header_top)
+        self._add_column_bullets(slide, right_bullets, rect["x"] + column_w + gutter, no_header_top, bottom - no_header_top)
 
     def _add_column_bullets(self, slide: Any, bullets: list, x: float, top: float, height: float) -> None:
         if not bullets:
@@ -1229,17 +1235,23 @@ class PPTXGenerator:
         content = slide_data.content
         self._add_slide_title(slide, slide_data, content)
 
+        rect = self._layout("comparison", {"x": 0.5, "y": 1.3, "w": 12.3, "h": 5.7})
+        gutter = 0.5
+        column_w = (rect["w"] - gutter) / 2
         comparison = content["comparison"]
-        for side_key, x in (("left", 0.5), ("right", 6.9)):
+        for side_key, x in (("left", rect["x"]), ("right", rect["x"] + column_w + gutter)):
             side = comparison[side_key]
-            header_box = self._add_layout_textbox(slide, {"x": x, "y": 1.3, "w": 5.9, "h": 0.5})
+            header_box = self._add_layout_textbox(slide, {"x": x, "y": rect["y"], "w": column_w, "h": 0.5})
             header_paragraph = header_box.text_frame.paragraphs[0]
             header_paragraph.text = str(side.get("title", ""))
             self._style_paragraph(header_paragraph, 20, self.tokens["body_font"], bold=True)
             header_paragraph.alignment = PP_ALIGN.CENTER
-            self._add_column_bullets(slide, side.get("bullets", []), x, 1.9, 5.1)
+            bullets_top = rect["y"] + 0.6
+            self._add_column_bullets(slide, side.get("bullets", []), x, bullets_top, rect["y"] + rect["h"] - bullets_top)
 
-        badge = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(6.267), Inches(1.35), Inches(0.8), Inches(0.8))
+        badge_x = rect["x"] + column_w + gutter / 2 - 0.4
+        badge_y = rect["y"] + 0.05
+        badge = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(badge_x), Inches(badge_y), Inches(0.8), Inches(0.8))
         badge.fill.solid()
         badge.fill.fore_color.rgb = self.tokens["text"]
         badge.line.fill.background()

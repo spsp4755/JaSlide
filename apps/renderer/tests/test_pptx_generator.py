@@ -1505,3 +1505,36 @@ def test_process_slide_repositions_from_an_uploaded_templates_slot():
     assert boxes[0].left == Inches(1)
     assert boxes[0].top == Inches(3)
     assert boxes[0].height == Inches(2)
+
+
+def test_comparison_slide_repositions_from_an_uploaded_templates_slot():
+    template = SimpleNamespace(config=SimpleNamespace(htmlTemplate=(
+        '<div data-jaslide-slot="comparison" data-x="1" data-y="2" data-w="10" data-h="4"></div>'
+    )))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "COMPARISON", "비교",
+        {"heading": "비교", "comparison": {
+            "left": {"title": "A", "bullets": [{"text": "x", "level": 0}]},
+            "right": {"title": "B", "bullets": [{"text": "y", "level": 0}]},
+        }},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    header = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == "A")
+    assert header.left == Inches(1)
+    assert header.top == Inches(2)
+
+
+def test_two_column_slide_repositions_from_an_uploaded_templates_slot():
+    template = SimpleNamespace(config=SimpleNamespace(htmlTemplate=(
+        '<div data-jaslide-slot="columns" data-x="1" data-y="2" data-w="10" data-h="4"></div>'
+    )))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "TWO_COLUMN", "비교",
+        {"heading": "비교", "columns": [
+            {"header": "왼쪽", "bullets": [{"text": "항목", "level": 0}]},
+            {"header": "오른쪽", "bullets": [{"text": "항목", "level": 0}]},
+        ]},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    header = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == "왼쪽")
+    assert header.left == Inches(1)
