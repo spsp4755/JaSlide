@@ -1069,6 +1069,7 @@ class PPTXGenerator:
         tf.paragraphs[0].text = title
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._shrink_text_to_fit(title_box)
 
         columns = content.get("columns")
         if isinstance(columns, list) and len(columns) == 2 and all(isinstance(item, dict) for item in columns):
@@ -1082,6 +1083,7 @@ class PPTXGenerator:
                     header_paragraph.text = header
                     self._style_paragraph(header_paragraph, 16, self.tokens["body_font"], bold=True)
                     bullets_top = 1.7
+                    self._shrink_text_to_fit(header_box)
                 bullets = column.get("bullets") if isinstance(column.get("bullets"), list) else []
                 self._add_column_bullets(slide, bullets, x, bullets_top, 1.3 + 5.7 - bullets_top)
             return
@@ -1112,6 +1114,7 @@ class PPTXGenerator:
             self._style_paragraph(paragraph, 18, self.tokens["body_font"])
             paragraph.level = level if isinstance(level, int) else 0
             paragraph.space_before = Pt(10)
+        self._shrink_text_to_fit(box)
 
     def _add_slide_title(self, slide: Any, slide_data: Any, content: dict) -> None:
         """Draw the standard top title textbox shared by the four new layouts."""
@@ -1291,7 +1294,7 @@ class PPTXGenerator:
 
         content = slide_data.content
         quote_text = content.get("body", content.get("heading", ""))
-        
+
         # Quote text
         body_layout = self._layout("body", {"x": 1.5, "y": 2.5, "w": 10.333, "h": 2, "fontSize": 32})
         quote_box = self._add_layout_textbox(slide, body_layout)
@@ -1302,6 +1305,7 @@ class PPTXGenerator:
         self._apply_alignment(tf.paragraphs[0], body_layout.get("align"))
         if "align" not in body_layout:
             tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        self._shrink_text_to_fit(quote_box)
 
     def _add_section_header_slide(self, slide_data: Any):
         """Add section header slide"""
@@ -1321,3 +1325,4 @@ class PPTXGenerator:
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
         if "align" not in title_layout:
             tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        self._shrink_text_to_fit(title_box)

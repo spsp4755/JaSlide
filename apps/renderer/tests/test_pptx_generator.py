@@ -1396,3 +1396,51 @@ def test_bullet_slide_shrinks_its_own_title_and_bullets_when_they_overflow():
     bullet_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text.startswith("• 불렛"))
     bullet_auto_fit = bullet_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
     assert bullet_auto_fit is not None and bullet_auto_fit.get("fontScale") is not None
+
+
+def test_two_column_slide_shrinks_a_very_long_column_header_to_fit():
+    long_header = "가" * 200
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TWO_COLUMN", "비교",
+        {"heading": "비교", "columns": [
+            {"header": long_header, "bullets": [{"text": "항목", "level": 0}]},
+            {"header": "짧은 헤더", "bullets": [{"text": "항목", "level": 0}]},
+        ]},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    header_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_header)
+    auto_fit = header_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
+def test_two_column_slide_shrinks_a_very_long_column_bullet_list_to_fit():
+    long_bullets = [{"text": "불렛 " * 60, "level": 0} for _ in range(6)]
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "TWO_COLUMN", "비교",
+        {"heading": "비교", "columns": [
+            {"header": "왼쪽", "bullets": long_bullets},
+            {"header": "오른쪽", "bullets": [{"text": "항목", "level": 0}]},
+        ]},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    bullet_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text.startswith("• 불렛"))
+    auto_fit = bullet_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
+def test_quote_slide_shrinks_a_very_long_quote_to_fit():
+    long_quote = "인용 " * 200
+    output = PPTXGenerator().generate(_presentation(_slide("QUOTE", "", {"body": long_quote})))
+    slide = Presentation(BytesIO(output)).slides[0]
+    quote_shape = next(shape for shape in slide.shapes if shape.has_text_frame and long_quote in shape.text_frame.text)
+    auto_fit = quote_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
+def test_section_header_slide_shrinks_a_very_long_title_to_fit():
+    long_title = "가" * 300
+    output = PPTXGenerator().generate(_presentation(_slide("SECTION_HEADER", long_title, {"heading": long_title})))
+    slide = Presentation(BytesIO(output)).slides[0]
+    title_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_title)
+    auto_fit = title_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
