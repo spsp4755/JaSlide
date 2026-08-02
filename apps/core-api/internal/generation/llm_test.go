@@ -293,6 +293,21 @@ func TestOutlinePromptAndSlidePromptIncludeDateGuidance(t *testing.T) {
 	}
 }
 
+func TestSlidePromptIncludesSkillGuidanceWhenPresent(t *testing.T) {
+	slide := slidePrompt(SlideRequest{Title: "t", Type: "CONTENT", Language: "ko"})
+	if strings.Contains(slide, "Writing Skill Guide") {
+		t.Fatalf("expected no skill guide section without SkillGuidance, got: %s", slide)
+	}
+
+	withGuidance := slidePrompt(SlideRequest{
+		Title: "t", Type: "CONTENT", Language: "ko",
+		SkillGuidance: "이 템플릿의 표/목록은 최대 3단계 들여쓰기 구조를 사용합니다.",
+	})
+	if !strings.Contains(withGuidance, "Writing Skill Guide") || !strings.Contains(withGuidance, "3단계") {
+		t.Fatalf("expected slide prompt to include the skill guidance, got: %s", withGuidance)
+	}
+}
+
 func TestValidColumnsAcceptsExactlyTwoWellFormedColumns(t *testing.T) {
 	raw, err := parseSlideContent(json.RawMessage(`{
 		"heading":"주간업무 추진실적 및 계획",

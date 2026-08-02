@@ -197,7 +197,10 @@ type cancellableLLM struct {
 	once      sync.Once
 }
 
-type maliciousHTMLLLM struct{ seenTemplate string }
+type maliciousHTMLLLM struct {
+	seenTemplate     string
+	seenSlideRequest SlideRequest
+}
 
 func (*maliciousHTMLLLM) Outline(context.Context, OutlineRequest) (Outline, error) {
 	return Outline{Title: "Deck", Slides: []OutlineSlide{{
@@ -205,7 +208,8 @@ func (*maliciousHTMLLLM) Outline(context.Context, OutlineRequest) (Outline, erro
 	}}}, nil
 }
 
-func (*maliciousHTMLLLM) SlideContent(context.Context, SlideRequest) (json.RawMessage, error) {
+func (llm *maliciousHTMLLLM) SlideContent(_ context.Context, input SlideRequest) (json.RawMessage, error) {
+	llm.seenSlideRequest = input
 	return json.RawMessage(`{"heading":"Slide","bullets":[{"text":"Point"}]}`), nil
 }
 
@@ -731,6 +735,31 @@ func TestProcessSanitizesTemplateAndGeneratedHTMLBeforePersistence(t *testing.T)
 	}
 	if !strings.Contains(html, `data-object="true"`) {
 		t.Fatalf("persisted HTML lost template structure: %s", html)
+	}
+}
+
+// The outline call already sees SkillGuidance (appended to its "content"
+// input further up in Process) — this pins that the per-slide content call,
+// which is what actually produces bullet levels, receives it too. Before
+// this, a PPTX skill's auto-extracted bullet-hierarchy example only ever
+// reached the outline, never the call that generates the bullets themselves.
+func TestProcessPassesSkillGuidanceToSlideContentToo(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"AI security","slideCount":1,"language":"en",` +
+			`"skillGuidance":"이 템플릿의 표는 최대 3단계 들여쓰기 구조를 사용합니다."}`),
+	}
+	llm := new(maliciousHTMLLLM)
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.seenSlideRequest.SkillGuidance != "이 템플릿의 표는 최대 3단계 들여쓰기 구조를 사용합니다." {
+		t.Fatalf("SlideContent's SkillGuidance = %q, want the job's skillGuidance", llm.seenSlideRequest.SkillGuidance)
 	}
 }
 

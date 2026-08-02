@@ -129,6 +129,32 @@ def test_converts_tables_without_assuming_a_shape_fill():
     assert result["source"]["slides"][0]["objects"][0]["cells"] == [["Header", ""], ["", "Value"]]
 
 
+def test_captures_each_table_cells_paragraph_levels_not_just_flattened_text():
+    # cell.text (used to build "cells") joins every paragraph with "\n" and
+    # drops each paragraph's .level entirely — the same information a plain
+    # text shape's "paragraphs" field already keeps (see the list-paragraph
+    # test above). Without it, a skill built from a template whose table
+    # cells hold a real multi-level bulleted report has no way to tell the
+    # generation pipeline what hierarchy depth to reproduce.
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    table = slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(4), Inches(2)).table
+    cell = table.cell(0, 0)
+    cell.text_frame.paragraphs[0].text = "사내 시험 시스템(examweb) 고도화"
+    sub = cell.text_frame.add_paragraph()
+    sub.text = "응시 이탈 오류 수정"
+    sub.level = 1
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    table_object = pptx_to_html(buffer.getvalue())["source"]["slides"][0]["objects"][0]
+
+    assert table_object["cellParagraphs"][0][0] == [
+        {"text": "사내 시험 시스템(examweb) 고도화", "level": 0},
+        {"text": "응시 이탈 오류 수정", "level": 1},
+    ]
+
+
 def test_preserves_table_cell_dimensions_and_formatting():
     presentation = Presentation()
     slide = presentation.slides.add_slide(presentation.slide_layouts[6])

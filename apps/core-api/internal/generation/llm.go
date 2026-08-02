@@ -773,18 +773,22 @@ func outlinePrompt(input OutlineRequest) string {
 }
 
 func slidePrompt(input SlideRequest) string {
+	guidance := ""
+	if strings.TrimSpace(input.SkillGuidance) != "" {
+		guidance = "\n\n[Writing Skill Guide]\n" + input.SkillGuidance
+	}
 	return fmt.Sprintf(
 		"Create concise slide content in %s. Title: %s. Type: %s. Key points: %s. "+
 			"Return JSON only with heading, optional subheading/body, 3-5 bullets "+
-			"(each an object with text and level 0-2 for indentation), "+
+			"(each an object with text and level 0-4 for indentation), "+
 			"chart for CHART as {\"labels\":[\"...\"],\"values\":[0]}, "+
 			"table for TABLE as {\"headers\":[\"...\"],\"rows\":[[\"...\"]]}, "+
 			"columns for TWO_COLUMN as exactly two {\"header\":\"...\",\"bullets\":[{\"text\":\"...\",\"level\":0}]} objects, "+
 			"timeline for TIMELINE as {\"items\":[{\"date\":\"...\",\"label\":\"...\",\"description\":\"...\"}]} with 3-8 items, "+
 			"process for PROCESS as {\"steps\":[{\"label\":\"...\",\"description\":\"...\"}]} with 2-6 steps, "+
 			"comparison for COMPARISON as {\"left\":{\"title\":\"...\",\"bullets\":[\"...\"]},\"right\":{\"title\":\"...\",\"bullets\":[\"...\"]}}, "+
-			"and metrics for KPI as {\"metrics\":[{\"value\":\"...\",\"label\":\"...\"}]} with 2-6 cards.%s",
-		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), dateGuidance(),
+			"and metrics for KPI as {\"metrics\":[{\"value\":\"...\",\"label\":\"...\"}]} with 2-6 cards.%s%s",
+		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), dateGuidance(), guidance,
 	)
 }
 

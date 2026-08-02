@@ -139,6 +139,12 @@ type OutlineRequest struct {
 type SlideRequest struct {
 	Title, Type, Language string
 	KeyPoints             []string
+	// SkillGuidance is the same per-skill outlineGuidance text the outline
+	// call already receives — a PPTX-imported skill's guidance can include a
+	// concrete bullet-hierarchy example (see bulletHierarchyExample in the
+	// skills package), which only helps if the per-slide content call that
+	// actually produces bullet levels sees it too.
+	SkillGuidance string
 }
 
 type CritiqueRequest struct {
@@ -367,6 +373,7 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	for index, item := range outline.Slides {
 		rawContent, contentErr := service.llm.SlideContent(ctx, SlideRequest{
 			Title: item.Title, Type: item.Type, Language: input.Language, KeyPoints: item.KeyPoints,
+			SkillGuidance: input.SkillGuidance,
 		})
 		if contentErr != nil {
 			service.fail(ctx, jobID, contentErr)

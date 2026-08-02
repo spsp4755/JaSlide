@@ -189,6 +189,10 @@ func (handler *handlers) createImported(
 	); err != nil {
 		return nil, err
 	}
+	outlineGuidance := "Preserve the original information hierarchy and visual rhythm."
+	if example := bulletHierarchyExample(configObject(config)); example != "" {
+		outlineGuidance += " " + example
+	}
 	var raw json.RawMessage
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO "PresentationSkill"
@@ -198,7 +202,7 @@ func (handler *handlers) createImported(
 		RETURNING to_jsonb("PresentationSkill")`,
 		skillID, name, "Uses visual styles extracted from "+originalName,
 		"General audience", "Clear and concise", "PPTX-styled presentation",
-		"Preserve the original information hierarchy and visual rhythm.", user.ID,
+		outlineGuidance, user.ID,
 		user.OrganizationID, templateID,
 	).Scan(&raw); err != nil {
 		return nil, err

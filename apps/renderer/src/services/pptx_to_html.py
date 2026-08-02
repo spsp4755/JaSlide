@@ -302,6 +302,16 @@ def pptx_to_html(content: bytes) -> dict:
             source_objects.append({
                 **source_object, "kind": "table", "width": width, "height": height,
                 "cells": [[cell.text for cell in row.cells] for row in shape.table.rows],
+                # cell.text flattens every paragraph with "\n" and drops each one's
+                # .level — the same per-paragraph level a plain text shape's
+                # "paragraphs" field already keeps below. A skill built from a
+                # template whose cells hold a real multi-level bulleted report
+                # needs this to tell generation what hierarchy depth to reproduce.
+                "cellParagraphs": [
+                    [[{"text": paragraph.text, "level": paragraph.level} for paragraph in cell.text_frame.paragraphs]
+                     for cell in row.cells]
+                    for row in shape.table.rows
+                ],
                 "rowHeights": row_heights, "columnWidths": column_widths,
             })
             objects.append(f'<div {object_attrs} data-object-type="table" style="{position};box-sizing:border-box;overflow:hidden">{_table_html(shape, pt_to_px, palette)}</div>')
