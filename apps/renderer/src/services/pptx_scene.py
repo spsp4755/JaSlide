@@ -219,6 +219,23 @@ def _apply_edit_fields(object_: dict, edit: dict) -> None:
         object_["rotation"] = edit["rotation"]
     if object_["type"] == "text" and isinstance(edit.get("paragraphs"), list):
         object_["paragraphs"] = edit["paragraphs"]
+    elif object_["type"] == "text" and isinstance(edit.get("text"), str):
+        # generation.service.ts also writes plain-text objectEdits the same way
+        # _apply_native_edit (pptx_generator.py) reads them for a text shape —
+        # {"text": "..."}, never the scene's own {paragraphs: [...]} shape. Mirror
+        # that function's fallback here (one paragraph per "\n"-separated line,
+        # each keeping the level/align of the pre-edit paragraph at the same
+        # position, clamped to the last one) or the scene view keeps showing the
+        # template's stale placeholder text instead of the generated one.
+        existing = object_.get("paragraphs") or [{}]
+        object_["paragraphs"] = [
+            {
+                "level": existing[min(index, len(existing) - 1)].get("level", 0),
+                "align": existing[min(index, len(existing) - 1)].get("align", "left"),
+                "runs": [{"text": line}],
+            }
+            for index, line in enumerate(edit["text"].split("\n"))
+        ]
     elif object_["type"] == "table" and isinstance(edit.get("cells"), list):
         object_["cells"] = [
             [_table_cell_from_edit(cell) for cell in row] if isinstance(row, list) else row

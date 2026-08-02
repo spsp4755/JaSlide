@@ -230,6 +230,24 @@ def test_apply_edits_to_scene_converts_legacy_string_cells_to_paragraphs():
     assert table["cells"][1][1]["paragraphs"][0]["runs"][0]["text"] == "b"
 
 
+def test_apply_edits_to_scene_applies_a_legacy_plain_text_edit():
+    # generation.service.ts also writes plain-text objectEdits the same way
+    # _apply_native_edit (pptx_generator.py) reads them for a text shape —
+    # {"text": "..."} , never the scene's own {paragraphs: [...]} shape. Before
+    # this fix, the scene view silently ignored these edits and kept showing
+    # the template's stale placeholder text instead of the generated one.
+    def build(slide):
+        box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1))
+        box.text_frame.paragraphs[0].add_run().text = "stale placeholder"
+
+    scene = pptx_to_scene(_deck_bytes(build))["slides"][0]
+    text_id = scene["objects"][0]["id"]
+
+    edited = apply_edits_to_scene(scene, [{"objectId": text_id, "text": "0730 업무보고"}])
+
+    assert edited["objects"][0]["paragraphs"][0]["runs"][0]["text"] == "0730 업무보고"
+
+
 def test_apply_edits_to_scene_duplicates_an_existing_object():
     def build(slide):
         shape = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(1), Inches(1), Inches(2), Inches(1))
