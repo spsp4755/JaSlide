@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -160,6 +161,7 @@ func (handler *handlers) importPPTX(writer http.ResponseWriter, request *http.Re
 	}
 	result, err := handler.createImported(request.Context(), user, name, header.Filename, key, configRaw)
 	if err != nil {
+		log.Printf("importPPTX: createImported failed: %v", err)
 		handler.removeFile(key)
 	}
 	writeRaw(writer, result, http.StatusCreated, err)
