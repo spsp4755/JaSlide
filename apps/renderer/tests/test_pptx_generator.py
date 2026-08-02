@@ -1374,6 +1374,28 @@ def test_kpi_slide_keeps_its_chart_even_if_it_also_carries_metrics():
     assert any(shape.has_chart for shape in slide.shapes)
 
 
+def test_kpi_slide_repositions_from_an_uploaded_templates_slot():
+    template = SimpleNamespace(config=SimpleNamespace(htmlTemplate=(
+        '<div data-jaslide-slot="kpi" data-x="1" data-y="2" data-w="10" data-h="4"></div>'
+    )))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "KPI", "핵심 지표",
+        {"heading": "핵심 지표", "metrics": {"metrics": [
+            {"value": "1", "label": "a"}, {"value": "2", "label": "b"},
+        ]}},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    cards = []
+    for shape in slide.shapes:
+        try:
+            if shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE:
+                cards.append(shape)
+        except (ValueError, AttributeError):
+            pass
+    assert min(card.left for card in cards) == Inches(1)
+    assert min(card.top for card in cards) == Inches(2)
+
+
 def test_title_slide_shrinks_a_very_long_title_to_fit():
     long_title = "가" * 400
     output = PPTXGenerator().generate(_presentation(_slide("TITLE", long_title, {"heading": long_title})))

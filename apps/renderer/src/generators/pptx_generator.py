@@ -1277,7 +1277,8 @@ class PPTXGenerator:
         count = len(metrics)
         columns = 3 if count > 4 else 2
         rows = math.ceil(count / columns)
-        left, top, right, bottom, gap = 0.7, 1.6, 12.633, 6.9, 0.3
+        rect = self._layout("kpi", {"x": 0.7, "y": 1.6, "w": 11.933, "h": 5.3})
+        left, top, right, bottom, gap = rect["x"], rect["y"], rect["x"] + rect["w"], rect["y"] + rect["h"], 0.3
         card_w = (right - left - gap * (columns - 1)) / columns
         card_h = (bottom - top - gap * (rows - 1)) / rows
         for index, metric in enumerate(metrics):
