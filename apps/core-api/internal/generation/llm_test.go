@@ -3,6 +3,7 @@ package generation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -729,7 +730,7 @@ func TestOpenAIClientCritiqueOutlineApprovesWellFormedOutline(t *testing.T) {
 	original := Outline{Title: "Deck", Slides: []OutlineSlide{
 		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
 	}}
-	outline, changed, err := llm.CritiqueOutline(context.Background(), original)
+	outline, changed, err := llm.CritiqueOutline(context.Background(), original, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -765,7 +766,7 @@ func TestOpenAIClientCritiqueOutlineReturnsCorrectedOutlineWhenRejected(t *testi
 	original := Outline{Title: "Deck", Slides: []OutlineSlide{
 		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
 	}}
-	outline, changed, err := llm.CritiqueOutline(context.Background(), original)
+	outline, changed, err := llm.CritiqueOutline(context.Background(), original, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -774,6 +775,47 @@ func TestOpenAIClientCritiqueOutlineReturnsCorrectedOutlineWhenRejected(t *testi
 	}
 	if len(outline.Slides) != 2 || outline.Slides[1].Title != "Details" {
 		t.Fatalf("expected the corrected 2-slide outline, got %+v", outline)
+	}
+}
+
+func TestOpenAIClientCritiqueOutlineCapsCorrectedSlideCount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		slides := make([]map[string]any, 0, 10)
+		for i := 1; i <= 10; i++ {
+			slides = append(slides, map[string]any{
+				"order": i, "title": fmt.Sprintf("Slide %d", i), "type": "CONTENT", "keyPoints": []string{"Point"},
+			})
+		}
+		raw, _ := json.Marshal(map[string]any{
+			"approved": false,
+			"outline":  map[string]any{"title": "Deck", "slides": slides},
+		})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	// Original outline has only 1 slide; a legitimate correction may grow it by
+	// a couple of slides but must not balloon to match the mock's 10 slides.
+	original := Outline{Title: "Deck", Slides: []OutlineSlide{
+		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
+	}}
+	outline, changed, err := llm.CritiqueOutline(context.Background(), original, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected changed = true for a rejected outline")
+	}
+	if len(outline.Slides) > len(original.Slides)+2 {
+		t.Fatalf("expected corrected outline capped at %d slides, got %d", len(original.Slides)+2, len(outline.Slides))
+	}
+	if len(outline.Slides) >= 10 {
+		t.Fatalf("expected corrected outline truncated well below the mock's 10 slides, got %d", len(outline.Slides))
 	}
 }
 
@@ -809,7 +851,7 @@ func TestOpenAIClientCritiqueOutlineRetriesOnInvalidCorrection(t *testing.T) {
 	original := Outline{Title: "Deck", Slides: []OutlineSlide{
 		{Order: 1, Title: "Intro", Type: "CONTENT", KeyPoints: []string{"Hello"}},
 	}}
-	_, changed, err := llm.CritiqueOutline(context.Background(), original)
+	_, changed, err := llm.CritiqueOutline(context.Background(), original, "")
 	if err != nil {
 		t.Fatal(err)
 	}

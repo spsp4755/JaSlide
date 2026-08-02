@@ -207,7 +207,7 @@ func (*maliciousHTMLLLM) Critique(context.Context, CritiqueRequest) (string, err
 	return "", nil
 }
 
-func (*maliciousHTMLLLM) CritiqueOutline(_ context.Context, outline Outline) (Outline, bool, error) {
+func (*maliciousHTMLLLM) CritiqueOutline(_ context.Context, outline Outline, _ string) (Outline, bool, error) {
 	return outline, false, nil
 }
 
@@ -243,7 +243,7 @@ func (*cancellableLLM) Critique(context.Context, CritiqueRequest) (string, error
 	return "", errors.New("unexpected critique call")
 }
 
-func (*cancellableLLM) CritiqueOutline(context.Context, Outline) (Outline, bool, error) {
+func (*cancellableLLM) CritiqueOutline(context.Context, Outline, string) (Outline, bool, error) {
 	return Outline{}, false, errors.New("unexpected critique outline call")
 }
 
@@ -287,7 +287,7 @@ func (llm *reviewLLM) Critique(context.Context, CritiqueRequest) (string, error)
 	return llm.critiqueFeedback, llm.critiqueErr
 }
 
-func (llm *reviewLLM) CritiqueOutline(_ context.Context, outline Outline) (Outline, bool, error) {
+func (llm *reviewLLM) CritiqueOutline(_ context.Context, outline Outline, _ string) (Outline, bool, error) {
 	llm.critiqueOutlineCalls++
 	if llm.critiqueOutlineErr != nil {
 		return Outline{}, false, llm.critiqueOutlineErr

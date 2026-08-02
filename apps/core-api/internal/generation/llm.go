@@ -118,23 +118,20 @@ func (client *OpenAIClient) Critique(ctx context.Context, input CritiqueRequest)
 	return feedback, err
 }
 
-func (client *OpenAIClient) CritiqueOutline(ctx context.Context, outline Outline) (Outline, bool, error) {
-	titles := make([]string, 0, len(outline.Slides))
-	for _, slide := range outline.Slides {
-		titles = append(titles, fmt.Sprintf("%d. %s (points: %s)", slide.Order, slide.Title, strings.Join(slide.KeyPoints, "; ")))
-	}
+func (client *OpenAIClient) CritiqueOutline(ctx context.Context, outline Outline, content string) (Outline, bool, error) {
 	raw, err := json.Marshal(outline)
 	if err != nil {
 		return outline, false, err
 	}
 	prompt := fmt.Sprintf(
-		"Review this presentation outline as a whole. Check: (1) slide order and flow -- does the deck progress "+
-			"logically with no jarring jumps, (2) duplication and coverage -- do any two slides overlap, and are "+
-			"the source topics covered without gaps, (3) slide count and distribution -- is any single slide "+
-			"overloaded or starved relative to the others. Outline JSON: %s. Slide summary: %s. "+
+		"Review this presentation outline as a whole against its source content. Check: (1) slide order and flow "+
+			"-- does the deck progress logically with no jarring jumps, (2) duplication and coverage -- do any two "+
+			"slides overlap, and are the source content's topics covered without gaps, (3) slide count and "+
+			"distribution -- is any single slide overloaded or starved relative to the others. "+
+			"Source content: %s. Outline JSON: %s. "+
 			"Return JSON only: {\"approved\":true} if it's fine, or {\"approved\":false,\"outline\":{...corrected "+
 			"outline, same JSON shape as the input}} if not.",
-		raw, strings.Join(titles, " | "),
+		content, raw,
 	)
 	var result Outline
 	changed := false
@@ -150,10 +147,9 @@ func (client *OpenAIClient) CritiqueOutline(ctx context.Context, outline Outline
 			if len(value.Outline) == 0 {
 				return errors.New("rejected outline critique must include a corrected outline")
 			}
-			// 30 mirrors validateOutline's slide-count ceiling (service.go:820) --
-			// not len(outline.Slides), since a legitimate correction may merge or
-			// split slides and change the count.
-			corrected, parseErr := parseOutline(value.Outline, 30, 0)
+			// Cap slightly above the original count -- a legitimate correction may
+			// merge or split a slide or two, but must not balloon the deck size.
+			corrected, parseErr := parseOutline(value.Outline, len(outline.Slides)+2, 0)
 			if parseErr != nil {
 				return parseErr
 			}

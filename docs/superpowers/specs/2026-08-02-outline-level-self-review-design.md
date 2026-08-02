@@ -46,7 +46,9 @@ outline is a deliberate choice, not something to second-guess.
 This bounds cost to exactly one extra LLM call per generation (not per
 slide), regardless of slide count — cheaper than the slide-content
 self-review's per-slide multiplier, since the outline step runs once for
-the whole deck.
+the whole deck. A corrected outline is capped at the original slide count
+plus two, so a legitimate structural correction (merge/split/reorder) may
+shift the deck size by a couple of slides, but cannot balloon it further.
 
 ## Architecture
 
@@ -57,7 +59,7 @@ type LLM interface {
 	Outline(context.Context, OutlineRequest) (Outline, error)
 	SlideContent(context.Context, SlideRequest) (json.RawMessage, error)
 	Critique(context.Context, CritiqueRequest) (string, error)
-	CritiqueOutline(context.Context, Outline) (Outline, bool, error)
+	CritiqueOutline(context.Context, Outline, string) (Outline, bool, error)
 	Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error)
 	SlideHTML(context.Context, string, SlideRequest) (string, error)
 	EditHTML(context.Context, string, string) (string, error)
@@ -108,7 +110,7 @@ if err != nil {
 	service.fail(ctx, jobID, err)
 	return
 }
-if revised, changed, critiqueErr := service.llm.CritiqueOutline(ctx, outline); critiqueErr == nil && changed {
+if revised, changed, critiqueErr := service.llm.CritiqueOutline(ctx, outline, content); critiqueErr == nil && changed {
 	outline = revised
 }
 ```
