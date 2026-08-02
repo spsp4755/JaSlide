@@ -34,14 +34,13 @@ separately).
 |---|---|
 | `_add_title_slide` | title box, subtitle box |
 | `_add_content_slide` | title box, body box (bullets covered via `_add_bullets`) |
+| `_add_bullet_slide` | title box (its own, separate from `_add_content_slide`'s; bullets covered via `_add_bullets`) |
 | `_add_bullets` (shared by `_add_content_slide` and `_add_bullet_slide`) | bullet box |
 | `_add_two_column_slide` | title box, each column's header box (column bullets covered via `_add_column_bullets`) |
 | `_add_column_bullets` (shared, also used by the comparison layout) | bullet box |
 | `_add_quote_slide` | quote box |
 | `_add_section_header_slide` | title box |
 
-`_add_bullet_slide` itself needs no direct change — it only calls `_add_bullets`,
-already covered.
 
 ## Behavior
 
