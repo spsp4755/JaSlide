@@ -1146,6 +1146,21 @@ def test_pptx_table_edits_keep_cell_text_style():
     assert updated.font.size == Pt(18) and updated.font.bold
 
 
+def test_add_slide_title_shrinks_a_very_long_title_to_fit():
+    # _add_slide_title is the shared title path for all four new layouts
+    # (timeline/process/comparison/kpi); it should auto-fit like every
+    # other title box in the file.
+    long_title = "가" * 400
+    output = PPTXGenerator().generate(_presentation(_slide(
+        "PROCESS", long_title,
+        {"heading": long_title, "process": {"steps": [{"label": "a"}, {"label": "b"}]}},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    title_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_title)
+    auto_fit = title_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
 def test_timeline_slide_renders_markers_dates_and_labels_in_order():
     output = PPTXGenerator().generate(_presentation(_slide(
         "TIMELINE", "로드맵",

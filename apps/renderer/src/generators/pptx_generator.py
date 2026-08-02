@@ -1125,6 +1125,7 @@ class PPTXGenerator:
         tf.paragraphs[0].text = title
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._shrink_text_to_fit(title_box)
 
     def _add_timeline_slide(self, slide_data: Any):
         """Add a horizontal timeline/roadmap slide."""
