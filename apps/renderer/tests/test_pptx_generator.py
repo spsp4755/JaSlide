@@ -1459,3 +1459,49 @@ def test_section_header_slide_shrinks_a_very_long_title_to_fit():
     title_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_title)
     auto_fit = title_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
     assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
+def test_timeline_slide_repositions_from_an_uploaded_templates_slot():
+    template = SimpleNamespace(config=SimpleNamespace(htmlTemplate=(
+        '<div data-jaslide-slot="timeline" data-x="2" data-y="4" data-w="9" data-h="2"></div>'
+    )))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "TIMELINE", "로드맵",
+        {"heading": "로드맵", "timeline": {"items": [
+            {"date": "Q1", "label": "a"}, {"date": "Q2", "label": "b"}, {"date": "Q3", "label": "c"},
+        ]}},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    lines = []
+    for shape in slide.shapes:
+        try:
+            if shape.auto_shape_type == MSO_SHAPE.RECTANGLE:
+                lines.append(shape)
+        except (ValueError, AttributeError):
+            pass
+    assert len(lines) > 0
+    line = lines[0]
+    assert line.left == Inches(2)
+    assert line.width == Inches(9)
+
+
+def test_process_slide_repositions_from_an_uploaded_templates_slot():
+    template = SimpleNamespace(config=SimpleNamespace(htmlTemplate=(
+        '<div data-jaslide-slot="process" data-x="1" data-y="3" data-w="10" data-h="2"></div>'
+    )))
+    output = PPTXGenerator(template).generate(_presentation(_slide(
+        "PROCESS", "절차",
+        {"heading": "절차", "process": {"steps": [{"label": "a"}, {"label": "b"}]}},
+    )))
+    slide = Presentation(BytesIO(output)).slides[0]
+    boxes = []
+    for shape in slide.shapes:
+        try:
+            if shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE:
+                boxes.append(shape)
+        except (ValueError, AttributeError):
+            pass
+    assert len(boxes) > 0
+    assert boxes[0].left == Inches(1)
+    assert boxes[0].top == Inches(3)
+    assert boxes[0].height == Inches(2)

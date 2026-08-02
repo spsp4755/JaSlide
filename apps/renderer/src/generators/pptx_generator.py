@@ -1138,7 +1138,11 @@ class PPTXGenerator:
 
         items = content["timeline"]["items"]
         count = len(items)
-        left, right, line_y = 1.0, 12.333, 3.6
+        rect = self._layout("timeline", {"x": 1.0, "y": 3.05, "w": 11.333, "h": 2.65})
+        left, right = rect["x"], rect["x"] + rect["w"]
+        line_y = rect["y"] + rect["h"] * 0.2075
+        date_top, date_h = rect["y"], rect["h"] * 0.150943
+        text_top, text_h = rect["y"] + rect["h"] * 0.320755, rect["h"] * 0.679245
         line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(line_y), Inches(right - left), Inches(0.04))
         line.fill.solid()
         line.fill.fore_color.rgb = self.tokens["text"]
@@ -1154,7 +1158,7 @@ class PPTXGenerator:
 
             date = str(item.get("date", "")).strip()
             if date:
-                date_box = self._add_layout_textbox(slide, {"x": cx - slot_w / 2 + 0.05, "y": line_y - 0.55, "w": slot_w - 0.1, "h": 0.4})
+                date_box = self._add_layout_textbox(slide, {"x": cx - slot_w / 2 + 0.05, "y": date_top, "w": slot_w - 0.1, "h": date_h})
                 date_box.text_frame.word_wrap = True
                 date_paragraph = date_box.text_frame.paragraphs[0]
                 date_paragraph.text = date
@@ -1164,7 +1168,7 @@ class PPTXGenerator:
 
             label = str(item.get("label", "")).strip()
             description = str(item.get("description", "")).strip()
-            text_box = self._add_layout_textbox(slide, {"x": cx - slot_w / 2 + 0.05, "y": line_y + 0.3, "w": slot_w - 0.1, "h": 1.8})
+            text_box = self._add_layout_textbox(slide, {"x": cx - slot_w / 2 + 0.05, "y": text_top, "w": slot_w - 0.1, "h": text_h})
             text_box.text_frame.word_wrap = True
             label_paragraph = text_box.text_frame.paragraphs[0]
             label_paragraph.text = label
@@ -1188,7 +1192,8 @@ class PPTXGenerator:
 
         steps = content["process"]["steps"]
         count = len(steps)
-        left, right, y, h, gap = 0.7, 12.633, 2.8, 1.8, 0.4
+        rect = self._layout("process", {"x": 0.7, "y": 2.8, "w": 11.933, "h": 1.8})
+        left, right, y, h, gap = rect["x"], rect["x"] + rect["w"], rect["y"], rect["h"], 0.4
         box_w = (right - left - gap * (count - 1)) / count
         for index, step in enumerate(steps):
             x = left + index * (box_w + gap)

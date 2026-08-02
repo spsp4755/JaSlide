@@ -13,7 +13,7 @@ CANVAS_HEIGHT = 1080
 # This was 0.54, which is close enough to look right and wrong enough that a deck did
 # not survive the round trip out of pptx_to_html and back at its own size.
 PX_TO_PT = SLIDE_HEIGHT * 72 / CANVAS_HEIGHT
-SLOTS = {"title", "subtitle", "body", "bullets"}
+SLOTS = {"title", "subtitle", "body", "bullets", "timeline", "process", "comparison", "kpi", "columns"}
 ALIGNMENTS = {"left", "center", "right"}
 
 
