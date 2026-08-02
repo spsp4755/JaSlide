@@ -60,3 +60,4 @@ uploads/*
 
 # Test compile scratch (compile-module.js)
 **/.test-compile/
+.superpowers/
