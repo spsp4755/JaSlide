@@ -121,6 +121,7 @@ type Queue interface {
 type LLM interface {
 	Outline(context.Context, OutlineRequest) (Outline, error)
 	SlideContent(context.Context, SlideRequest) (json.RawMessage, error)
+	Critique(context.Context, CritiqueRequest) (string, error)
 	Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error)
 	SlideHTML(context.Context, string, SlideRequest) (string, error)
 	EditHTML(context.Context, string, string) (string, error)
@@ -137,6 +138,12 @@ type OutlineRequest struct {
 type SlideRequest struct {
 	Title, Type, Language string
 	KeyPoints             []string
+}
+
+type CritiqueRequest struct {
+	Content   json.RawMessage
+	Title     string
+	KeyPoints []string
 }
 
 type Service struct {

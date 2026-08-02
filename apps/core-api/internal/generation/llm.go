@@ -89,6 +89,35 @@ func (client *OpenAIClient) SlideContent(ctx context.Context, input SlideRequest
 	return result, err
 }
 
+func (client *OpenAIClient) Critique(ctx context.Context, input CritiqueRequest) (string, error) {
+	var feedback string
+	prompt := fmt.Sprintf(
+		"Review this generated slide JSON against its title and key points. Check: (1) every key point is reflected "+
+			"somewhere in the content, (2) bullets are concrete and specific, not generic filler, (3) the heading "+
+			"matches what the body/bullets actually say. Title: %s. Key points: %s. Slide JSON: %s. "+
+			"Return JSON only: {\"approved\":true} if it's fine, or {\"approved\":false,\"feedback\":\"specific "+
+			"instruction to fix it\"} if not.",
+		input.Title, strings.Join(input.KeyPoints, "; "), input.Content,
+	)
+	err := client.validated(ctx, "You are a presentation content reviewer. Return JSON only.", prompt, func(raw json.RawMessage) error {
+		var value struct {
+			Approved bool   `json:"approved"`
+			Feedback string `json:"feedback"`
+		}
+		if json.Unmarshal(raw, &value) != nil {
+			return errors.New("invalid critique response")
+		}
+		if !value.Approved && strings.TrimSpace(value.Feedback) == "" {
+			return errors.New("rejected critique must include feedback")
+		}
+		if !value.Approved {
+			feedback = value.Feedback
+		}
+		return nil
+	})
+	return feedback, err
+}
+
 func (client *OpenAIClient) Edit(
 	ctx context.Context, current json.RawMessage, instruction, slideType string,
 ) (json.RawMessage, error) {

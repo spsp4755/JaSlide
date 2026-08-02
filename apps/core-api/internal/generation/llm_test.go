@@ -607,3 +607,84 @@ func TestValidKPIRejectsAMetricMissingAValue(t *testing.T) {
 		t.Fatalf("expected metrics with a missing value to be rejected, got %v", value["metrics"])
 	}
 }
+
+func TestOpenAIClientCritiqueApprovesWellFormedContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		raw, _ := json.Marshal(map[string]any{"approved": true})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	feedback, err := llm.Critique(context.Background(), CritiqueRequest{
+		Content: json.RawMessage(`{"heading":"실적","bullets":[{"text":"90% 달성","level":0}]}`),
+		Title:   "실적", KeyPoints: []string{"90% 달성"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feedback != "" {
+		t.Fatalf("expected empty feedback for approved content, got %q", feedback)
+	}
+}
+
+func TestOpenAIClientCritiqueReturnsFeedbackWhenRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		raw, _ := json.Marshal(map[string]any{"approved": false, "feedback": "Add the missing key point about Q3 results"})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	feedback, err := llm.Critique(context.Background(), CritiqueRequest{
+		Content: json.RawMessage(`{"heading":"실적","bullets":[{"text":"일부 항목","level":0}]}`),
+		Title:   "실적", KeyPoints: []string{"Q3 실적", "Q4 계획"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feedback != "Add the missing key point about Q3 results" {
+		t.Fatalf("expected feedback to be passed through, got %q", feedback)
+	}
+}
+
+func TestOpenAIClientCritiqueRetriesOnRejectionWithoutFeedback(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		call := calls.Add(1)
+		var raw []byte
+		if call == 1 {
+			raw, _ = json.Marshal(map[string]any{"approved": false})
+		} else {
+			raw, _ = json.Marshal(map[string]any{"approved": false, "feedback": "Be more specific"})
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+	feedback, err := llm.Critique(context.Background(), CritiqueRequest{
+		Content: json.RawMessage(`{"heading":"h"}`), Title: "h", KeyPoints: []string{"x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2 (retry after a rejection with no feedback)", calls.Load())
+	}
+	if feedback != "Be more specific" {
+		t.Fatalf("expected feedback from the retried response, got %q", feedback)
+	}
+}

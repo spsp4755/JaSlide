@@ -203,6 +203,10 @@ func (*maliciousHTMLLLM) SlideContent(context.Context, SlideRequest) (json.RawMe
 	return json.RawMessage(`{"heading":"Slide","bullets":[{"text":"Point"}]}`), nil
 }
 
+func (*maliciousHTMLLLM) Critique(context.Context, CritiqueRequest) (string, error) {
+	return "", nil
+}
+
 func (*maliciousHTMLLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
 	return nil, errors.New("unexpected edit call")
 }
@@ -229,6 +233,10 @@ func (llm *cancellableLLM) Outline(ctx context.Context, _ OutlineRequest) (Outli
 
 func (*cancellableLLM) SlideContent(context.Context, SlideRequest) (json.RawMessage, error) {
 	return nil, errors.New("unexpected slide content call")
+}
+
+func (*cancellableLLM) Critique(context.Context, CritiqueRequest) (string, error) {
+	return "", errors.New("unexpected critique call")
 }
 
 func (*cancellableLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
