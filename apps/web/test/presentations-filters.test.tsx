@@ -96,7 +96,7 @@ describe('PresentationsPage filters', () => {
         expect(await screen.findByText('검색 결과가 없습니다')).toBeDefined();
         expect(screen.queryByText('첫 번째 프레젠테이션을 만들어보세요')).toBeNull();
 
-        fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+        fireEvent.click(screen.getAllByRole('button', { name: '필터 초기화' })[0]);
         expect(await screen.findByText('신규 프로젝트 제안')).toBeDefined();
     });
 

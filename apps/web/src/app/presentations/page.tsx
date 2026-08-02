@@ -8,10 +8,12 @@ import { useAuthStore } from '@/stores/auth-store';
 import { presentationsApi } from '@/lib/api';
 import { Plus, FileText, Clock, Trash2 } from 'lucide-react';
 
+type PresentationStatus = 'COMPLETED' | 'GENERATING' | 'FAILED' | 'DRAFT';
+
 interface Presentation {
     id: string;
     title: string;
-    status: string;
+    status: PresentationStatus;
     createdAt: string;
     updatedAt: string;
     _count: { slides: number };
@@ -21,10 +23,11 @@ export default function PresentationsPage() {
     const router = useRouter();
     const { isAuthenticated, hasHydrated } = useAuthStore();
     const [presentations, setPresentations] = useState<Presentation[]>([]);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [searchText, setSearchText] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'GENERATING' | 'FAILED' | 'DRAFT'>('ALL');
+    const [statusFilter, setStatusFilter] = useState<'ALL' | PresentationStatus>('ALL');
     const [sortBy, setSortBy] = useState<'updatedAt' | 'createdAt' | 'title'>('updatedAt');
 
     useEffect(() => {
@@ -37,6 +40,7 @@ export default function PresentationsPage() {
             try {
                 const presResponse = await presentationsApi.list(1, 200);
                 setPresentations(presResponse.data.data);
+                setTotal(presResponse.data.total ?? presResponse.data.data.length);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
             } finally {
@@ -92,7 +96,13 @@ export default function PresentationsPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">내 발표함</h1>
                         <div className="flex items-center gap-3 mt-1 text-muted-foreground">
-                            <span>{presentations.length}개의 프레젠테이션</span>
+                            <span role="status">
+                                {searchText || statusFilter !== 'ALL'
+                                    ? `전체 ${presentations.length}개 중 ${visible.length}개 표시`
+                                    : total > presentations.length
+                                      ? `총 ${total}개 중 최근 ${presentations.length}개 표시`
+                                      : `${presentations.length}개의 프레젠테이션`}
+                            </span>
                         </div>
                     </div>
                     <Link href="/dashboard">
@@ -119,14 +129,15 @@ export default function PresentationsPage() {
                     <>
                         <div className="mb-6">
                             <input
-                                type="text"
+                                type="search"
                                 value={searchText}
                                 onChange={(event) => setSearchText(event.target.value)}
                                 placeholder="제목으로 검색"
+                                aria-label="제목으로 검색"
                                 className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
                             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex gap-2 overflow-x-auto pb-1">
+                                <div className="flex items-center gap-2 overflow-x-auto pb-1">
                                     {([
                                         ['ALL', '전체'],
                                         ['COMPLETED', '완료'],
@@ -137,6 +148,7 @@ export default function PresentationsPage() {
                                         <button
                                             key={value}
                                             type="button"
+                                            aria-pressed={statusFilter === value}
                                             onClick={() => setStatusFilter(value)}
                                             className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                                                 statusFilter === value
@@ -147,12 +159,20 @@ export default function PresentationsPage() {
                                             {label}
                                         </button>
                                     ))}
+                                    {(searchText || statusFilter !== 'ALL') && (
+                                        <button
+                                            type="button"
+                                            onClick={resetFilters}
+                                            className="whitespace-nowrap text-xs font-medium text-muted-foreground underline hover:text-foreground"
+                                        >
+                                            필터 초기화
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2 sm:justify-end">
                                     <label htmlFor="presentations-sort" className="sr-only">정렬</label>
                                     <select
                                         id="presentations-sort"
-                                        aria-label="정렬"
                                         value={sortBy}
                                         onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
                                         className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"

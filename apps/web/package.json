@@ -6,7 +6,7 @@
         "dev": "vite --port 3000",
         "build": "tsc --noEmit && vite build",
         "start": "vite preview --host 0.0.0.0 --port 3000",
-        "test": "node --test ./test/*.test.js && vitest run ./test/router.test.tsx ./test/presentations-filters.test.tsx",
+        "test": "node --test ./test/*.test.js && vitest run ./test/*.test.tsx",
         "lint": "tsc --noEmit"
     },
     "dependencies": {
