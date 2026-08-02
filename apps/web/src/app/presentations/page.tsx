@@ -23,6 +23,9 @@ export default function PresentationsPage() {
     const [presentations, setPresentations] = useState<Presentation[]>([]);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [searchText, setSearchText] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'GENERATING' | 'FAILED' | 'DRAFT'>('ALL');
+    const [sortBy, setSortBy] = useState<'updatedAt' | 'createdAt' | 'title'>('updatedAt');
 
     useEffect(() => {
         if (!hasHydrated) return;
@@ -32,7 +35,7 @@ export default function PresentationsPage() {
         }
         (async () => {
             try {
-                const presResponse = await presentationsApi.list();
+                const presResponse = await presentationsApi.list(1, 200);
                 setPresentations(presResponse.data.data);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
@@ -41,6 +44,20 @@ export default function PresentationsPage() {
             }
         })();
     }, [hasHydrated, isAuthenticated, router]);
+
+    const visible = presentations
+        .filter((item) => item.title.toLowerCase().includes(searchText.trim().toLowerCase()))
+        .filter((item) => statusFilter === 'ALL' || item.status === statusFilter)
+        .sort((a, b) => {
+            if (sortBy === 'title') return a.title.localeCompare(b.title, 'ko');
+            if (sortBy === 'createdAt') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
+
+    const resetFilters = () => {
+        setSearchText('');
+        setStatusFilter('ALL');
+    };
 
     const formatDate = (dateString: string) =>
         new Date(dateString).toLocaleDateString('ko-KR', {
@@ -99,54 +116,115 @@ export default function PresentationsPage() {
                         </Link>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {presentations.map((pres) => (
-                            <div key={pres.id} className="relative bg-card rounded-xl border hover:shadow-lg transition-shadow overflow-hidden">
-                            <Link href={`/editor/${pres.id}`} className="block">
-                                <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                                    <FileText className="h-12 w-12 text-muted-foreground" />
-                                </div>
-                                <div className="p-4">
-                                    <h3 className="font-medium text-foreground truncate">{pres.title}</h3>
-                                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                                        <span>{pres._count.slides} 슬라이드</span>
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="h-3 w-3" />
-                                            {formatDate(pres.updatedAt)}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2">
-                                        <span
-                                            className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                                                pres.status === 'COMPLETED'
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : pres.status === 'GENERATING'
-                                                      ? 'bg-yellow-100 text-yellow-700'
-                                                      : pres.status === 'FAILED'
-                                                        ? 'bg-red-100 text-red-700'
-                                                        : 'bg-secondary text-foreground'
+                    <>
+                        <div className="mb-6">
+                            <input
+                                type="text"
+                                value={searchText}
+                                onChange={(event) => setSearchText(event.target.value)}
+                                placeholder="제목으로 검색"
+                                className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex gap-2 overflow-x-auto pb-1">
+                                    {([
+                                        ['ALL', '전체'],
+                                        ['COMPLETED', '완료'],
+                                        ['GENERATING', '생성 중'],
+                                        ['FAILED', '실패'],
+                                        ['DRAFT', '초안'],
+                                    ] as const).map(([value, label]) => (
+                                        <button
+                                            key={value}
+                                            type="button"
+                                            onClick={() => setStatusFilter(value)}
+                                            className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                                statusFilter === value
+                                                    ? 'border-foreground bg-foreground text-background'
+                                                    : 'border-input bg-background text-foreground hover:bg-accent'
                                             }`}
                                         >
-                                            {pres.status === 'COMPLETED' && '완료'}
-                                            {pres.status === 'GENERATING' && '생성 중'}
-                                            {pres.status === 'FAILED' && '실패'}
-                                            {pres.status === 'DRAFT' && '초안'}
-                                        </span>
-                                    </div>
+                                            {label}
+                                        </button>
+                                    ))}
                                 </div>
-                            </Link>
-                            <button
-                                type="button"
-                                aria-label={`${pres.title} 삭제`}
-                                disabled={deletingId === pres.id}
-                                onClick={() => deletePresentation(pres)}
-                                className="absolute right-3 top-3 rounded-md bg-card/90 p-2 text-red-600 shadow hover:bg-red-50 disabled:opacity-50"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                                <div className="flex items-center gap-2 sm:justify-end">
+                                    <label htmlFor="presentations-sort" className="sr-only">정렬</label>
+                                    <select
+                                        id="presentations-sort"
+                                        aria-label="정렬"
+                                        value={sortBy}
+                                        onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+                                        className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
+                                    >
+                                        <option value="updatedAt">최근 수정순</option>
+                                        <option value="createdAt">생성순</option>
+                                        <option value="title">제목순</option>
+                                    </select>
+                                </div>
                             </div>
-                        ))}
-                    </div>
+                        </div>
+
+                        {visible.length === 0 ? (
+                            <div className="text-center py-20 bg-card rounded-xl border-2 border-dashed">
+                                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-foreground mb-2">검색 결과가 없습니다</h3>
+                                <p className="text-muted-foreground mb-6">다른 검색어나 필터를 시도해보세요</p>
+                                <Button onClick={resetFilters} className="bg-primary hover:opacity-90">
+                                    필터 초기화
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {visible.map((pres) => (
+                                    <div key={pres.id} className="relative bg-card rounded-xl border hover:shadow-lg transition-shadow overflow-hidden">
+                                    <Link href={`/editor/${pres.id}`} className="block">
+                                        <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                            <FileText className="h-12 w-12 text-muted-foreground" />
+                                        </div>
+                                        <div className="p-4">
+                                            <h3 className="font-medium text-foreground truncate">{pres.title}</h3>
+                                            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                                <span>{pres._count.slides} 슬라이드</span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {formatDate(pres.updatedAt)}
+                                                </span>
+                                            </div>
+                                            <div className="mt-2">
+                                                <span
+                                                    className={`inline-flex px-2 py-1 text-xs rounded-full ${
+                                                        pres.status === 'COMPLETED'
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : pres.status === 'GENERATING'
+                                                              ? 'bg-yellow-100 text-yellow-700'
+                                                              : pres.status === 'FAILED'
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-secondary text-foreground'
+                                                    }`}
+                                                >
+                                                    {pres.status === 'COMPLETED' && '완료'}
+                                                    {pres.status === 'GENERATING' && '생성 중'}
+                                                    {pres.status === 'FAILED' && '실패'}
+                                                    {pres.status === 'DRAFT' && '초안'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                    <button
+                                        type="button"
+                                        aria-label={`${pres.title} 삭제`}
+                                        disabled={deletingId === pres.id}
+                                        onClick={() => deletePresentation(pres)}
+                                        className="absolute right-3 top-3 rounded-md bg-card/90 p-2 text-red-600 shadow hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </AppShell>
