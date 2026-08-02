@@ -10,8 +10,8 @@ func TestLoadReturnsOrderedChecksummedMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 8 {
-		t.Fatalf("got %d migrations, want 8", len(items))
+	if len(items) != 9 {
+		t.Fatalf("got %d migrations, want 9", len(items))
 	}
 	for index, item := range items {
 		if index > 0 && items[index-1].Name >= item.Name {
