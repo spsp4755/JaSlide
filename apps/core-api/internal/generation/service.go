@@ -368,6 +368,13 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 			service.fail(ctx, jobID, contentErr)
 			return
 		}
+		if feedback, critiqueErr := service.llm.Critique(ctx, CritiqueRequest{
+			Content: rawContent, Title: item.Title, KeyPoints: item.KeyPoints,
+		}); critiqueErr == nil && feedback != "" {
+			if revised, editErr := service.llm.Edit(ctx, rawContent, feedback, item.Type); editErr == nil {
+				rawContent = revised
+			}
+		}
 		fields := rawObject(rawContent)
 		templateIndex := chooseTemplateIndex(item.TemplateIndex, index, capable)
 		if templateIndex >= 0 {

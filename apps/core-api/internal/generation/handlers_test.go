@@ -251,6 +251,124 @@ func (*cancellableLLM) EditHTML(context.Context, string, string) (string, error)
 	return "", errors.New("unexpected edit HTML call")
 }
 
+type reviewLLM struct {
+	critiqueFeedback string
+	critiqueErr      error
+	editContent      json.RawMessage
+	editErr          error
+	critiqueCalls    int
+	editCalls        int
+}
+
+func (*reviewLLM) Outline(context.Context, OutlineRequest) (Outline, error) {
+	return Outline{Title: "Deck", Slides: []OutlineSlide{{
+		Order: 1, Title: "Slide", Type: "CONTENT", KeyPoints: []string{"Point"},
+	}}}, nil
+}
+
+func (*reviewLLM) SlideContent(context.Context, SlideRequest) (json.RawMessage, error) {
+	return json.RawMessage(`{"heading":"Slide","bullets":[{"text":"Original"}]}`), nil
+}
+
+func (llm *reviewLLM) Critique(context.Context, CritiqueRequest) (string, error) {
+	llm.critiqueCalls++
+	return llm.critiqueFeedback, llm.critiqueErr
+}
+
+func (llm *reviewLLM) Edit(context.Context, json.RawMessage, string, string) (json.RawMessage, error) {
+	llm.editCalls++
+	return llm.editContent, llm.editErr
+}
+
+func (*reviewLLM) SlideHTML(context.Context, string, SlideRequest) (string, error) {
+	return "", errors.New("unexpected slide HTML call")
+}
+
+func (*reviewLLM) EditHTML(context.Context, string, string) (string, error) {
+	return "", errors.New("unexpected edit HTML call")
+}
+
+func TestProcessSkipsEditWhenCritiqueApproves(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":1,"language":"en"}`),
+	}
+	llm := &reviewLLM{critiqueFeedback: ""}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.editCalls != 0 {
+		t.Fatalf("edit calls = %d, want 0 when critique approves", llm.editCalls)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1", len(repo.slides))
+	}
+	heading, _ := rawObject(repo.slides[0].Content)["heading"].(string)
+	if heading != "Slide" {
+		t.Fatalf("expected original content preserved, got heading %q", heading)
+	}
+}
+
+func TestProcessAppliesEditWhenCritiqueRequestsChanges(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":1,"language":"en"}`),
+	}
+	llm := &reviewLLM{
+		critiqueFeedback: "Add the missing key point",
+		editContent:      json.RawMessage(`{"heading":"Revised","bullets":[{"text":"Fixed"}]}`),
+	}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.editCalls != 1 {
+		t.Fatalf("edit calls = %d, want 1 when critique requests changes", llm.editCalls)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1", len(repo.slides))
+	}
+	heading, _ := rawObject(repo.slides[0].Content)["heading"].(string)
+	if heading != "Revised" {
+		t.Fatalf("expected the Edit result stored, got heading %q", heading)
+	}
+}
+
+func TestProcessFallsBackToOriginalContentWhenCritiqueFails(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"c","slideCount":1,"language":"en"}`),
+	}
+	llm := &reviewLLM{critiqueErr: errors.New("network error")}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	if llm.editCalls != 0 {
+		t.Fatalf("edit calls = %d, want 0 when critique fails", llm.editCalls)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1 (generation must not fail on a critique error)", len(repo.slides))
+	}
+	heading, _ := rawObject(repo.slides[0].Content)["heading"].(string)
+	if heading != "Slide" {
+		t.Fatalf("expected original content preserved on critique failure, got heading %q", heading)
+	}
+}
+
 func TestStartQueuesTenSlideGenerationAndPersistsProgress(t *testing.T) {
 	repo := newMemoryRepository()
 	repo.users["user-1"] = db.User{ID: "user-1"}
