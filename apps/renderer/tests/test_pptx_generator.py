@@ -1357,3 +1357,42 @@ def test_kpi_slide_keeps_its_chart_even_if_it_also_carries_metrics():
 
     slide = Presentation(BytesIO(output)).slides[0]
     assert any(shape.has_chart for shape in slide.shapes)
+
+
+def test_title_slide_shrinks_a_very_long_title_to_fit():
+    long_title = "가" * 400
+    output = PPTXGenerator().generate(_presentation(_slide("TITLE", long_title, {"heading": long_title})))
+    slide = Presentation(BytesIO(output)).slides[0]
+    title_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_title)
+    auto_fit = title_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
+def test_title_slide_leaves_a_short_title_at_full_size():
+    output = PPTXGenerator().generate(_presentation(_slide("TITLE", "짧은 제목", {"heading": "짧은 제목"})))
+    slide = Presentation(BytesIO(output)).slides[0]
+    title_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == "짧은 제목")
+    auto_fit = title_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is None
+
+
+def test_content_slide_shrinks_a_very_long_body_to_fit():
+    long_body = "본문 " * 400
+    output = PPTXGenerator().generate(_presentation(_slide("CONTENT", "제목", {"heading": "제목", "body": long_body})))
+    slide = Presentation(BytesIO(output)).slides[0]
+    body_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_body)
+    auto_fit = body_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert auto_fit is not None and auto_fit.get("fontScale") is not None
+
+
+def test_bullet_slide_shrinks_its_own_title_and_bullets_when_they_overflow():
+    long_title = "가" * 400
+    long_bullets = [{"text": "불렛 " * 60, "level": 0} for _ in range(5)]
+    output = PPTXGenerator().generate(_presentation(_slide("BULLET_LIST", long_title, {"heading": long_title, "bullets": long_bullets})))
+    slide = Presentation(BytesIO(output)).slides[0]
+    title_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text == long_title)
+    title_auto_fit = title_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert title_auto_fit is not None and title_auto_fit.get("fontScale") is not None
+    bullet_shape = next(shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text.startswith("• 불렛"))
+    bullet_auto_fit = bullet_shape.text_frame._txBody.bodyPr.find(qn("a:normAutofit"))
+    assert bullet_auto_fit is not None and bullet_auto_fit.get("fontScale") is not None

@@ -935,6 +935,7 @@ class PPTXGenerator:
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
         if "align" not in title_layout:
             tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        self._shrink_text_to_fit(title_box)
 
         # Subtitle
         if subtitle:
@@ -946,6 +947,7 @@ class PPTXGenerator:
             self._apply_alignment(tf.paragraphs[0], subtitle_layout.get("align"))
             if "align" not in subtitle_layout:
                 tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+            self._shrink_text_to_fit(sub_box)
 
     def _add_content_slide(self, slide_data: Any):
         """Add content slide with title and body"""
@@ -965,6 +967,7 @@ class PPTXGenerator:
         tf.paragraphs[0].text = title
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._shrink_text_to_fit(title_box)
 
         # ponytail: _add_table/_add_chart were only wired into the HTML-template
         # dispatch (_add_html_template_slide); a presentation with no template
@@ -989,6 +992,7 @@ class PPTXGenerator:
             tf.paragraphs[0].text = body
             self._style_paragraph(tf.paragraphs[0], body_layout["fontSize"], self.tokens["body_font"])
             self._apply_alignment(tf.paragraphs[0], body_layout.get("align"))
+            self._shrink_text_to_fit(body_box)
 
         if bullets:
             self._add_bullets(slide, bullets, content_top, content_height)
@@ -1010,6 +1014,7 @@ class PPTXGenerator:
         tf.paragraphs[0].text = title
         self._style_paragraph(tf.paragraphs[0], title_layout["fontSize"], self.tokens["title_font"], bold=True)
         self._apply_alignment(tf.paragraphs[0], title_layout.get("align"))
+        self._shrink_text_to_fit(title_box)
 
         # Bullets
         self._add_bullets(slide, bullets, Inches(1.3), Inches(5.7))
@@ -1044,6 +1049,9 @@ class PPTXGenerator:
             self._apply_alignment(p, bullet_layout.get("align"))
             p.level = level
             p.space_before = Pt(12)
+
+        if bullets:
+            self._shrink_text_to_fit(bullet_box)
 
     def _add_two_column_slide(self, slide_data: Any):
         """Add two-column slide"""
