@@ -1093,6 +1093,7 @@ git commit -m "feat(generation): ground subtitle/date/kpi prompt fields in the t
 - Modify: `apps/core-api/internal/generation/roles.go` (add the role-aware assignment logic, from Task 4)
 - Modify: `apps/core-api/internal/generation/service.go:377-406` (`Process()`'s call site), `apps/core-api/internal/generation/service.go:672-717` (remove the old `pptxObjectEdits`, now moved)
 - Create: `apps/core-api/internal/generation/roles_test.go` additions (same file Task 4 created)
+- Modify: `apps/core-api/internal/generation/pptx_object_edits_test.go` (pre-existing file, missed during this plan's initial research — see Step 3.5 below; it has one test that calls `pptxObjectEdits` with today's 4-argument signature and will fail to compile once this task's signature change lands)
 
 **Interfaces:**
 - Consumes: `object["role"]` (Task 1/2/3), `fields["subheading"]`/`fields["date"]`/`fields["kpiValue"]` (Task 4's `parseSlideContent`).
@@ -1408,6 +1409,23 @@ import (
 	"testing"
 )
 ```
+
+- [ ] **Step 3.5: Fix the pre-existing test that calls the old signature**
+
+`apps/core-api/internal/generation/pptx_object_edits_test.go` already exists (added in an earlier, unrelated commit) and has one test, `TestPptxObjectEditsBuildsAStructuredCellEditWhenATableIsPresent`, that calls `pptxObjectEdits(objects, 0, "0730 업무보고", lines)` — today's 4-argument signature. It will fail to compile once this task's signature change lands. Its `objects` carry no `"role"` key at all, so under the new dispatcher this scenario correctly falls through to `legacyPptxObjectEdits` and produces byte-identical output to today — only the call site needs updating, not the assertions. In `apps/core-api/internal/generation/pptx_object_edits_test.go`, change:
+
+```go
+	edits := pptxObjectEdits(objects, 0, "0730 업무보고", lines)
+```
+
+to:
+
+```go
+	edits := pptxObjectEdits(objects, 0, roleContent{Title: "0730 업무보고", Lines: lines})
+```
+
+Run: `cd apps/core-api && go test ./internal/generation/... -run TestPptxObjectEditsBuildsAStructuredCellEditWhenATableIsPresent -v`
+Expected: PASS (unchanged assertions, now compiling against the new signature)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
