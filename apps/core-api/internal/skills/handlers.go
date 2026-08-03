@@ -106,13 +106,73 @@ func (handler *handlers) deleteMany(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	user, _ := auth.PrincipalFromContext(request.Context())
-	result, err := handler.db.Pool().Exec(request.Context(),
-		`DELETE FROM "PresentationSkill" WHERE "id"=ANY($1) AND "userId"=$2`, ids, user.ID)
+	ctx := request.Context()
+
+	tx, err := handler.db.Pool().Begin(ctx)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]int64{"deleted": result.RowsAffected()})
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows, err := tx.Query(ctx,
+		`DELETE FROM "PresentationSkill" WHERE "id"=ANY($1) AND "userId"=$2 RETURNING "templateId"`, ids, user.ID)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	var templateIDs []string
+	var deleted int64
+	for rows.Next() {
+		deleted++
+		var templateID *string
+		if err := rows.Scan(&templateID); err != nil {
+			rows.Close()
+			writeError(writer, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		if templateID != nil {
+			templateIDs = append(templateIDs, *templateID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	var storageKeys []string
+	if len(templateIDs) > 0 {
+		configRows, err := tx.Query(ctx,
+			`DELETE FROM "Template" WHERE "id"=ANY($1) AND "userId"=$2 RETURNING "config"`, templateIDs, user.ID)
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		for configRows.Next() {
+			var config json.RawMessage
+			if err := configRows.Scan(&config); err != nil {
+				configRows.Close()
+				writeError(writer, http.StatusInternalServerError, "Internal server error")
+				return
+			}
+			if key := templateStorageKey(config); key != "" {
+				storageKeys = append(storageKeys, key)
+			}
+		}
+		if err := configRows.Err(); err != nil {
+			writeError(writer, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	for _, key := range storageKeys {
+		handler.removeFile(key)
+	}
+	writeJSON(writer, http.StatusOK, map[string]int64{"deleted": deleted})
 }
 
 func (handler *handlers) update(writer http.ResponseWriter, request *http.Request) {
@@ -221,17 +281,23 @@ func (handler *handlers) delete(writer http.ResponseWriter, request *http.Reques
 		writeError(writer, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	var storageKey string
 	if templateID != nil {
-		if _, err := tx.Exec(ctx,
-			`DELETE FROM "Template" WHERE "id"=$1 AND "userId"=$2`, *templateID, user.ID,
-		); err != nil {
+		var config json.RawMessage
+		if err := tx.QueryRow(ctx,
+			`DELETE FROM "Template" WHERE "id"=$1 AND "userId"=$2 RETURNING "config"`, *templateID, user.ID,
+		).Scan(&config); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			writeError(writer, http.StatusInternalServerError, "Internal server error")
 			return
 		}
+		storageKey = templateStorageKey(config)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		writeError(writer, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+	if storageKey != "" {
+		handler.removeFile(storageKey)
 	}
 	writeJSON(writer, http.StatusOK, map[string]bool{"success": true})
 }
@@ -244,7 +310,8 @@ func (handler *handlers) previewHTML(writer http.ResponseWriter, request *http.R
 		SELECT t."config" FROM "PresentationSkill" s
 		JOIN "Template" t ON t."id"=s."templateId"
 		WHERE s."id"=$1
-			AND (s."isPublic" OR s."userId"=$2 OR ($3::text IS NOT NULL AND s."organizationId"=$3))`,
+			AND (s."isPublic" OR s."userId"=$2 OR ($3::text IS NOT NULL AND s."organizationId"=$3))
+			AND (t."isPublic" OR t."userId"=$2 OR ($3::text IS NOT NULL AND t."organizationId"=$3))`,
 		id, user.ID, user.OrganizationID,
 	).Scan(&config)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -461,6 +528,18 @@ func configObject(raw json.RawMessage) map[string]any {
 	result := map[string]any{}
 	_ = json.Unmarshal(raw, &result)
 	return result
+}
+
+func templateStorageKey(raw json.RawMessage) string {
+	fields := configObject(raw)
+	for _, name := range []string{"source", "pptxTemplate", "zipTemplate"} {
+		if section, ok := fields[name].(map[string]any); ok {
+			if key, ok := section["storageKey"].(string); ok && key != "" {
+				return key
+			}
+		}
+	}
+	return ""
 }
 
 func validTemplateConfig(config map[string]any) bool {

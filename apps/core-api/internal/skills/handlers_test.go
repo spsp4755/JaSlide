@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -300,5 +301,114 @@ func TestPreviewHTMLReturnsTheTemplatesFirstSlideOnlyWhenVisible(t *testing.T) {
 	strangerPreview := requestJSON(t, client, strangerToken, http.MethodGet, server.URL+"/api/skills/"+skillID+"/preview-html", "", http.StatusOK)
 	if strangerPreview["html"] != "<html><body>Hello</body></html>" {
 		t.Fatalf("stranger preview html after going public = %#v", strangerPreview["html"])
+	}
+}
+
+// TestPreviewHTMLRejectsASkillAttachedToSomeoneElsesPrivateTemplate proves the fix for the
+// ownership-leak finding: previewHTML must check the Template's own visibility, not just the
+// Skill's. It simulates the attack by pointing user B's own skill at user A's private template
+// (the same effect as POSTing a skill with a stolen templateId) and expects a 404, not A's content.
+func TestPreviewHTMLRejectsASkillAttachedToSomeoneElsesPrivateTemplate(t *testing.T) {
+	store, authService, sessions := newTestStore(t)
+	ctx := context.Background()
+	suffix := fmt.Sprint(time.Now().UnixNano())
+
+	ownerID := createTestUser(t, ctx, store, "leak-owner-"+suffix, "leak-owner-"+suffix+"@example.com", nil)
+	attackerID := createTestUser(t, ctx, store, "leak-attacker-"+suffix, "leak-attacker-"+suffix+"@example.com", nil)
+
+	// User A's private skill+template pair (the victim's private content).
+	_, _ = createTestSkillWithTemplate(t, ctx, store, "leak-victim-tpl-"+suffix, "leak-victim-skill-"+suffix, ownerID, nil)
+	if _, err := store.Pool().Exec(ctx, `
+		UPDATE "Template" SET "config"='{"htmlSlides":["<html><body>Victim secret</body></html>"]}'::jsonb WHERE "id"=$1`,
+		"leak-victim-tpl-"+suffix); err != nil {
+		t.Fatal(err)
+	}
+
+	// User B's own skill+template pair.
+	_, attackerSkillID := createTestSkillWithTemplate(t, ctx, store, "leak-attacker-tpl-"+suffix, "leak-attacker-skill-"+suffix, attackerID, nil)
+
+	// Simulate the attack: attach the attacker's own skill to the victim's private template,
+	// exactly as create() would if it accepted a client-supplied templateId with no ownership check.
+	if _, err := store.Pool().Exec(ctx,
+		`UPDATE "PresentationSkill" SET "templateId"=$1 WHERE "id"=$2`,
+		"leak-victim-tpl-"+suffix, attackerSkillID); err != nil {
+		t.Fatal(err)
+	}
+
+	router := chi.NewRouter()
+	router.Mount("/api/skills", NewHandlers(store, nil, "", authService))
+	server := httptest.NewServer(router)
+	defer server.Close()
+	client := server.Client()
+
+	attackerToken := issueTestToken(t, sessions, attackerID, "leak-attacker-"+suffix+"@example.com")
+
+	requestJSON(t, client, attackerToken, http.MethodGet, server.URL+"/api/skills/"+attackerSkillID+"/preview-html", "", http.StatusNotFound)
+}
+
+// TestDeleteRemovesTheStoredTemplateFile proves the fix for the orphaned-file finding: deleting
+// a skill must also remove the underlying stored PPTX/template file, not just the DB rows.
+func TestDeleteRemovesTheStoredTemplateFile(t *testing.T) {
+	store, authService, sessions := newTestStore(t)
+	ctx := context.Background()
+	suffix := fmt.Sprint(time.Now().UnixNano())
+	root := t.TempDir()
+
+	ownerID := createTestUser(t, ctx, store, "file-owner-"+suffix, "file-owner-"+suffix+"@example.com", nil)
+	templateID, skillID := createTestSkillWithTemplate(t, ctx, store, "file-tpl-"+suffix, "file-skill-"+suffix, ownerID, nil)
+
+	if err := os.MkdirAll(filepath.Join(root, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	storedPath := filepath.Join(root, "templates", "file-test-"+suffix+".pptx")
+	if err := os.WriteFile(storedPath, []byte("fake pptx bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	storageKey := "templates/file-test-" + suffix + ".pptx"
+	config := fmt.Sprintf(`{"htmlSlides":["<html></html>"],"source":{"storageKey":%q}}`, storageKey)
+	if _, err := store.Pool().Exec(ctx, `UPDATE "Template" SET "config"=$1::jsonb WHERE "id"=$2`, config, templateID); err != nil {
+		t.Fatal(err)
+	}
+
+	router := chi.NewRouter()
+	router.Mount("/api/skills", NewHandlers(store, nil, root, authService))
+	server := httptest.NewServer(router)
+	defer server.Close()
+	client := server.Client()
+
+	ownerToken := issueTestToken(t, sessions, ownerID, "file-owner-"+suffix+"@example.com")
+	requestJSON(t, client, ownerToken, http.MethodDelete, server.URL+"/api/skills/"+skillID, "", http.StatusOK)
+
+	if _, err := os.Stat(storedPath); !os.IsNotExist(err) {
+		t.Fatalf("stored file at %s after delete: err=%v, want os.IsNotExist", storedPath, err)
+	}
+}
+
+// TestDeleteManyCascadesToLinkedTemplates proves the user-requested Fix 3: bulk delete must
+// cascade to linked Templates the same way the single-item delete does.
+func TestDeleteManyCascadesToLinkedTemplates(t *testing.T) {
+	store, authService, sessions := newTestStore(t)
+	ctx := context.Background()
+	suffix := fmt.Sprint(time.Now().UnixNano())
+
+	ownerID := createTestUser(t, ctx, store, "bulk-owner-"+suffix, "bulk-owner-"+suffix+"@example.com", nil)
+	templateID, skillID := createTestSkillWithTemplate(t, ctx, store, "bulk-tpl-"+suffix, "bulk-skill-"+suffix, ownerID, nil)
+
+	router := chi.NewRouter()
+	router.Mount("/api/skills", NewHandlers(store, nil, "", authService))
+	server := httptest.NewServer(router)
+	defer server.Close()
+	client := server.Client()
+
+	ownerToken := issueTestToken(t, sessions, ownerID, "bulk-owner-"+suffix+"@example.com")
+	body := fmt.Sprintf(`{"ids":[%q]}`, skillID)
+	requestJSON(t, client, ownerToken, http.MethodDelete, server.URL+"/api/skills", body, http.StatusOK)
+
+	var templateCount int
+	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM "Template" WHERE "id"=$1`, templateID).Scan(&templateCount); err != nil {
+		t.Fatal(err)
+	}
+	if templateCount != 0 {
+		t.Fatalf("template count after bulk delete = %d, want 0", templateCount)
 	}
 }

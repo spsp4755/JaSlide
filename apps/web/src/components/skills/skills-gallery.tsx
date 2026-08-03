@@ -160,8 +160,9 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
         try {
             const response = await skillsApi.previewHtml(skill.id);
             setPreviewHtml(response.data?.html || '');
-        } catch {
+        } catch (error: any) {
             setPreviewHtml('');
+            toast({ title: '미리보기를 불러오지 못했습니다', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
         } finally {
             setPreviewLoading(false);
         }
@@ -263,7 +264,7 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                                         <button type="button" onClick={() => { setDeletingSkill(skill); setOpenMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-secondary"><Trash2 className="h-3.5 w-3.5" /> 삭제</button>
                                     </div>}
                                 </div>}
-                                <div onClick={() => !preview && skill.templateId && openPreview(skill)} className={`h-32 bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4 ${skill.templateId ? 'cursor-pointer' : ''}`}><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-card/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">TaeSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></div>
+                                <button type="button" onClick={() => !preview && skill.templateId && openPreview(skill)} disabled={!skill.templateId} className={`block h-32 w-full text-left bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4 ${skill.templateId ? 'cursor-pointer' : 'cursor-default'}`} aria-label={skill.templateId ? `${skill.name} 미리보기 열기` : undefined}><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-card/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">TaeSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></button>
                                 <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span>{!preview && <button type="button" onClick={() => cycleScope(skill)} title="클릭해서 공개 범위 변경" className={`ml-2 rounded-full px-2 py-1 text-xs ${scopeBadgeClass[scopeOf(skill)]}`}>{scopeLabel[scopeOf(skill)]}</button>}<h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link>}</div>
                             </article>)}
                             {openMenuId && <button type="button" className="fixed inset-0 z-[5] cursor-default" aria-label="메뉴 닫기" onClick={() => setOpenMenuId(null)} />}
