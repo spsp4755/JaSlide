@@ -893,6 +893,39 @@ func TestSlidePromptUsesAvailableLevelsWhenPresent(t *testing.T) {
 	}
 }
 
+func TestSlidePromptRequestsSubtitleDateAndKPIOnlyWhenRequested(t *testing.T) {
+	withRoles := slidePrompt(SlideRequest{Title: "T", Type: "CONTENT", RequestedRoles: []string{"date", "kpi", "subtitle"}})
+	for _, want := range []string{"subheading", "\"date\"", "kpiValue"} {
+		if !strings.Contains(withRoles, want) {
+			t.Fatalf("slidePrompt() with RequestedRoles = %q, want it to mention %q", withRoles, want)
+		}
+	}
+
+	withoutRoles := slidePrompt(SlideRequest{Title: "T", Type: "CONTENT"})
+	for _, notWanted := range []string{"date box", "highlighted metric box", "subtitle box"} {
+		if strings.Contains(withoutRoles, notWanted) {
+			t.Fatalf("slidePrompt() without RequestedRoles = %q, should not mention %q", withoutRoles, notWanted)
+		}
+	}
+}
+
+func TestParseSlideContentPassesThroughDateAndKPIValue(t *testing.T) {
+	raw, err := parseSlideContent(json.RawMessage(`{"heading":"Q3","date":"2026.08.03","kpiValue":"32%"}`), "CONTENT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	if value["date"] != "2026.08.03" {
+		t.Fatalf("date = %v, want 2026.08.03", value["date"])
+	}
+	if value["kpiValue"] != "32%" {
+		t.Fatalf("kpiValue = %v, want 32%%", value["kpiValue"])
+	}
+}
+
 func TestSlidePromptInstructsAgainstLiteralBulletCharacters(t *testing.T) {
 	prompt := slidePrompt(SlideRequest{Title: "T", Type: "CONTENT"})
 	if !strings.Contains(prompt, "bullet characters") {

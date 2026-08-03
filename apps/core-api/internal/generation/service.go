@@ -150,6 +150,11 @@ type SlideRequest struct {
 	// destination template objects actually support — empty for non-PPTX
 	// slides, where slidePrompt falls back to a generic 0-4 range.
 	AvailableLevels []int
+	// RequestedRoles is the sorted set of subtitle/date/kpi roles this
+	// slide's destination template objects actually carry (see
+	// requestedGenerativeRoles) — empty when the template has none of
+	// these, in which case slidePrompt asks for none of them.
+	RequestedRoles []string
 }
 
 type CritiqueRequest struct {
@@ -378,12 +383,15 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	for index, item := range outline.Slides {
 		templateIndex := chooseTemplateIndex(item.TemplateIndex, index, capable)
 		var levels []int
+		var requestedRoles []string
 		if template.PPTX && templateIndex >= 0 {
-			levels = availableLevels(template.objects(templateIndex))
+			objects := template.objects(templateIndex)
+			levels = availableLevels(objects)
+			requestedRoles = requestedGenerativeRoles(objects)
 		}
 		rawContent, contentErr := service.llm.SlideContent(ctx, SlideRequest{
 			Title: item.Title, Type: item.Type, Language: input.Language, KeyPoints: item.KeyPoints,
-			SkillGuidance: input.SkillGuidance, AvailableLevels: levels,
+			SkillGuidance: input.SkillGuidance, AvailableLevels: levels, RequestedRoles: requestedRoles,
 		})
 		if contentErr != nil {
 			service.fail(ctx, jobID, contentErr)

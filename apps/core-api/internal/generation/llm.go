@@ -421,7 +421,7 @@ func parseSlideContent(raw json.RawMessage, slideType string) (json.RawMessage, 
 		return nil, errors.New("slide content requires heading")
 	}
 	result := map[string]any{"heading": heading}
-	for _, field := range []string{"subheading", "body"} {
+	for _, field := range []string{"subheading", "body", "date", "kpiValue"} {
 		if text, ok := value[field].(string); ok && strings.TrimSpace(text) != "" {
 			result[field] = text
 		}
@@ -786,6 +786,7 @@ func slidePrompt(input SlideRequest) string {
 		}
 		levelGuidance = fmt.Sprintf("level — only these values are usable in this template: %s", strings.Join(parts, ", "))
 	}
+	roleGuidance := roleFieldGuidance(input.RequestedRoles)
 	return fmt.Sprintf(
 		"Create concise slide content in %s. Title: %s. Type: %s. Key points: %s. "+
 			"Return JSON only with heading, optional subheading/body, 3-5 bullets "+
@@ -797,9 +798,31 @@ func slidePrompt(input SlideRequest) string {
 			"process for PROCESS as {\"steps\":[{\"label\":\"...\",\"description\":\"...\"}]} with 2-6 steps, "+
 			"comparison for COMPARISON as {\"left\":{\"title\":\"...\",\"bullets\":[\"...\"]},\"right\":{\"title\":\"...\",\"bullets\":[\"...\"]}}, "+
 			"and metrics for KPI as {\"metrics\":[{\"value\":\"...\",\"label\":\"...\"}]} with 2-6 cards. "+
-			"Do not write bullet characters (-, •) as literal text in the bullet text — the template already draws them.%s%s",
-		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), levelGuidance, dateGuidance(), guidance,
+			"Do not write bullet characters (-, •) as literal text in the bullet text — the template already draws them.%s%s%s",
+		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), levelGuidance, dateGuidance(), guidance, roleGuidance,
 	)
+}
+
+// roleFieldGuidance appends explicit instructions for the extra fields this
+// slide's destination template can actually use (subheading/date/
+// kpiValue), computed from RequestedRoles so slides without a matching
+// template shape are never asked to invent one.
+func roleFieldGuidance(requestedRoles []string) string {
+	var extra []string
+	for _, role := range requestedRoles {
+		switch role {
+		case "subtitle":
+			extra = append(extra, "This slide's template has a subtitle box: always include a concise \"subheading\" (one line).")
+		case "date":
+			extra = append(extra, "This slide's template has a date box: include a \"date\" field using one of the computed dates above.")
+		case "kpi":
+			extra = append(extra, "This slide's template has a highlighted metric box: include a \"kpiValue\" field with one short number/metric string relevant to the content.")
+		}
+	}
+	if len(extra) == 0 {
+		return ""
+	}
+	return " " + strings.Join(extra, " ")
 }
 
 func extractJSON(raw json.RawMessage) json.RawMessage {
