@@ -20,3 +20,14 @@ test('the Skill type carries visibility and template linkage fields', () => {
     assert.match(gallery, /organizationId:\s*string \| null;/);
     assert.match(gallery, /templateId:\s*string \| null;/);
 });
+
+test('each skill card has a menu with rename and delete, backed by modals', () => {
+    const gallery = fs.readFileSync(path.join(webRoot, 'src', 'components', 'skills', 'skills-gallery.tsx'), 'utf8');
+
+    assert.match(gallery, /openMenuId/);
+    assert.match(gallery, /MoreVertical/);
+    assert.match(gallery, /이름 변경/);
+    assert.match(gallery, /skillsApi\.update\(renamingSkill\.id,\s*\{\s*name:\s*renameValue\.trim\(\)\s*\}\)/);
+    assert.match(gallery, /skillsApi\.delete\(skill\.id\)/);
+    assert.match(gallery, /setSkills\(\(current\) => current\.filter\(\(item\) => item\.id !== (deletingSkill\.id|skill\.id)\)\)/);
+});

@@ -2,7 +2,7 @@
 
 import Link from '@/lib/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, FileUp, LayoutTemplate, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { BookOpen, FileUp, LayoutTemplate, MoreVertical, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { skillsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
@@ -29,6 +29,12 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
     const [query, setQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [deleting, setDeleting] = useState(false);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [renamingSkill, setRenamingSkill] = useState<Skill | null>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [renaming, setRenaming] = useState(false);
+    const [deletingSkill, setDeletingSkill] = useState<Skill | null>(null);
+    const [deletingOne, setDeletingOne] = useState(false);
     const pptxInputRef = useRef<HTMLInputElement>(null);
     const [form, setForm] = useState({
         name: '', category: '기업 전략', audience: '의사결정자', tone: '명확하고 단정하게',
@@ -61,6 +67,34 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
             toast({ title: 'Skill 삭제 실패', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const submitRename = async () => {
+        if (!renamingSkill || !renameValue.trim()) return;
+        setRenaming(true);
+        try {
+            const response = await skillsApi.update(renamingSkill.id, { name: renameValue.trim() });
+            setSkills((current) => current.map((item) => (item.id === renamingSkill.id ? response.data : item)));
+            setRenamingSkill(null);
+        } catch (error: any) {
+            toast({ title: '이름 변경 실패', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
+        } finally {
+            setRenaming(false);
+        }
+    };
+
+    const deleteSkill = async (skill: Skill) => {
+        setDeletingOne(true);
+        try {
+            await skillsApi.delete(skill.id);
+            setSkills((current) => current.filter((item) => item.id !== skill.id));
+            setDeletingSkill(null);
+            toast({ title: 'Skill을 삭제했습니다' });
+        } catch (error: any) {
+            toast({ title: '삭제 실패', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
+        } finally {
+            setDeletingOne(false);
         }
     };
 
@@ -146,16 +180,28 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                     {loading ? <p className="py-10 text-sm text-muted-foreground">Skills를 불러오는 중입니다.</p> : (
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             {displayedSkills.map((skill) => <article key={skill.id} className="relative overflow-hidden rounded-2xl border border-border bg-card">
-                                {!preview && <label className="absolute right-3 top-3 z-10 rounded bg-card/90 p-1.5"><input type="checkbox" checked={selectedIds.includes(skill.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, skill.id] : current.filter((id) => id !== skill.id))} aria-label={`${skill.name} 선택`} /></label>}
+                                {!preview && <label className="absolute left-3 top-3 z-10 rounded bg-card/90 p-1.5"><input type="checkbox" checked={selectedIds.includes(skill.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, skill.id] : current.filter((id) => id !== skill.id))} aria-label={`${skill.name} 선택`} /></label>}
+                                {!preview && <div className="absolute right-3 top-3 z-10">
+                                    <button type="button" onClick={() => setOpenMenuId(openMenuId === skill.id ? null : skill.id)} className="rounded bg-card/90 p-1.5 hover:bg-secondary" aria-label={`${skill.name} 메뉴`}><MoreVertical className="h-4 w-4" /></button>
+                                    {openMenuId === skill.id && <div className="absolute right-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
+                                        <button type="button" onClick={() => { setRenamingSkill(skill); setRenameValue(skill.name); setOpenMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary"><PencilLine className="h-3.5 w-3.5" /> 이름 변경</button>
+                                        <button type="button" onClick={() => { setDeletingSkill(skill); setOpenMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-secondary"><Trash2 className="h-3.5 w-3.5" /> 삭제</button>
+                                    </div>}
+                                </div>}
                                 <div className="h-32 bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4"><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-card/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">TaeSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></div>
                                 <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link>}</div>
                             </article>)}
+                            {openMenuId && <button type="button" className="fixed inset-0 z-10 cursor-default" aria-label="메뉴 닫기" onClick={() => setOpenMenuId(null)} />}
                         </div>
                     )}
                 </section>
             </main>
 
             {showCreator && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div role="dialog" aria-modal="true" aria-label="새 Skill 만들기" className="w-full max-w-xl rounded-2xl bg-card p-6 shadow-xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="font-display text-2xl font-bold">새 Skill 만들기</h2><p className="mt-1 text-sm text-muted-foreground">실행 코드가 아닌 작성 가이드만 저장됩니다.</p></div><button type="button" onClick={() => setShowCreator(false)} className="rounded-lg p-2 hover:bg-secondary" aria-label="닫기"><X className="h-5 w-5" /></button></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium sm:col-span-2">이름<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-normal outline-none focus:border-foreground" placeholder="예: 공공 정책 브리핑" /></label><label className="text-sm font-medium">분류<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-normal"><option>기업 전략</option><option>교육</option><option>B2B 영업</option><option>데이터 & KPI</option><option>마케팅</option><option>공공 정책</option></select></label><label className="text-sm font-medium">대상<input value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-normal" /></label><label className="text-sm font-medium sm:col-span-2">사용 목적<input value={form.purpose} onChange={(event) => setForm({ ...form, purpose: event.target.value })} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-normal" placeholder="예: 정책 추진 배경과 실행 계획을 설명" /></label><label className="text-sm font-medium sm:col-span-2">구성 가이드<textarea value={form.outlineGuidance} onChange={(event) => setForm({ ...form, outlineGuidance: event.target.value })} className="mt-1 min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 font-normal" /></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setShowCreator(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-medium">취소</button><button type="button" disabled={creating} onClick={createSkill} className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"><Plus className="h-4 w-4" />{creating ? '저장 중' : 'Skill 만들기'}</button></div></div></div>}
+
+            {renamingSkill && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div role="dialog" aria-modal="true" aria-label="Skill 이름 변경" className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl"><div className="mb-4 flex items-center justify-between"><h2 className="font-display text-lg font-bold">이름 변경</h2><button type="button" onClick={() => setRenamingSkill(null)} className="rounded-lg p-2 hover:bg-secondary" aria-label="닫기"><X className="h-5 w-5" /></button></div><input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-foreground" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setRenamingSkill(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-medium">취소</button><button type="button" disabled={renaming || !renameValue.trim()} onClick={submitRename} className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50">{renaming ? '저장 중' : '저장'}</button></div></div></div>}
+
+            {deletingSkill && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div role="dialog" aria-modal="true" aria-label="Skill 삭제 확인" className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl"><h2 className="mb-2 font-display text-lg font-bold">삭제 확인</h2><p className="text-sm text-muted-foreground">&quot;{deletingSkill.name}&quot;을(를) 삭제할까요? 이 Skill로 만든 발표자료는 남지만 템플릿 연결은 사라집니다.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDeletingSkill(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-medium">취소</button><button type="button" disabled={deletingOne} onClick={() => deleteSkill(deletingSkill)} className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-50">{deletingOne ? '삭제 중' : '삭제'}</button></div></div></div>}
         </div>
     );
 }
