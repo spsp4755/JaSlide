@@ -425,6 +425,13 @@ class PPTXGenerator:
             else:
                 paragraph.text = str(item.get("text", ""))
 
+        # A text frame must always have at least one <a:p> — OOXML's CT_TextBody
+        # requires minOccurs="1". An edit with an empty paragraphs list must not
+        # leave the shape with zero paragraphs, or PowerPoint treats the file as
+        # needing repair. If nothing was appended, add a single empty paragraph.
+        if not frame._txBody.p_lst:
+            frame._txBody.add_p()
+
     def _apply_native_edit(self, edit: dict, slide: Any) -> None:
         if not isinstance(edit, dict):
             return

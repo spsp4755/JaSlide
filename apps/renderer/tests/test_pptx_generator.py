@@ -1654,3 +1654,22 @@ def test_two_column_slide_keeps_bullet_boxes_on_slide_when_the_template_widens_c
     bullet_shapes = [shape for shape in slide.shapes if shape.has_text_frame and "항목" in shape.text_frame.text]
     rightmost = max(bullet_shapes, key=lambda shape: shape.left)
     assert rightmost.left + rightmost.width <= Inches(13.333)
+
+
+def test_native_edit_with_an_empty_paragraphs_list_leaves_a_valid_single_empty_paragraph():
+    # A text frame must always have at least one <a:p> — OOXML's CT_TextBody
+    # requires minOccurs="1". An edit with an empty paragraphs list must not
+    # leave the shape with zero paragraphs, or PowerPoint treats the file as
+    # needing repair.
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    text.text_frame.paragraphs[0].text = "Original"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {"slide": 0, "objectId": str(text.shape_id), "paragraphs": []}
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    paragraphs = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs
+    assert len(paragraphs) == 1
