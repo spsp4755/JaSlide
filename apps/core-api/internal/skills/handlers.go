@@ -39,6 +39,7 @@ func NewHandlers(store *db.Store, renderer *renderer.Client, root string, authSe
 	router.Delete("/", handler.deleteMany)
 	router.Patch("/{id}", handler.update)
 	router.Delete("/{id}", handler.delete)
+	router.Get("/{id}/preview-html", handler.previewHTML)
 	router.Post("/import-pptx", handler.importPPTX)
 	return router
 }
@@ -233,6 +234,32 @@ func (handler *handlers) delete(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (handler *handlers) previewHTML(writer http.ResponseWriter, request *http.Request) {
+	user, _ := auth.PrincipalFromContext(request.Context())
+	id := chi.URLParam(request, "id")
+	var config json.RawMessage
+	err := handler.db.Pool().QueryRow(request.Context(), `
+		SELECT t."config" FROM "PresentationSkill" s
+		JOIN "Template" t ON t."id"=s."templateId"
+		WHERE s."id"=$1
+			AND (s."isPublic" OR s."userId"=$2 OR ($3::text IS NOT NULL AND s."organizationId"=$3))`,
+		id, user.ID, user.OrganizationID,
+	).Scan(&config)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(writer, http.StatusNotFound, "Skill not found")
+		return
+	}
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	html := ""
+	if slides, ok := configObject(config)["htmlSlides"].([]any); ok && len(slides) > 0 {
+		html, _ = slides[0].(string)
+	}
+	writeJSON(writer, http.StatusOK, map[string]string{"html": html})
 }
 
 func (handler *handlers) importPPTX(writer http.ResponseWriter, request *http.Request) {

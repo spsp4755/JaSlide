@@ -267,3 +267,38 @@ func TestDeleteRemovesSkillAndCascadesToTemplateLeavingPresentationsIntact(t *te
 		t.Fatalf("presentation templateId after delete = %v, want nil (SET NULL)", *presentationTemplateID)
 	}
 }
+
+func TestPreviewHTMLReturnsTheTemplatesFirstSlideOnlyWhenVisible(t *testing.T) {
+	store, authService, sessions := newTestStore(t)
+	ctx := context.Background()
+	suffix := fmt.Sprint(time.Now().UnixNano())
+
+	ownerID := createTestUser(t, ctx, store, "pv-owner-"+suffix, "pv-owner-"+suffix+"@example.com", nil)
+	strangerID := createTestUser(t, ctx, store, "pv-stranger-"+suffix, "pv-stranger-"+suffix+"@example.com", nil)
+	_, skillID := createTestSkillWithTemplate(t, ctx, store, "pv-tpl-"+suffix, "pv-skill-"+suffix, ownerID, nil)
+
+	router := chi.NewRouter()
+	router.Mount("/api/skills", NewHandlers(store, nil, "", authService))
+	server := httptest.NewServer(router)
+	defer server.Close()
+	client := server.Client()
+
+	ownerToken := issueTestToken(t, sessions, ownerID, "pv-owner-"+suffix+"@example.com")
+	strangerToken := issueTestToken(t, sessions, strangerID, "pv-stranger-"+suffix+"@example.com")
+
+	// A stranger cannot preview a private skill's template.
+	requestJSON(t, client, strangerToken, http.MethodGet, server.URL+"/api/skills/"+skillID+"/preview-html", "", http.StatusNotFound)
+
+	// The owner gets the first extracted slide.
+	preview := requestJSON(t, client, ownerToken, http.MethodGet, server.URL+"/api/skills/"+skillID+"/preview-html", "", http.StatusOK)
+	if preview["html"] != "<html><body>Hello</body></html>" {
+		t.Fatalf("preview html = %#v", preview["html"])
+	}
+
+	// Once public, a stranger can preview it too.
+	requestJSON(t, client, ownerToken, http.MethodPatch, server.URL+"/api/skills/"+skillID, `{"scope":"public"}`, http.StatusOK)
+	strangerPreview := requestJSON(t, client, strangerToken, http.MethodGet, server.URL+"/api/skills/"+skillID+"/preview-html", "", http.StatusOK)
+	if strangerPreview["html"] != "<html><body>Hello</body></html>" {
+		t.Fatalf("stranger preview html after going public = %#v", strangerPreview["html"])
+	}
+}
