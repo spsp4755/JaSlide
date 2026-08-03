@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpjson"
@@ -35,6 +37,7 @@ func NewHandlers(store *db.Store, renderer *renderer.Client, root string, authSe
 	router.Get("/", handler.list)
 	router.Post("/", handler.create)
 	router.Delete("/", handler.deleteMany)
+	router.Patch("/{id}", handler.update)
 	router.Post("/import-pptx", handler.importPPTX)
 	return router
 }
@@ -108,6 +111,88 @@ func (handler *handlers) deleteMany(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]int64{"deleted": result.RowsAffected()})
+}
+
+func (handler *handlers) update(writer http.ResponseWriter, request *http.Request) {
+	user, _ := auth.PrincipalFromContext(request.Context())
+	id := chi.URLParam(request, "id")
+	var input skillUpdateInput
+	if err := decode(writer, request, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	if input.Name != nil && strings.TrimSpace(*input.Name) == "" {
+		writeError(writer, http.StatusBadRequest, "Name is required")
+		return
+	}
+	var isPublic *bool
+	var organizationID *string
+	scopeChanged := false
+	if input.Scope != nil {
+		value, orgID, err := scopeColumns(*input.Scope, user.OrganizationID)
+		if err != nil {
+			writeError(writer, http.StatusBadRequest, err.Error())
+			return
+		}
+		isPublic, organizationID, scopeChanged = &value, orgID, true
+	}
+
+	ctx := request.Context()
+	tx, err := handler.db.Pool().Begin(ctx)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var templateID *string
+	if err := tx.QueryRow(ctx,
+		`SELECT "templateId" FROM "PresentationSkill" WHERE "id"=$1 AND "userId"=$2`,
+		id, user.ID,
+	).Scan(&templateID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(writer, http.StatusNotFound, "Skill not found")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	var raw json.RawMessage
+	if err := tx.QueryRow(ctx, `
+		UPDATE "PresentationSkill" SET
+			"name"=COALESCE($3,"name"),
+			"isPublic"=COALESCE($4,"isPublic"),
+			"organizationId"=CASE WHEN $5 THEN $6 ELSE "organizationId" END,
+			"updatedAt"=NOW()
+		WHERE "id"=$1 AND "userId"=$2
+		RETURNING to_jsonb("PresentationSkill")`,
+		id, user.ID, input.Name, isPublic, scopeChanged, organizationID,
+	).Scan(&raw); err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	if templateID != nil {
+		if _, err := tx.Exec(ctx, `
+			UPDATE "Template" SET
+				"name"=COALESCE($3,"name"),
+				"isPublic"=COALESCE($4,"isPublic"),
+				"organizationId"=CASE WHEN $5 THEN $6 ELSE "organizationId" END,
+				"updatedAt"=NOW()
+			WHERE "id"=$1 AND "userId"=$2`,
+			*templateID, user.ID, input.Name, isPublic, scopeChanged, organizationID,
+		); err != nil {
+			writeError(writer, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	writeRaw(writer, raw, http.StatusOK, nil)
 }
 
 func (handler *handlers) importPPTX(writer http.ResponseWriter, request *http.Request) {
@@ -231,6 +316,27 @@ func (input skillInput) valid() bool {
 		strings.TrimSpace(input.Audience) != "" && strings.TrimSpace(input.Tone) != "" &&
 		strings.TrimSpace(input.Purpose) != "" && strings.TrimSpace(input.OutlineGuidance) != "" &&
 		input.RecommendedSlideCount >= 3 && input.RecommendedSlideCount <= 30
+}
+
+type skillUpdateInput struct {
+	Name  *string `json:"name,omitempty"`
+	Scope *string `json:"scope,omitempty"`
+}
+
+func scopeColumns(scope string, userOrgID *string) (isPublic bool, organizationID *string, err error) {
+	switch scope {
+	case "private":
+		return false, nil, nil
+	case "organization":
+		if userOrgID == nil {
+			return false, nil, errors.New("No organization to share with")
+		}
+		return false, userOrgID, nil
+	case "public":
+		return true, nil, nil
+	default:
+		return false, nil, errors.New("Invalid scope")
+	}
 }
 
 func createSkill(ctx context.Context, store *db.Store, user auth.Principal, input skillInput) (json.RawMessage, error) {
