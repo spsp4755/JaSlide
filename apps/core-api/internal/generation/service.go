@@ -185,7 +185,7 @@ func (service *Service) Start(ctx context.Context, principal Principal, input St
 	if input.TemplateID == nil && skill.TemplateID != nil {
 		input.TemplateID = skill.TemplateID
 	}
-	if _, err := service.template(ctx, input.TemplateID, principal.ID); err != nil {
+	if _, err := service.template(ctx, input.TemplateID, principal.ID, false); err != nil {
 		return StartResult{}, err
 	}
 	input.SkillGuidance = skill.OutlineGuidance
@@ -285,7 +285,7 @@ func (service *Service) GenerateOutline(ctx context.Context, principal Principal
 	if language == "" {
 		language = detectLanguage(content)
 	}
-	catalog, err := service.templateCatalog(ctx, input.TemplateID, principal.ID)
+	catalog, err := service.templateCatalog(ctx, input.TemplateID, principal.ID, false)
 	if err != nil {
 		return Outline{}, err
 	}
@@ -352,7 +352,7 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	if input.Outline != nil {
 		outline = *input.Outline
 	} else {
-		catalog, catalogErr := service.templateCatalog(ctx, input.TemplateID, job.UserID)
+		catalog, catalogErr := service.templateCatalog(ctx, input.TemplateID, job.UserID, true)
 		if catalogErr != nil {
 			service.fail(ctx, jobID, catalogErr)
 			return
@@ -372,7 +372,7 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	if err := service.updateStatus(ctx, jobID, "GENERATING_CONTENT", 30); err != nil {
 		return
 	}
-	template, err := service.template(ctx, input.TemplateID, job.UserID)
+	template, err := service.template(ctx, input.TemplateID, job.UserID, true)
 	if err != nil {
 		service.fail(ctx, jobID, err)
 		return
@@ -582,7 +582,13 @@ type templateData struct {
 	Source     map[string]any
 }
 
-func (service *Service) template(ctx context.Context, id *string, userID string) (templateData, error) {
+// template loads a template's config. classify controls whether an
+// unclassified PPTX template's shapes get role-classified as a side
+// effect of this call (an LLM round-trip) -- true only from Process()
+// (the background worker), false from every request-scoped call site
+// (Start, GenerateOutline) so a classification LLM call never blocks an
+// HTTP response. See classifyTemplateRoles.
+func (service *Service) template(ctx context.Context, id *string, userID string, classify bool) (templateData, error) {
 	if id == nil || *id == "" {
 		return templateData{}, nil
 	}
@@ -597,7 +603,7 @@ func (service *Service) template(ctx context.Context, id *string, userID string)
 	fields := rawObject(raw)
 	htmlSlides := stringSlice(fields["htmlSlides"])
 	source, _ := fields["source"].(map[string]any)
-	if source["kind"] == "pptx" && needsRoleClassification(source) {
+	if classify && source["kind"] == "pptx" && needsRoleClassification(source) {
 		service.classifyTemplateRoles(ctx, *id, fields, source)
 	}
 	return templateData{
@@ -626,8 +632,8 @@ func (service *Service) classifyTemplateRoles(ctx context.Context, id string, fi
 	}
 }
 
-func (service *Service) templateCatalog(ctx context.Context, id *string, userID string) ([]string, error) {
-	template, err := service.template(ctx, id, userID)
+func (service *Service) templateCatalog(ctx context.Context, id *string, userID string, classify bool) ([]string, error) {
+	template, err := service.template(ctx, id, userID, classify)
 	if err != nil {
 		return nil, err
 	}

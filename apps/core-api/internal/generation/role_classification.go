@@ -57,13 +57,16 @@ const roleClassificationSystem = "You are a presentation template analyst. Retur
 // in source (all slides), and merges the result back in. Returns source
 // unchanged (no error) if there is nothing to classify.
 func ApplyRoleClassification(ctx context.Context, classifier RoleClassifier, source map[string]any) (map[string]any, error) {
+	if classifier == nil {
+		return source, nil
+	}
 	slides := buildRoleObjects(source)
 	if len(slides) == 0 {
 		return source, nil
 	}
 	roles, err := classifier.ClassifyTemplateRoles(ctx, RoleClassificationRequest{Slides: slides})
 	if err != nil {
-		return nil, err
+		return source, err
 	}
 	return mergeTemplateRoles(source, roles), nil
 }

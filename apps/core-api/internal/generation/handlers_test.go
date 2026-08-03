@@ -806,6 +806,86 @@ func TestProcessGroundsBulletLevelGuidanceInTheTemplatesRealLevels(t *testing.T)
 	}
 }
 
+// roleFieldLLM's SlideContent returns a fixed payload carrying values for
+// every one of the four generative roles (title comes from the outline's
+// item.Title, not from here), so a single Process() run can prove the
+// subtitle/date/kpi fields the model returns actually land in the
+// matching-role shapes' objectEdits -- the Task 4 -> Task 5 seam no other
+// test exercises together.
+type roleFieldLLM struct {
+	*maliciousHTMLLLM
+}
+
+func (llm *roleFieldLLM) SlideContent(_ context.Context, input SlideRequest) (json.RawMessage, error) {
+	llm.seenSlideRequest = input
+	return json.RawMessage(
+		`{"heading":"Q3 Report","subheading":"Board Review","date":"2026.08.03","kpiValue":"32%","bullets":[{"text":"Point"}]}`,
+	), nil
+}
+
+func TestProcessAssignsRoleBasedContentToMatchingShapes(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
+			`{"id":"title-shape","kind":"text","role":"title"},` +
+			`{"id":"subtitle-shape","kind":"text","role":"subtitle"},` +
+			`{"id":"date-shape","kind":"text","role":"date"},` +
+			`{"id":"kpi-shape","kind":"text","role":"kpi"},` +
+			`{"id":"body-shape","kind":"text","role":"body"}` +
+			`]}]}}`),
+	}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"AI security","slideCount":1,"language":"en",` +
+			`"templateId":"pptx-template"}`),
+	}
+	llm := &roleFieldLLM{maliciousHTMLLLM: &maliciousHTMLLLM{}}
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	want := []string{"date", "kpi", "subtitle"}
+	if !reflect.DeepEqual(llm.seenSlideRequest.RequestedRoles, want) {
+		t.Fatalf("RequestedRoles = %v, want %v", llm.seenSlideRequest.RequestedRoles, want)
+	}
+	if len(repo.slides) != 1 {
+		t.Fatalf("persisted slides = %d, want 1", len(repo.slides))
+	}
+	var content map[string]any
+	if err := json.Unmarshal(repo.slides[0].Content, &content); err != nil {
+		t.Fatal(err)
+	}
+	edits, ok := content["objectEdits"].([]any)
+	if !ok {
+		t.Fatalf("objectEdits missing or wrong type: %v", content["objectEdits"])
+	}
+	byID := map[string]map[string]any{}
+	for _, rawEdit := range edits {
+		edit, _ := rawEdit.(map[string]any)
+		id, _ := edit["objectId"].(string)
+		byID[id] = edit
+	}
+	if byID["title-shape"]["text"] != "Slide" {
+		t.Fatalf("title-shape edit = %v, want text=Slide (the outline's item.Title)", byID["title-shape"])
+	}
+	if byID["subtitle-shape"]["text"] != "Board Review" {
+		t.Fatalf("subtitle-shape edit = %v, want text=Board Review", byID["subtitle-shape"])
+	}
+	if byID["date-shape"]["text"] != "2026.08.03" {
+		t.Fatalf("date-shape edit = %v, want text=2026.08.03", byID["date-shape"])
+	}
+	if byID["kpi-shape"]["text"] != "32%" {
+		t.Fatalf("kpi-shape edit = %v, want text=32%%", byID["kpi-shape"])
+	}
+	if _, ok := byID["body-shape"]["paragraphs"]; !ok {
+		t.Fatalf("body-shape edit = %v, want a paragraphs edit", byID["body-shape"])
+	}
+}
+
 // classifyingLLM adds ClassifyTemplateRoles on top of maliciousHTMLLLM's
 // existing full LLM implementation, so it satisfies both LLM and (via the
 // service.llm.(RoleClassifier) type assertion in template()) RoleClassifier.
@@ -841,7 +921,7 @@ func TestTemplateClassifiesAndPersistsRolesOnFirstUseThenReusesThem(t *testing.T
 	service := NewService(repo, llm, new(recordingQueue))
 	templateID := "pptx-template"
 
-	template, err := service.template(context.Background(), &templateID, "user-1")
+	template, err := service.template(context.Background(), &templateID, "user-1", true)
 	if err != nil {
 		t.Fatalf("template() error = %v", err)
 	}
@@ -853,7 +933,7 @@ func TestTemplateClassifiesAndPersistsRolesOnFirstUseThenReusesThem(t *testing.T
 		t.Fatalf("objects roles = %v / %v, want title / body", objects[0]["role"], objects[1]["role"])
 	}
 
-	if _, err := service.template(context.Background(), &templateID, "user-1"); err != nil {
+	if _, err := service.template(context.Background(), &templateID, "user-1", true); err != nil {
 		t.Fatalf("template() second call error = %v", err)
 	}
 	if llm.classifyCalls != 1 {
@@ -874,7 +954,7 @@ func TestTemplateLeavesTemplateUnclassifiedWhenClassificationFails(t *testing.T)
 	service := NewService(repo, llm, new(recordingQueue))
 	templateID := "pptx-template"
 
-	template, err := service.template(context.Background(), &templateID, "user-1")
+	template, err := service.template(context.Background(), &templateID, "user-1", true)
 	if err != nil {
 		t.Fatalf("template() error = %v, want nil (classification failure must not fail template())", err)
 	}
