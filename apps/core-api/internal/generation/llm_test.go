@@ -877,3 +877,25 @@ func TestOpenAIClientCritiqueOutlineRetriesOnInvalidCorrection(t *testing.T) {
 		t.Fatal("expected changed = true once the retried response validates")
 	}
 }
+
+func TestSlidePromptUsesAvailableLevelsWhenPresent(t *testing.T) {
+	withLevels := slidePrompt(SlideRequest{Title: "T", Type: "CONTENT", AvailableLevels: []int{0, 2}})
+	if strings.Contains(withLevels, "level 0-4 for indentation") {
+		t.Fatal("slidePrompt() kept the generic 0-4 range when AvailableLevels was set")
+	}
+	if !strings.Contains(withLevels, "0, 2") {
+		t.Fatalf("slidePrompt() = %q, want it to mention the available levels 0, 2", withLevels)
+	}
+
+	withoutLevels := slidePrompt(SlideRequest{Title: "T", Type: "CONTENT"})
+	if !strings.Contains(withoutLevels, "level 0-4 for indentation") {
+		t.Fatal("slidePrompt() dropped the generic 0-4 fallback when AvailableLevels was empty")
+	}
+}
+
+func TestSlidePromptInstructsAgainstLiteralBulletCharacters(t *testing.T) {
+	prompt := slidePrompt(SlideRequest{Title: "T", Type: "CONTENT"})
+	if !strings.Contains(prompt, "bullet characters") {
+		t.Fatal("slidePrompt() does not instruct the model to avoid literal bullet characters")
+	}
+}

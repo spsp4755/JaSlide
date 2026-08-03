@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -777,10 +778,19 @@ func slidePrompt(input SlideRequest) string {
 	if strings.TrimSpace(input.SkillGuidance) != "" {
 		guidance = "\n\n[Writing Skill Guide]\n" + input.SkillGuidance
 	}
+	levelGuidance := "level 0-4 for indentation"
+	if len(input.AvailableLevels) > 0 {
+		parts := make([]string, len(input.AvailableLevels))
+		for i, level := range input.AvailableLevels {
+			parts[i] = strconv.Itoa(level)
+		}
+		levelGuidance = fmt.Sprintf("level — only these values are usable in this template: %s", strings.Join(parts, ", "))
+	}
 	return fmt.Sprintf(
 		"Create concise slide content in %s. Title: %s. Type: %s. Key points: %s. "+
 			"Return JSON only with heading, optional subheading/body, 3-5 bullets "+
-			"(each an object with text and level 0-4 for indentation), "+
+			"(each an object with text and %s), "+
+			"Do not write bullet characters (-, •) as literal text in the bullet text — the template already draws them. "+
 			"chart for CHART as {\"labels\":[\"...\"],\"values\":[0]}, "+
 			"table for TABLE as {\"headers\":[\"...\"],\"rows\":[[\"...\"]]}, "+
 			"columns for TWO_COLUMN as exactly two {\"header\":\"...\",\"bullets\":[{\"text\":\"...\",\"level\":0}]} objects, "+
@@ -788,7 +798,7 @@ func slidePrompt(input SlideRequest) string {
 			"process for PROCESS as {\"steps\":[{\"label\":\"...\",\"description\":\"...\"}]} with 2-6 steps, "+
 			"comparison for COMPARISON as {\"left\":{\"title\":\"...\",\"bullets\":[\"...\"]},\"right\":{\"title\":\"...\",\"bullets\":[\"...\"]}}, "+
 			"and metrics for KPI as {\"metrics\":[{\"value\":\"...\",\"label\":\"...\"}]} with 2-6 cards.%s%s",
-		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), dateGuidance(), guidance,
+		input.Language, input.Title, input.Type, strings.Join(input.KeyPoints, "; "), levelGuidance, dateGuidance(), guidance,
 	)
 }
 

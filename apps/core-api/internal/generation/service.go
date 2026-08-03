@@ -145,6 +145,10 @@ type SlideRequest struct {
 	// skills package), which only helps if the per-slide content call that
 	// actually produces bullet levels sees it too.
 	SkillGuidance string
+	// AvailableLevels is the sorted set of indentation levels this slide's
+	// destination template objects actually support — empty for non-PPTX
+	// slides, where slidePrompt falls back to a generic 0-4 range.
+	AvailableLevels []int
 }
 
 type CritiqueRequest struct {
@@ -371,9 +375,14 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 	capable := template.capableIndexes()
 	var slides []Slide
 	for index, item := range outline.Slides {
+		templateIndex := chooseTemplateIndex(item.TemplateIndex, index, capable)
+		var levels []int
+		if template.PPTX && templateIndex >= 0 {
+			levels = availableLevels(template.objects(templateIndex))
+		}
 		rawContent, contentErr := service.llm.SlideContent(ctx, SlideRequest{
 			Title: item.Title, Type: item.Type, Language: input.Language, KeyPoints: item.KeyPoints,
-			SkillGuidance: input.SkillGuidance,
+			SkillGuidance: input.SkillGuidance, AvailableLevels: levels,
 		})
 		if contentErr != nil {
 			service.fail(ctx, jobID, contentErr)
@@ -387,7 +396,6 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 			}
 		}
 		fields := rawObject(rawContent)
-		templateIndex := chooseTemplateIndex(item.TemplateIndex, index, capable)
 		if templateIndex >= 0 {
 			fields["templateIndex"] = templateIndex
 		}

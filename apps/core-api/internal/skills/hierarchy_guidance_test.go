@@ -90,3 +90,27 @@ func TestBulletHierarchyExampleAlsoFindsADeepPlainTextBox(t *testing.T) {
 		t.Fatalf("example = %q, want it to describe the text box's own 2-level structure", example)
 	}
 }
+
+func TestBulletHierarchyExampleTellsTheModelNotToReuseTheExampleTextVerbatim(t *testing.T) {
+	config := map[string]any{
+		"source": map[string]any{
+			"slides": []any{
+				map[string]any{
+					"objects": []any{
+						map[string]any{
+							"kind": "text",
+							"paragraphs": []any{
+								map[string]any{"text": "Top", "level": float64(0)},
+								map[string]any{"text": "Nested", "level": float64(1)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	example := bulletHierarchyExample(config)
+	if !strings.Contains(example, "그대로 재사용하지") {
+		t.Fatalf("bulletHierarchyExample() = %q, want it to say the examples are not for verbatim reuse", example)
+	}
+}
