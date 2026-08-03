@@ -90,11 +90,11 @@ func TestMergeTemplateRolesAppliesReturnedRolesAndDefaultsRestToStatic(t *testin
 func TestOpenAIClientClassifyTemplateRolesRejectsInvalidAndKindMismatchedRoles(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		raw, _ := json.Marshal(map[string]any{"roles": map[string]string{
-			"shape-1": "title",         // valid, text
-			"shape-2": "kpi",           // invalid: table can't be kpi
-			"shape-3": "not-a-role",    // invalid: not in the closed vocabulary
-			"shape-4": "static",        // valid, table
-			"unknown-shape": "title",   // invalid: id not in the request
+			"shape-1":       "title",      // valid, text
+			"shape-2":       "kpi",        // invalid: table can't be kpi
+			"shape-3":       "not-a-role", // invalid: not in the closed vocabulary
+			"shape-4":       "static",     // valid, table
+			"unknown-shape": "title",      // invalid: id not in the request
 		}})
 		_ = json.NewEncoder(writer).Encode(map[string]any{
 			"choices": []any{map[string]any{"message": map[string]string{"content": string(raw)}}},
