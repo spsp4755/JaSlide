@@ -61,6 +61,11 @@ func (store *SQLStore) VisibleTemplateConfig(ctx context.Context, id, userID str
 	return raw, err
 }
 
+func (store *SQLStore) UpdateTemplateConfig(ctx context.Context, id string, config json.RawMessage) error {
+	_, err := store.db.Pool().Exec(ctx, `UPDATE "Template" SET "config"=$2,"updatedAt"=NOW() WHERE "id"=$1`, id, config)
+	return err
+}
+
 func (store *SQLStore) CreateGeneration(ctx context.Context, presentation Presentation, job Job) error {
 	tx, err := store.db.Pool().Begin(ctx)
 	if err != nil {

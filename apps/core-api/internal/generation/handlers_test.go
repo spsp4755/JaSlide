@@ -68,6 +68,16 @@ func (repo *memoryRepository) VisibleTemplateConfig(_ context.Context, id, userI
 	return nil, errors.New("not found")
 }
 
+func (repo *memoryRepository) UpdateTemplateConfig(_ context.Context, id string, config json.RawMessage) error {
+	template, ok := repo.templates[id]
+	if !ok {
+		return errors.New("not found")
+	}
+	template.config = config
+	repo.templates[id] = template
+	return nil
+}
+
 func (repo *memoryRepository) CreateGeneration(_ context.Context, presentation Presentation, job Job) error {
 	repo.presentations[presentation.ID] = presentation
 	repo.jobs[job.ID] = job
@@ -793,6 +803,83 @@ func TestProcessGroundsBulletLevelGuidanceInTheTemplatesRealLevels(t *testing.T)
 	want := []int{0, 2}
 	if !reflect.DeepEqual(llm.seenSlideRequest.AvailableLevels, want) {
 		t.Fatalf("SlideContent's AvailableLevels = %v, want %v", llm.seenSlideRequest.AvailableLevels, want)
+	}
+}
+
+// classifyingLLM adds ClassifyTemplateRoles on top of maliciousHTMLLLM's
+// existing full LLM implementation, so it satisfies both LLM and (via the
+// service.llm.(RoleClassifier) type assertion in template()) RoleClassifier.
+type classifyingLLM struct {
+	*maliciousHTMLLLM
+	classifyCalls int
+	roles         map[string]string
+	classifyErr   error
+}
+
+func (llm *classifyingLLM) ClassifyTemplateRoles(_ context.Context, _ RoleClassificationRequest) (map[string]string, error) {
+	llm.classifyCalls++
+	if llm.classifyErr != nil {
+		return nil, llm.classifyErr
+	}
+	return llm.roles, nil
+}
+
+func TestTemplateClassifiesAndPersistsRolesOnFirstUseThenReusesThem(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
+			`{"id":"shape-1","kind":"text","fontSize":32,"text":"Heading"},` +
+			`{"id":"shape-2","kind":"text","fontSize":14,"text":"Body"}` +
+			`]}]}}`),
+	}
+	llm := &classifyingLLM{
+		maliciousHTMLLLM: &maliciousHTMLLLM{},
+		roles:            map[string]string{"shape-1": "title", "shape-2": "body"},
+	}
+	service := NewService(repo, llm, new(recordingQueue))
+	templateID := "pptx-template"
+
+	template, err := service.template(context.Background(), &templateID, "user-1")
+	if err != nil {
+		t.Fatalf("template() error = %v", err)
+	}
+	if llm.classifyCalls != 1 {
+		t.Fatalf("classifyCalls = %d, want 1", llm.classifyCalls)
+	}
+	objects := template.objects(0)
+	if objects[0]["role"] != "title" || objects[1]["role"] != "body" {
+		t.Fatalf("objects roles = %v / %v, want title / body", objects[0]["role"], objects[1]["role"])
+	}
+
+	if _, err := service.template(context.Background(), &templateID, "user-1"); err != nil {
+		t.Fatalf("template() second call error = %v", err)
+	}
+	if llm.classifyCalls != 1 {
+		t.Fatalf("classifyCalls after second template() call = %d, want still 1 (persisted, not re-classified)", llm.classifyCalls)
+	}
+}
+
+func TestTemplateLeavesTemplateUnclassifiedWhenClassificationFails(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
+			`{"id":"shape-1","kind":"text","fontSize":32,"text":"Heading"}` +
+			`]}]}}`),
+	}
+	llm := &classifyingLLM{maliciousHTMLLLM: &maliciousHTMLLLM{}, classifyErr: errors.New("LLM unavailable")}
+	service := NewService(repo, llm, new(recordingQueue))
+	templateID := "pptx-template"
+
+	template, err := service.template(context.Background(), &templateID, "user-1")
+	if err != nil {
+		t.Fatalf("template() error = %v, want nil (classification failure must not fail template())", err)
+	}
+	if _, hasRole := template.objects(0)[0]["role"]; hasRole {
+		t.Fatal("objects[0] has a role after a failed classification, want none")
 	}
 }
 

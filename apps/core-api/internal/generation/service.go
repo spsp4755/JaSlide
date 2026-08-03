@@ -103,6 +103,7 @@ type StartResult struct {
 type Repository interface {
 	VisibleSkill(context.Context, string, string, *string) (Skill, error)
 	VisibleTemplateConfig(context.Context, string, string) (json.RawMessage, error)
+	UpdateTemplateConfig(context.Context, string, json.RawMessage) error
 	CreateGeneration(context.Context, Presentation, Job) error
 	GenerationJob(context.Context, string, string) (Job, error)
 	SetGenerationStatus(context.Context, string, string, int, json.RawMessage) (bool, error)
@@ -583,9 +584,33 @@ func (service *Service) template(ctx context.Context, id *string, userID string)
 	fields := rawObject(raw)
 	htmlSlides := stringSlice(fields["htmlSlides"])
 	source, _ := fields["source"].(map[string]any)
+	if source["kind"] == "pptx" && needsRoleClassification(source) {
+		service.classifyTemplateRoles(ctx, *id, fields, source)
+	}
 	return templateData{
 		PPTX: source["kind"] == "pptx", HTMLSlides: htmlSlides, Source: source,
 	}, nil
+}
+
+// classifyTemplateRoles runs role classification once for a PPTX template
+// that has never been classified (needsRoleClassification), then persists
+// the result so future calls skip straight past that check. A classifier
+// unavailable on service.llm, or a classification error, is a silent no-op
+// -- pptxObjectEdits' font-rank fallback (Task 5) covers a template that
+// never gets classified.
+func (service *Service) classifyTemplateRoles(ctx context.Context, id string, fields, source map[string]any) {
+	classifier, ok := service.llm.(RoleClassifier)
+	if !ok {
+		return
+	}
+	classified, err := ApplyRoleClassification(ctx, classifier, source)
+	if err != nil {
+		return
+	}
+	fields["source"] = classified
+	if encoded, err := json.Marshal(fields); err == nil {
+		_ = service.repo.UpdateTemplateConfig(ctx, id, encoded)
+	}
 }
 
 func (service *Service) templateCatalog(ctx context.Context, id *string, userID string) ([]string, error) {
