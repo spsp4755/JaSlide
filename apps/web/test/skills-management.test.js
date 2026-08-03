@@ -8,7 +8,7 @@ const webRoot = path.join(__dirname, '..');
 test('the API client exposes update/delete/previewHtml for a single skill', () => {
     const api = fs.readFileSync(path.join(webRoot, 'src', 'lib', 'api.ts'), 'utf8');
 
-    assert.match(api, /update:\s*\(id:\s*string,\s*data:\s*\{\s*name\?:\s*string;\s*scope\?:\s*'private'\s*\|\s*'organization'\s*\|\s*'public';?\s*\}\)\s*=>\s*\n?\s*api\.patch\(`\/skills\/\$\{id\}`/);
+    assert.match(api, /update:\s*\(id:\s*string,\s*data:\s*\{\s*name\?:\s*string;\s*scope\?:\s*'private'\s*\|\s*'organization'\s*\|\s*'public';?\s*\}\)\s*=>\s*\n?\s*api\.patch\(`\/skills\/\$\{id\}`,\s*data\)/);
     assert.match(api, /delete:\s*\(id:\s*string\)\s*=>\s*api\.delete\(`\/skills\/\$\{id\}`\)/);
     assert.match(api, /previewHtml:\s*\(id:\s*string\)\s*=>\s*api\.get\(`\/skills\/\$\{id\}\/preview-html`\)/);
 });
