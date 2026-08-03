@@ -38,6 +38,7 @@ func NewHandlers(store *db.Store, renderer *renderer.Client, root string, authSe
 	router.Post("/", handler.create)
 	router.Delete("/", handler.deleteMany)
 	router.Patch("/{id}", handler.update)
+	router.Delete("/{id}", handler.delete)
 	router.Post("/import-pptx", handler.importPPTX)
 	return router
 }
@@ -193,6 +194,45 @@ func (handler *handlers) update(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	writeRaw(writer, raw, http.StatusOK, nil)
+}
+
+func (handler *handlers) delete(writer http.ResponseWriter, request *http.Request) {
+	user, _ := auth.PrincipalFromContext(request.Context())
+	id := chi.URLParam(request, "id")
+	ctx := request.Context()
+
+	tx, err := handler.db.Pool().Begin(ctx)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var templateID *string
+	if err := tx.QueryRow(ctx,
+		`DELETE FROM "PresentationSkill" WHERE "id"=$1 AND "userId"=$2 RETURNING "templateId"`,
+		id, user.ID,
+	).Scan(&templateID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(writer, http.StatusNotFound, "Skill not found")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if templateID != nil {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM "Template" WHERE "id"=$1 AND "userId"=$2`, *templateID, user.ID,
+		); err != nil {
+			writeError(writer, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		writeError(writer, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]bool{"success": true})
 }
 
 func (handler *handlers) importPPTX(writer http.ResponseWriter, request *http.Request) {

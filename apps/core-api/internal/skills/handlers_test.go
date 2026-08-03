@@ -216,3 +216,54 @@ func requestJSON(t *testing.T, client *http.Client, token, method, target, body 
 	}
 	return value
 }
+
+func TestDeleteRemovesSkillAndCascadesToTemplateLeavingPresentationsIntact(t *testing.T) {
+	store, authService, sessions := newTestStore(t)
+	ctx := context.Background()
+	suffix := fmt.Sprint(time.Now().UnixNano())
+
+	ownerID := createTestUser(t, ctx, store, "del-owner-"+suffix, "del-owner-"+suffix+"@example.com", nil)
+	otherID := createTestUser(t, ctx, store, "del-other-"+suffix, "del-other-"+suffix+"@example.com", nil)
+	templateID, skillID := createTestSkillWithTemplate(t, ctx, store, "del-tpl-"+suffix, "del-skill-"+suffix, ownerID, nil)
+
+	presentationID := "del-pres-" + suffix
+	if _, err := store.Pool().Exec(ctx, `
+		INSERT INTO "Presentation" (id,title,"userId","templateId","sourceType","updatedAt")
+		VALUES ($1,'Uses the template',$2,$3,'TEXT',NOW())`,
+		presentationID, ownerID, templateID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = store.Pool().Exec(context.Background(), `DELETE FROM "Presentation" WHERE id=$1`, presentationID)
+	})
+
+	router := chi.NewRouter()
+	router.Mount("/api/skills", NewHandlers(store, nil, "", authService))
+	server := httptest.NewServer(router)
+	defer server.Close()
+	client := server.Client()
+
+	otherToken := issueTestToken(t, sessions, otherID, "del-other-"+suffix+"@example.com")
+	ownerToken := issueTestToken(t, sessions, ownerID, "del-owner-"+suffix+"@example.com")
+
+	requestJSON(t, client, otherToken, http.MethodDelete, server.URL+"/api/skills/"+skillID, "", http.StatusNotFound)
+	requestJSON(t, client, ownerToken, http.MethodDelete, server.URL+"/api/skills/"+skillID, "", http.StatusOK)
+
+	var skillCount, templateCount int
+	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM "PresentationSkill" WHERE id=$1`, skillID).Scan(&skillCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM "Template" WHERE id=$1`, templateID).Scan(&templateCount); err != nil {
+		t.Fatal(err)
+	}
+	if skillCount != 0 || templateCount != 0 {
+		t.Fatalf("after delete: skillCount=%d templateCount=%d, want 0, 0", skillCount, templateCount)
+	}
+	var presentationTemplateID *string
+	if err := store.Pool().QueryRow(ctx, `SELECT "templateId" FROM "Presentation" WHERE id=$1`, presentationID).Scan(&presentationTemplateID); err != nil {
+		t.Fatal(err)
+	}
+	if presentationTemplateID != nil {
+		t.Fatalf("presentation templateId after delete = %v, want nil (SET NULL)", *presentationTemplateID)
+	}
+}
