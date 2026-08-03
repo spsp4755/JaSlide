@@ -908,6 +908,60 @@ def test_native_edit_falls_back_to_nearest_level_when_the_template_lacks_that_de
     assert paragraph.runs[0].font.size == Pt(22)
 
 
+def test_native_edit_uses_one_consistent_prototype_per_level_even_when_the_template_has_several():
+    # A real template's first paragraph in a list often carries different
+    # formatting from the rest (e.g. a distinct "header" bullet/indent)
+    # even though python-pptx reports the same numeric level for every one
+    # of them -- confirmed against a real production template where the
+    # first level-0 paragraph used marL=88900/buChar="•" and every
+    # other level-0 paragraph used marL=481013/buChar="-". Cycling through
+    # every distinctly-styled candidate at a level (round-robin by call
+    # order) made generated lines at the SAME level render with DIFFERENT
+    # bullets/indentation depending on how many lines happened to be
+    # generated and in what order -- this pins that every line at a level
+    # clones the SAME (first-found) prototype, so a generated list looks
+    # visually consistent within one level.
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(3))
+    first = text.text_frame.paragraphs[0]
+    first.text = "Header style"
+    first_pPr = first._p.get_or_add_pPr()
+    first_pPr.set("marL", "88900")
+    first_bullet = OxmlElement("a:buChar")
+    first_bullet.set("char", "•")
+    first_pPr.append(first_bullet)
+
+    second = text.text_frame.add_paragraph()
+    second.text = "Item style"
+    second.level = 0
+    second_pPr = second._p.get_or_add_pPr()
+    second_pPr.set("marL", "481013")
+    second_bullet = OxmlElement("a:buChar")
+    second_bullet.set("char", "-")
+    second_pPr.append(second_bullet)
+
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {
+        "slide": 0, "objectId": str(text.shape_id),
+        "paragraphs": [
+            {"text": "Line one", "level": 0},
+            {"text": "Line two", "level": 0},
+            {"text": "Line three", "level": 0},
+        ],
+    }
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    paragraphs = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs
+    assert [p.text for p in paragraphs] == ["Line one", "Line two", "Line three"]
+    bullets = [p._p.find(qn("a:pPr")).find(qn("a:buChar")).get("char") for p in paragraphs]
+    margins = [p._p.find(qn("a:pPr")).get("marL") for p in paragraphs]
+    assert bullets == ["•", "•", "•"], f"expected every level-0 line to share one bullet style, got {bullets}"
+    assert margins == ["88900", "88900", "88900"], f"expected every level-0 line to share one indent, got {margins}"
+
+
 def test_native_edit_strips_a_literal_bullet_character_the_model_wrote_by_mistake():
     source = Presentation()
     slide = source.slides.add_slide(source.slide_layouts[6])

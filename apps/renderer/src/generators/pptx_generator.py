@@ -355,11 +355,21 @@ class PPTXGenerator:
         text_element.text = text
 
     def _write_paragraphs(self, frame: Any, paragraphs: list) -> None:
-        prototypes_by_level: dict[int, list] = {}
+        # A real template's first paragraph in a list frequently carries
+        # different formatting from the rest (e.g. a distinct "header"
+        # bullet/indent) even though python-pptx reports the same numeric
+        # level for all of them. Keeping only the FIRST prototype found per
+        # level -- instead of collecting every distinctly-styled paragraph
+        # and cycling through them by call order -- guarantees every
+        # generated line at a given level renders identically, matching
+        # what "level" is supposed to mean visually.
+        prototype_by_level: dict[int, Any] = {}
         for paragraph in frame.paragraphs:
             if not paragraph.runs:
                 continue  # a run-less prototype has nowhere to put the generated text
-            prototypes_by_level.setdefault(paragraph.level or 0, []).append(copy.deepcopy(paragraph._p))
+            level = paragraph.level or 0
+            if level not in prototype_by_level:
+                prototype_by_level[level] = copy.deepcopy(paragraph._p)
 
         # frame.clear() special-cases the first paragraph (keeps its <a:pPr>,
         # only strips runs) instead of removing it — remove every existing
@@ -367,18 +377,13 @@ class PPTXGenerator:
         for existing in list(frame._txBody.p_lst):
             frame._txBody.remove(existing)
 
-        used_by_level: dict[int, int] = {}
-
         def pick_prototype(level: int):
-            if not prototypes_by_level:
+            if not prototype_by_level:
                 return None
-            candidates = prototypes_by_level.get(level)
-            if not candidates:
-                nearest = min(prototypes_by_level, key=lambda existing_level: abs(existing_level - level))
-                candidates = prototypes_by_level[nearest]
-            index = used_by_level.get(level, 0)
-            used_by_level[level] = index + 1
-            return candidates[min(index, len(candidates) - 1)]
+            if level in prototype_by_level:
+                return prototype_by_level[level]
+            nearest = min(prototype_by_level, key=lambda existing_level: abs(existing_level - level))
+            return prototype_by_level[nearest]
 
         for item in paragraphs:
             if not isinstance(item, dict):
