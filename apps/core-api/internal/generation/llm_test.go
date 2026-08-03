@@ -624,6 +624,65 @@ func TestValidKPIRejectsAMetricMissingAValue(t *testing.T) {
 	}
 }
 
+// Reasoning-style local models (e.g. Qwen "thinking" builds, DeepSeek-R1)
+// stream their chain-of-thought into a separate "reasoning_content" field
+// and only write the real answer into "content" once reasoning is done. If
+// max_tokens runs out mid-reasoning, "content" stays empty even though the
+// model genuinely tried -- this must be distinguishable from a model that
+// returned nothing at all, so the retry prompt (validated() appends the
+// error text to the next attempt) can tell the model to stop reasoning and
+// answer directly instead of just repeating the same failure.
+func TestOpenAIClientChatDistinguishesReasoningOnlyResponseFromEmptyContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"message": map[string]string{
+					"content":           "",
+					"reasoning_content": "Thinking about the answer...",
+				},
+				"finish_reason": "length",
+			}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+
+	_, err := llm.Critique(context.Background(), CritiqueRequest{
+		Content: json.RawMessage(`{}`), Title: "T", KeyPoints: []string{"a"},
+	})
+	if err == nil {
+		t.Fatal("expected an error when the model only produced reasoning content")
+	}
+	if !strings.Contains(err.Error(), "reasoning") {
+		t.Fatalf("error = %q, want it to mention reasoning so the retry prompt can react", err.Error())
+	}
+}
+
+func TestOpenAIClientChatReturnsGenericNoContentErrorWhenThereIsNoReasoningEither(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"message": map[string]string{"content": ""},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	llm := NewOpenAIClient(staticModelSource{model: Model{
+		ID: "model-1", ModelID: "local-model", Endpoint: server.URL, MaxTokens: 2048, IsActive: true,
+	}}, server.Client(), EnvironmentModel{})
+
+	_, err := llm.Critique(context.Background(), CritiqueRequest{
+		Content: json.RawMessage(`{}`), Title: "T", KeyPoints: []string{"a"},
+	})
+	if err == nil || strings.Contains(err.Error(), "reasoning") {
+		t.Fatalf("error = %v, want the generic no-content error when there's no reasoning_content", err)
+	}
+}
+
 func TestOpenAIClientCritiqueApprovesWellFormedContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		raw, _ := json.Marshal(map[string]any{"approved": true})

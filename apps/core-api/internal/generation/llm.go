@@ -276,15 +276,33 @@ func (client *OpenAIClient) chat(ctx context.Context, system, prompt string) (js
 	var response struct {
 		Choices []struct {
 			Message struct {
-				Content string `json:"content"`
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content"`
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	if json.Unmarshal(raw, &response) != nil || len(response.Choices) == 0 ||
-		strings.TrimSpace(response.Choices[0].Message.Content) == "" {
+	if json.Unmarshal(raw, &response) != nil || len(response.Choices) == 0 {
 		return nil, errors.New("LLM returned no content")
 	}
-	return json.RawMessage(response.Choices[0].Message.Content), nil
+	message := response.Choices[0].Message
+	if strings.TrimSpace(message.Content) == "" {
+		// Reasoning-style models (e.g. Qwen "thinking" builds, DeepSeek-R1)
+		// stream their chain-of-thought into "reasoning_content" and only
+		// write the real answer into "content" once done -- if max_tokens
+		// runs out mid-reasoning, "content" stays empty even though the
+		// model was genuinely trying. Surface a distinct, actionable error:
+		// validated()'s retry appends this message to the next attempt's
+		// prompt, so the model is told to stop reasoning and answer
+		// directly instead of repeating the same failure.
+		if strings.TrimSpace(message.ReasoningContent) != "" {
+			return nil, errors.New(
+				"LLM used its full token budget on internal step-by-step reasoning and produced no answer -- " +
+					"answer directly without lengthy reasoning and put the JSON result in your final response",
+			)
+		}
+		return nil, errors.New("LLM returned no content")
+	}
+	return json.RawMessage(message.Content), nil
 }
 
 func (client *OpenAIClient) request(
