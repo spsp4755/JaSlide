@@ -41,3 +41,13 @@ test('a visibility badge cycles scope and a filter narrows by scope', () => {
     assert.match(gallery, /scopeFilter/);
     assert.match(gallery, /cycleScope/);
 });
+
+test('clicking a card with a linked template opens a scaled preview iframe', () => {
+    const gallery = fs.readFileSync(path.join(webRoot, 'src', 'components', 'skills', 'skills-gallery.tsx'), 'utf8');
+
+    assert.match(gallery, /skillsApi\.previewHtml\(skill\.id\)/);
+    assert.match(gallery, /skill\.templateId && openPreview\(skill\)/);
+    assert.match(gallery, /srcDoc={previewHtml/);
+    assert.match(gallery, /sandbox=""/);
+    assert.match(gallery, /ResizeObserver/);
+});
