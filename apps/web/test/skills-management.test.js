@@ -31,3 +31,13 @@ test('each skill card has a menu with rename and delete, backed by modals', () =
     assert.match(gallery, /skillsApi\.delete\(skill\.id\)/);
     assert.match(gallery, /setSkills\(\(current\) => current\.filter\(\(item\) => item\.id !== (deletingSkill\.id|skill\.id)\)\)/);
 });
+
+test('a visibility badge cycles scope and a filter narrows by scope', () => {
+    const gallery = fs.readFileSync(path.join(webRoot, 'src', 'components', 'skills', 'skills-gallery.tsx'), 'utf8');
+
+    assert.match(gallery, /const scopeOf = \(skill: Skill\)/);
+    assert.match(gallery, /const nextScope = \(/);
+    assert.match(gallery, /usersApi\.getProfile\(\)/);
+    assert.match(gallery, /scopeFilter/);
+    assert.match(gallery, /cycleScope/);
+});

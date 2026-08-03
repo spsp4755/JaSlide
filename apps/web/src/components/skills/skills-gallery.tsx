@@ -3,7 +3,7 @@
 import Link from '@/lib/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FileUp, LayoutTemplate, MoreVertical, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react';
-import { skillsApi } from '@/lib/api';
+import { skillsApi, usersApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
 type Skill = {
@@ -18,6 +18,23 @@ type Skill = {
     isPublic: boolean;
     organizationId: string | null;
     templateId: string | null;
+};
+
+type Scope = 'private' | 'organization' | 'public';
+
+const scopeOf = (skill: Skill): Scope => (skill.isPublic ? 'public' : skill.organizationId ? 'organization' : 'private');
+
+const nextScope = (current: Scope, hasOrganization: boolean): Scope => {
+    if (current === 'private') return hasOrganization ? 'organization' : 'public';
+    if (current === 'organization') return 'public';
+    return 'private';
+};
+
+const scopeLabel: Record<Scope, string> = { private: '비공개', organization: '조직공개', public: '전체공개' };
+const scopeBadgeClass: Record<Scope, string> = {
+    private: 'bg-secondary text-muted-foreground',
+    organization: 'bg-blue-100 text-blue-700',
+    public: 'bg-green-100 text-green-700',
 };
 
 export function SkillsGallery({ preview = false }: { preview?: boolean }) {
@@ -35,6 +52,8 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
     const [renaming, setRenaming] = useState(false);
     const [deletingSkill, setDeletingSkill] = useState<Skill | null>(null);
     const [deletingOne, setDeletingOne] = useState(false);
+    const [userOrganizationId, setUserOrganizationId] = useState<string | null>(null);
+    const [scopeFilter, setScopeFilter] = useState<'all' | Scope>('all');
     const pptxInputRef = useRef<HTMLInputElement>(null);
     const [form, setForm] = useState({
         name: '', category: '기업 전략', audience: '의사결정자', tone: '명확하고 단정하게',
@@ -49,10 +68,21 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
             .finally(() => setLoading(false));
     }, [preview]);
 
+    useEffect(() => {
+        if (preview) return;
+        usersApi.getProfile()
+            .then((response) => setUserOrganizationId(response.data?.organizationId ?? null))
+            .catch(() => setUserOrganizationId(null));
+    }, [preview]);
+
     const displayedSkills = useMemo(() => {
         const needle = query.trim().toLowerCase();
-        return needle ? skills.filter((skill) => `${skill.name} ${skill.description || ''} ${skill.category} ${skill.purpose}`.toLowerCase().includes(needle)) : skills;
-    }, [skills, query]);
+        return skills.filter((skill) => {
+            if (scopeFilter !== 'all' && scopeOf(skill) !== scopeFilter) return false;
+            if (!needle) return true;
+            return `${skill.name} ${skill.description || ''} ${skill.category} ${skill.purpose}`.toLowerCase().includes(needle);
+        });
+    }, [skills, query, scopeFilter]);
 
     const deleteSelected = async () => {
         if (!selectedIds.length || !window.confirm(`선택한 ${selectedIds.length}개 Skill을 삭제할까요?`)) return;
@@ -95,6 +125,16 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
             toast({ title: '삭제 실패', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
         } finally {
             setDeletingOne(false);
+        }
+    };
+
+    const cycleScope = async (skill: Skill) => {
+        const scope = nextScope(scopeOf(skill), Boolean(userOrganizationId));
+        try {
+            const response = await skillsApi.update(skill.id, { scope });
+            setSkills((current) => current.map((item) => (item.id === skill.id ? response.data : item)));
+        } catch (error: any) {
+            toast({ title: '공개 범위 변경 실패', description: error.response?.data?.message || '다시 시도해주세요.', variant: 'destructive' });
         }
     };
 
@@ -158,6 +198,12 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
 
                 {!preview && <div className="mb-7 flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
                     <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Skill 검색" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground sm:max-w-sm" />
+                    <select value={scopeFilter} onChange={(event) => setScopeFilter(event.target.value as 'all' | Scope)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                        <option value="all">전체 범위</option>
+                        <option value="private">비공개</option>
+                        <option value="organization">조직공개</option>
+                        <option value="public">전체공개</option>
+                    </select>
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={displayedSkills.length > 0 && displayedSkills.every((skill) => selectedIds.includes(skill.id))} onChange={(event) => setSelectedIds(event.target.checked ? displayedSkills.map((skill) => skill.id) : [])} /> 현재 목록 전체 선택</label>
                     <button type="button" disabled={!selectedIds.length || deleting} onClick={deleteSelected} className="inline-flex items-center justify-center gap-2 rounded-lg border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive disabled:opacity-40 sm:ml-auto"><Trash2 className="h-4 w-4" /> 선택 삭제{selectedIds.length ? ` (${selectedIds.length})` : ''}</button>
                 </div>}
@@ -189,7 +235,7 @@ export function SkillsGallery({ preview = false }: { preview?: boolean }) {
                                     </div>}
                                 </div>}
                                 <div className="h-32 bg-[linear-gradient(135deg,#1d1d1b_0%,#393731_50%,#d8c8aa_50%,#f7f1e5_100%)] p-4"><div className="flex h-full flex-col justify-between rounded-lg border border-white/30 bg-card/10 p-3 text-white backdrop-blur"><span className="text-[10px] uppercase tracking-[0.18em]">TaeSlide Skill</span><strong className="font-display text-xl leading-tight">{skill.purpose}</strong></div></div>
-                                <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link>}</div>
+                                <div className="p-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground">{skill.category}</span><button type="button" onClick={() => cycleScope(skill)} title="클릭해서 공개 범위 변경" className={`ml-2 rounded-full px-2 py-1 text-xs ${scopeBadgeClass[scopeOf(skill)]}`}>{scopeLabel[scopeOf(skill)]}</button><h3 className="mt-3 font-bold">{skill.name}</h3><p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{skill.description || `${skill.audience}을 위한 ${skill.tone} 발표 가이드입니다.`}</p><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{skill.audience}</span><span>{skill.recommendedSlideCount}장 추천</span></div>{preview ? <Link href="/login" className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">로그인 후 사용</Link> : <Link href={`/dashboard?skillId=${skill.id}`} className="mt-4 inline-flex text-sm font-medium underline underline-offset-4">이 Skill로 만들기</Link>}</div>
                             </article>)}
                             {openMenuId && <button type="button" className="fixed inset-0 z-[5] cursor-default" aria-label="메뉴 닫기" onClick={() => setOpenMenuId(null)} />}
                         </div>
