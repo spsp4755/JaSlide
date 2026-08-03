@@ -315,27 +315,113 @@ class PPTXGenerator:
         except AttributeError:
             return None
 
+    _BULLET_MARKER_CHARS = "-–—•·∙‣▪▫◦*"
+
+    @classmethod
+    def _strip_leading_bullet_marker(cls, text: str) -> str:
+        """Drop a literal bullet character the model wrote at the start of a
+        line — the template's own a:buChar already draws one; writing both
+        doubles it up."""
+        stripped = text.lstrip(" \t")
+        indent = text[: len(text) - len(stripped)]
+        marker_end = 0
+        while marker_end < len(stripped) and stripped[marker_end] in cls._BULLET_MARKER_CHARS:
+            marker_end += 1
+        if marker_end == 0:
+            return text
+        rest = stripped[marker_end:]
+        if rest and not rest[0] in " \t":
+            return text  # not actually a marker followed by a space — e.g. "1-2" or a real hyphenated word
+        return indent + rest.lstrip(" \t")
+
+    @staticmethod
+    def _run_has_explicit_style(run_item: Optional[dict]) -> bool:
+        if not run_item:
+            return False
+        return any(run_item.get(key) not in (None, "") for key in ("bold", "italic", "underline", "color", "fontSize", "fontFamily"))
+
+    @staticmethod
+    def _set_first_run_text(paragraph_element, text: str) -> None:
+        runs = paragraph_element.findall(qn("a:r"))
+        for extra in runs[1:]:
+            paragraph_element.remove(extra)
+        if not runs:
+            return
+        text_element = runs[0].find(qn("a:t"))
+        if text_element is None:
+            return
+        text_element.text = text
+
     def _write_paragraphs(self, frame: Any, paragraphs: list) -> None:
-        frame.clear()
-        for index, item in enumerate(paragraphs):
+        prototypes_by_level: dict[int, list] = {}
+        for paragraph in frame.paragraphs:
+            prototypes_by_level.setdefault(paragraph.level or 0, []).append(copy.deepcopy(paragraph._p))
+
+        # frame.clear() special-cases the first paragraph (keeps its <a:pPr>,
+        # only strips runs) instead of removing it — remove every existing
+        # paragraph ourselves so nothing is left over before we start writing.
+        for existing in list(frame._txBody.p_lst):
+            frame._txBody.remove(existing)
+
+        used_by_level: dict[int, int] = {}
+
+        def pick_prototype(level: int):
+            if not prototypes_by_level:
+                return None
+            candidates = prototypes_by_level.get(level)
+            if not candidates:
+                nearest = min(prototypes_by_level, key=lambda existing_level: abs(existing_level - level))
+                candidates = prototypes_by_level[nearest]
+            index = used_by_level.get(level, 0)
+            used_by_level[level] = index + 1
+            return candidates[min(index, len(candidates) - 1)]
+
+        for item in paragraphs:
             if not isinstance(item, dict):
                 continue
-            paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
-            if isinstance(item.get("level"), int): paragraph.level = max(0, item["level"])
+            runs = item.get("runs")
+            level = max(0, item["level"]) if isinstance(item.get("level"), int) else 0
+            single_run = runs[0] if isinstance(runs, list) and len(runs) == 1 else None
+            is_simple = (not isinstance(runs, list) or len(runs) <= 1) and not self._run_has_explicit_style(single_run)
+
+            if is_simple:
+                prototype = pick_prototype(level)
+                if prototype is not None:
+                    text = str(single_run.get("text", "")) if single_run else str(item.get("text", ""))
+                    text = self._strip_leading_bullet_marker(text)
+                    clone = copy.deepcopy(prototype)
+                    self._set_first_run_text(clone, text)
+                    frame._txBody.append(clone)
+                    continue
+
+            # Explicit per-run styling (chat-edit character formatting) or a
+            # template with no paragraphs at all to clone from — build fresh,
+            # exactly as before.
+            paragraph = frame.add_paragraph()
+            if isinstance(item.get("level"), int):
+                paragraph.level = level
             if isinstance(item.get("align"), str):
                 alignment = _PARAGRAPH_ALIGNMENTS.get(item["align"])
-                if alignment is not None: paragraph.alignment = alignment
-            runs = item.get("runs")
+                if alignment is not None:
+                    paragraph.alignment = alignment
             if isinstance(runs, list) and runs:
                 for run_item in runs:
-                    if not isinstance(run_item, dict): continue
-                    run = paragraph.add_run(); run.text = str(run_item.get("text", ""))
-                    if isinstance(run_item.get("bold"), bool): run.font.bold = run_item["bold"]
-                    if isinstance(run_item.get("italic"), bool): run.font.italic = run_item["italic"]
-                    if isinstance(run_item.get("underline"), bool): run.font.underline = run_item["underline"]
-                    if isinstance(run_item.get("color"), str) and len(run_item["color"].lstrip("#")) == 6: run.font.color.rgb = RGBColor.from_string(run_item["color"].lstrip("#").upper())
-                    if isinstance(run_item.get("fontSize"), (int, float)): run.font.size = Pt(run_item["fontSize"])
-                    if isinstance(run_item.get("fontFamily"), str): run.font.name = run_item["fontFamily"]
+                    if not isinstance(run_item, dict):
+                        continue
+                    run = paragraph.add_run()
+                    run.text = str(run_item.get("text", ""))
+                    if isinstance(run_item.get("bold"), bool):
+                        run.font.bold = run_item["bold"]
+                    if isinstance(run_item.get("italic"), bool):
+                        run.font.italic = run_item["italic"]
+                    if isinstance(run_item.get("underline"), bool):
+                        run.font.underline = run_item["underline"]
+                    if isinstance(run_item.get("color"), str) and len(run_item["color"].lstrip("#")) == 6:
+                        run.font.color.rgb = RGBColor.from_string(run_item["color"].lstrip("#").upper())
+                    if isinstance(run_item.get("fontSize"), (int, float)):
+                        run.font.size = Pt(run_item["fontSize"])
+                    if isinstance(run_item.get("fontFamily"), str):
+                        run.font.name = run_item["fontFamily"]
             else:
                 paragraph.text = str(item.get("text", ""))
 
@@ -394,41 +480,7 @@ class PPTXGenerator:
         if not shape:
             return
         if getattr(shape, "has_text_frame", False) and isinstance(edit.get("paragraphs"), list):
-            shape.text_frame.clear()
-            for index, item in enumerate(edit["paragraphs"]):
-                if not isinstance(item, dict):
-                    continue
-                paragraph = shape.text_frame.paragraphs[0] if index == 0 else shape.text_frame.add_paragraph()
-                if isinstance(item.get("level"), int):
-                    paragraph.level = max(0, item["level"])
-                if isinstance(item.get("align"), str):
-                    alignment = _PARAGRAPH_ALIGNMENTS.get(item["align"])
-                    if alignment is not None:
-                        paragraph.alignment = alignment
-                runs = item.get("runs")
-                if isinstance(runs, list) and runs:
-                    # A user selecting part of a sentence and formatting it must not
-                    # flatten the rest — `paragraph.text = ...` would leave one run
-                    # for the whole line, undoing exactly the edit just made.
-                    for run_item in runs:
-                        if not isinstance(run_item, dict):
-                            continue
-                        run = paragraph.add_run()
-                        run.text = str(run_item.get("text", ""))
-                        if isinstance(run_item.get("bold"), bool):
-                            run.font.bold = run_item["bold"]
-                        if isinstance(run_item.get("italic"), bool):
-                            run.font.italic = run_item["italic"]
-                        if isinstance(run_item.get("underline"), bool):
-                            run.font.underline = run_item["underline"]
-                        if isinstance(run_item.get("color"), str) and len(run_item["color"].lstrip("#")) == 6:
-                            run.font.color.rgb = RGBColor.from_string(run_item["color"].lstrip("#").upper())
-                        if isinstance(run_item.get("fontSize"), (int, float)):
-                            run.font.size = Pt(run_item["fontSize"])
-                        if isinstance(run_item.get("fontFamily"), str):
-                            run.font.name = run_item["fontFamily"]
-                else:
-                    paragraph.text = str(item.get("text", ""))
+            self._write_paragraphs(shape.text_frame, edit["paragraphs"])
         elif isinstance(edit.get("text"), str) and getattr(shape, "has_text_frame", False):
             levels = [paragraph.level for paragraph in shape.text_frame.paragraphs]
             alignments = [paragraph.alignment for paragraph in shape.text_frame.paragraphs]

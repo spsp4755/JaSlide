@@ -10,6 +10,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.dml import MSO_THEME_COLOR
 from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
 from apps.renderer.src.generators.pptx_generator import PPTXGenerator, fit_font_scale
@@ -847,6 +848,78 @@ def test_pptx_template_preserves_paragraph_indent_when_text_changes():
     template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
     output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [{"slide": 0, "objectId": str(text.shape_id), "text": "Changed\nStill nested"}]})))
     assert Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[1].level == 1
+
+
+def test_native_edit_clones_the_templates_own_paragraph_at_the_requested_level():
+    # The template has two real paragraphs: level 0 with a custom font size,
+    # and level 1 with an explicit bullet character set on its pPr (buChar).
+    # A python-pptx `paragraph.level = 1` on a *freshly built* paragraph would
+    # carry neither of these — this test proves the rewritten path copies the
+    # actual level-1 paragraph's formatting instead of inventing a bare level.
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2))
+    text.text_frame.paragraphs[0].text = "Top"
+    text.text_frame.paragraphs[0].runs[0].font.size = Pt(30)
+    nested = text.text_frame.add_paragraph()
+    nested.text = "Nested example"
+    nested.level = 1
+    nested_pPr = nested._p.get_or_add_pPr()
+    buChar = OxmlElement("a:buChar")
+    buChar.set("char", "◆")
+    nested_pPr.append(buChar)
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {
+        "slide": 0, "objectId": str(text.shape_id),
+        "paragraphs": [
+            {"text": "New top", "level": 0},
+            {"text": "New nested", "level": 1},
+        ],
+    }
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    paragraphs = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs
+    assert [p.text for p in paragraphs] == ["New top", "New nested"]
+    assert paragraphs[0].runs[0].font.size == Pt(30)
+    assert paragraphs[1].level == 1
+    copied_buChar = paragraphs[1]._p.find(qn("a:pPr")).find(qn("a:buChar"))
+    assert copied_buChar is not None and copied_buChar.get("char") == "◆"
+
+
+def test_native_edit_falls_back_to_nearest_level_when_the_template_lacks_that_depth():
+    # The template only has level 0. Asking for level 3 must not invent a new
+    # formatting style — it should fall back to the level-0 prototype's own
+    # formatting rather than a bare, unstyled paragraph.
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    text.text_frame.paragraphs[0].text = "Only level"
+    text.text_frame.paragraphs[0].runs[0].font.size = Pt(22)
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {"slide": 0, "objectId": str(text.shape_id), "paragraphs": [{"text": "Deep line", "level": 3}]}
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    paragraph = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[0]
+    assert paragraph.text == "Deep line"
+    assert paragraph.runs[0].font.size == Pt(22)
+
+
+def test_native_edit_strips_a_literal_bullet_character_the_model_wrote_by_mistake():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    text.text_frame.paragraphs[0].text = "Original"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {"slide": 0, "objectId": str(text.shape_id), "paragraphs": [{"text": "• Written with a bullet", "level": 0}]}
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    assert Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[0].text == "Written with a bullet"
 
 
 def test_pptx_text_replace_preserves_paragraph_alignment():
