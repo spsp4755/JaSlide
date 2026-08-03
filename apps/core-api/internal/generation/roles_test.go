@@ -1,6 +1,9 @@
 package generation
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestRequestedGenerativeRolesReturnsSortedDistinctRoles(t *testing.T) {
 	objects := []map[string]any{
@@ -32,5 +35,113 @@ func TestRequestedGenerativeRolesReturnsNilWhenNoneOfTheThreeRolesArePresent(t *
 	}
 	if got := requestedGenerativeRoles(objects); got != nil {
 		t.Fatalf("requestedGenerativeRoles() = %v, want nil", got)
+	}
+}
+
+func TestPptxObjectEditsFallsBackToLegacyWhenNoRoleData(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "small", "kind": "text", "fontSize": 14.0},
+		{"id": "big", "kind": "text", "fontSize": 32.0},
+	}
+	content := roleContent{Title: "Title", Lines: []contentLine{{Text: "Body line"}}}
+
+	got := pptxObjectEdits(objects, 0, content)
+	want := legacyPptxObjectEdits(objects, 0, content.Title, content.Lines)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("pptxObjectEdits() with no role data = %v, want it to equal legacyPptxObjectEdits() = %v", got, want)
+	}
+}
+
+func TestPptxObjectEditsExcludesStaticObjects(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "title-shape", "kind": "text", "role": "title"},
+		{"id": "footer-shape", "kind": "text", "role": "static", "text": "Confidential"},
+		{"id": "legend-table", "kind": "table", "role": "static", "cells": []any{[]any{"A"}}},
+	}
+	content := roleContent{Title: "Q3 Results"}
+
+	edits := pptxObjectEdits(objects, 0, content)
+
+	if len(edits) != 1 {
+		t.Fatalf("edits = %v, want exactly 1 (only the title shape, static shapes excluded)", edits)
+	}
+	if edits[0]["objectId"] != "title-shape" {
+		t.Fatalf("edits[0][objectId] = %v, want title-shape", edits[0]["objectId"])
+	}
+}
+
+func TestPptxObjectEditsAssignsSingleValueRoles(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "title-shape", "kind": "text", "role": "title"},
+		{"id": "subtitle-shape", "kind": "text", "role": "subtitle"},
+		{"id": "date-shape", "kind": "text", "role": "date"},
+		{"id": "kpi-shape", "kind": "text", "role": "kpi"},
+	}
+	content := roleContent{Title: "Q3 Results", Subtitle: "Board Review", Date: "2026.08.03", KPI: "32%"}
+
+	edits := pptxObjectEdits(objects, 0, content)
+
+	byID := map[string]any{}
+	for _, edit := range edits {
+		byID[edit["objectId"].(string)] = edit["text"]
+	}
+	if byID["title-shape"] != "Q3 Results" || byID["subtitle-shape"] != "Board Review" ||
+		byID["date-shape"] != "2026.08.03" || byID["kpi-shape"] != "32%" {
+		t.Fatalf("edits by objectId->text = %v, want each shape to get its matching role's value", byID)
+	}
+}
+
+func TestPptxObjectEditsBroadcastsSameRoleToMultipleObjects(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "kpi-left", "kind": "text", "role": "kpi"},
+		{"id": "kpi-right", "kind": "text", "role": "kpi"},
+	}
+	content := roleContent{Title: "T", KPI: "1,204건"}
+
+	edits := pptxObjectEdits(objects, 0, content)
+
+	if len(edits) != 2 || edits[0]["text"] != "1,204건" || edits[1]["text"] != "1,204건" {
+		t.Fatalf("edits = %v, want both kpi shapes to receive the same broadcast value", edits)
+	}
+}
+
+func TestPptxObjectEditsFillsBodyTextAndTable(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "body-shape", "kind": "text", "role": "body"},
+		{"id": "data-table", "kind": "table", "role": "body", "cells": []any{[]any{""}}},
+	}
+	content := roleContent{Title: "T", Lines: []contentLine{{Text: "Point one"}, {Text: "Point two", Level: 1}}}
+
+	edits := pptxObjectEdits(objects, 0, content)
+
+	var sawParagraphs, sawCells bool
+	for _, edit := range edits {
+		if edit["objectId"] == "body-shape" {
+			if _, ok := edit["paragraphs"]; ok {
+				sawParagraphs = true
+			}
+		}
+		if edit["objectId"] == "data-table" {
+			if _, ok := edit["cells"]; ok {
+				sawCells = true
+			}
+		}
+	}
+	if !sawParagraphs || !sawCells {
+		t.Fatalf("edits = %v, want a paragraphs edit for body-shape and a cells edit for data-table", edits)
+	}
+}
+
+func TestPptxObjectEditsSynthesizesTextBoxWhenEveryObjectIsStatic(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "logo", "kind": "text", "role": "static"},
+	}
+	content := roleContent{Title: "Only Title", Lines: []contentLine{{Text: "Only Body"}}}
+
+	edits := pptxObjectEdits(objects, 3, content)
+
+	if len(edits) != 1 || edits[0]["objectId"] != "generated-title-3" {
+		t.Fatalf("edits = %v, want a single synthesized generated-title-3 edit", edits)
 	}
 }

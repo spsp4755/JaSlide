@@ -95,7 +95,7 @@ func TestPptxObjectEditsBuildsAStructuredCellEditWhenATableIsPresent(t *testing.
 		{Text: "프로젝트 관리 및 지원", Level: 1},
 	}
 
-	edits := pptxObjectEdits(objects, 0, "0730 업무보고", lines)
+	edits := pptxObjectEdits(objects, 0, roleContent{Title: "0730 업무보고", Lines: lines})
 
 	if len(edits) != 2 {
 		t.Fatalf("edits = %#v, want exactly a title edit and a table edit", edits)

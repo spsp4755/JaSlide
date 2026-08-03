@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -409,8 +408,14 @@ func (service *Service) Process(ctx context.Context, jobID string) {
 			fields["templateIndex"] = templateIndex
 		}
 		if template.PPTX && templateIndex >= 0 {
+			subtitle, _ := fields["subheading"].(string)
+			date, _ := fields["date"].(string)
+			kpi, _ := fields["kpiValue"].(string)
 			fields["objectEdits"] = pptxObjectEdits(
-				template.objects(templateIndex), templateIndex, item.Title, slideLines(fields, item.KeyPoints),
+				template.objects(templateIndex), templateIndex, roleContent{
+					Title: item.Title, Subtitle: subtitle, Date: date, KPI: kpi,
+					Lines: slideLines(fields, item.KeyPoints),
+				},
 			)
 		} else if templateIndex >= 0 && templateIndex < len(template.HTMLSlides) {
 			original := template.HTMLSlides[templateIndex]
@@ -700,53 +705,6 @@ func chooseTemplateIndex(requested *int, order int, capable []int) int {
 type contentLine struct {
 	Text  string
 	Level int
-}
-
-func pptxObjectEdits(objects []map[string]any, slide int, title string, lines []contentLine) []map[string]any {
-	var texts, tables []map[string]any
-	for _, object := range objects {
-		switch object["kind"] {
-		case "text":
-			texts = append(texts, object)
-		case "table":
-			tables = append(tables, object)
-		}
-	}
-	sort.SliceStable(texts, func(i, j int) bool { return number(texts[i]["fontSize"]) > number(texts[j]["fontSize"]) })
-	var edits []map[string]any
-	textLimit := min(len(texts), 2)
-	if len(tables) > 0 {
-		textLimit = min(len(texts), 1)
-	}
-	for index := 0; index < textLimit; index++ {
-		if index == 0 {
-			edits = append(edits, map[string]any{
-				"objectId": texts[index]["id"], "slide": slide, "text": title,
-			})
-			continue
-		}
-		edits = append(edits, map[string]any{
-			"objectId": texts[index]["id"], "slide": slide, "paragraphs": paragraphsFromLines(lines),
-		})
-	}
-	for _, table := range tables {
-		edits = append(edits, map[string]any{
-			"objectId": table["id"], "slide": slide,
-			"cells": populateCells(table["cells"], lines),
-		})
-	}
-	if len(edits) == 0 {
-		texts := make([]string, len(lines))
-		for index, line := range lines {
-			texts[index] = line.Text
-		}
-		edits = append(edits, map[string]any{
-			"objectId": fmt.Sprintf("generated-title-%d", slide), "slide": slide,
-			"kind": "text", "addText": title, "text": strings.Join(append([]string{title}, texts...), "\n"),
-			"left": 140, "top": 120, "width": 1640, "height": 560, "fontSize": 34, "color": "#1A1A1A",
-		})
-	}
-	return edits
 }
 
 // paragraphsFromLines is the structured {paragraphs: [...]} shape
