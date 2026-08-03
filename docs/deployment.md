@@ -34,8 +34,8 @@ pyproject.toml`을 실행하고 image 안의 `pip check`와 Chromium launch를 �
 검증합니다.
 
 ```bash
-JASLIDE_VERSION=v0.8.0 docker compose --file docker-compose.yml --env-file .env build
-JASLIDE_VERSION=v0.8.0 docker compose --file docker-compose.yml --env-file .env \
+JASLIDE_VERSION=v0.8.1 docker compose --file docker-compose.yml --env-file .env build
+JASLIDE_VERSION=v0.8.1 docker compose --file docker-compose.yml --env-file .env \
   up -d --no-build --pull never
 BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
 ```
@@ -69,9 +69,9 @@ docker compose --file docker-compose.yml \
 외부망에서 만든 release archive를 반입한 뒤:
 
 ```bash
-sha256sum -c jaslide-v0.8.0-linux-amd64-images.tar.gz.sha256
-docker load -i jaslide-v0.8.0-linux-amd64-images.tar.gz
-export JASLIDE_VERSION=v0.8.0
+sha256sum -c jaslide-v0.8.1-linux-amd64-images.tar.gz.sha256
+docker load -i jaslide-v0.8.1-linux-amd64-images.tar.gz
+export JASLIDE_VERSION=v0.8.1
 docker compose --project-name jaslide --env-file .env \
   --file docker-compose.offline.yml up -d --no-build --pull never
 BASE_URL=http://localhost:3000 ./scripts/release/smoke-compose.sh --check-only
@@ -86,19 +86,19 @@ OpenAI-compatible LLM 주소에는 사내망으로 접근할 수 있어야 합�
 외부망의 amd64 빌드 환경에서:
 
 ```bash
-./scripts/release/build-amd64-images.sh v0.8.0
+./scripts/release/build-amd64-images.sh v0.8.1
 ```
 
 생성물:
 
-- `dist/release/jaslide-v0.8.0-linux-amd64-images.tar.gz`
-- `dist/release/jaslide-v0.8.0-linux-amd64-images.tar.gz.sha256`
+- `dist/release/jaslide-v0.8.1-linux-amd64-images.tar.gz`
+- `dist/release/jaslide-v0.8.1-linux-amd64-images.tar.gz.sha256`
 
 폐쇄망의 모든 worker node에서:
 
 ```bash
-sha256sum -c jaslide-v0.8.0-linux-amd64-images.tar.gz.sha256
-sudo ctr -n k8s.io images import jaslide-v0.8.0-linux-amd64-images.tar.gz
+sha256sum -c jaslide-v0.8.1-linux-amd64-images.tar.gz.sha256
+sudo ctr -n k8s.io images import jaslide-v0.8.1-linux-amd64-images.tar.gz
 sudo ctr -n k8s.io images ls | grep jaslide
 ```
 
