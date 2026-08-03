@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -760,6 +761,38 @@ func TestProcessPassesSkillGuidanceToSlideContentToo(t *testing.T) {
 
 	if llm.seenSlideRequest.SkillGuidance != "이 템플릿의 표는 최대 3단계 들여쓰기 구조를 사용합니다." {
 		t.Fatalf("SlideContent's SkillGuidance = %q, want the job's skillGuidance", llm.seenSlideRequest.SkillGuidance)
+	}
+}
+
+// availableLevels is computed from the destination template slide's own
+// paragraph levels (0 and 2 here, deliberately skipping 1) and threaded
+// through Process() into the per-slide SlideContent call as
+// SlideRequest.AvailableLevels — this pins that the wiring actually reaches
+// the LLM call, not just that availableLevels() itself computes correctly
+// (already covered by hierarchy_test.go).
+func TestProcessGroundsBulletLevelGuidanceInTheTemplatesRealLevels(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[{"kind":"text","paragraphs":[` +
+			`{"text":"Top","level":0},{"text":"Nested","level":2}]}]}]}}`),
+	}
+	presentationID := "presentation-1"
+	repo.presentations[presentationID] = Presentation{ID: presentationID, Status: "GENERATING"}
+	repo.jobs["job-1"] = Job{
+		ID: "job-1", UserID: "user-1", Status: "QUEUED", PresentationID: &presentationID,
+		Input: json.RawMessage(`{"sourceType":"TEXT","content":"AI security","slideCount":1,"language":"en",` +
+			`"templateId":"pptx-template"}`),
+	}
+	llm := new(maliciousHTMLLLM)
+	service := NewService(repo, llm, new(recordingQueue))
+
+	service.Process(context.Background(), "job-1")
+
+	want := []int{0, 2}
+	if !reflect.DeepEqual(llm.seenSlideRequest.AvailableLevels, want) {
+		t.Fatalf("SlideContent's AvailableLevels = %v, want %v", llm.seenSlideRequest.AvailableLevels, want)
 	}
 }
 

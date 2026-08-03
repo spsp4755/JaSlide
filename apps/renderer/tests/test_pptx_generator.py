@@ -922,6 +922,82 @@ def test_native_edit_strips_a_literal_bullet_character_the_model_wrote_by_mistak
     assert Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[0].text == "Written with a bullet"
 
 
+def test_native_edit_does_not_lose_text_when_the_template_paragraph_at_that_level_is_blank():
+    # A blank spacer paragraph between two headings is a real, common template
+    # shape. Cloning it (as the naive fix would) has nowhere to put the
+    # generated text, since it has zero <a:r> runs — the fix must skip it as
+    # a candidate prototype instead, falling back to building fresh.
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2))
+    text.text_frame.paragraphs[0].text = "Heading A"
+    blank = text.text_frame.add_paragraph()  # no runs added — a blank line
+    text.text_frame.add_paragraph().text = "Heading B"
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {
+        "slide": 0, "objectId": str(text.shape_id),
+        "paragraphs": [
+            {"text": "Line one", "level": 0},
+            {"text": "Line two", "level": 0},
+            {"text": "Line three", "level": 0},
+        ],
+    }
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    texts = [p.text for p in Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs]
+    assert texts == ["Line one", "Line two", "Line three"]
+
+
+def test_native_table_cell_does_not_lose_text_when_the_templates_body_row_is_blank():
+    # The single most common fill-in-report template shape: a header row with
+    # real text, a body row of empty cells waiting to be filled. Before this
+    # fix, every generated cell's text was silently destroyed because the
+    # only prototype at that cell's level was its own blank paragraph.
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(4), Inches(2))
+    table.table.cell(0, 0).text = "구분"
+    table.table.cell(0, 1).text = "내용"
+    # cell(1, 0) and cell(1, 1) are left with their default single blank paragraph.
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    edit = {
+        "slide": 0, "objectId": str(table.shape_id),
+        "cells": [[None, None], [
+            {"paragraphs": [{"text": "실적", "level": 0}]},
+            {"paragraphs": [{"text": "완료", "level": 0}]},
+        ]],
+    }
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    generated_table = Presentation(BytesIO(output)).slides[0].shapes[0].table
+    assert generated_table.cell(1, 0).text == "실적"
+    assert generated_table.cell(1, 1).text == "완료"
+
+
+def test_native_edit_preserves_the_templates_own_alignment_on_the_cloned_paragraph_path():
+    source = Presentation()
+    slide = source.slides.add_slide(source.slide_layouts[6])
+    text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    text.text_frame.paragraphs[0].text = "Original"
+    text.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+    buffer = BytesIO(); source.save(buffer)
+    template = SimpleNamespace(config=SimpleNamespace(sourcePptx=base64.b64encode(buffer.getvalue()).decode("ascii")))
+
+    # The edit asks for "right" (the AI-generation path's blanket default is
+    # "left", but any value should behave the same way here) — the template's
+    # own centered alignment must win on the simple/clone path.
+    edit = {"slide": 0, "objectId": str(text.shape_id), "paragraphs": [{"text": "New", "level": 0, "align": "right"}]}
+    output = PPTXGenerator(template).generate(_presentation(_slide("CONTENT", "", {"objectEdits": [edit]})))
+
+    paragraph = Presentation(BytesIO(output)).slides[0].shapes[0].text_frame.paragraphs[0]
+    assert paragraph.text == "New"
+    assert paragraph.alignment == PP_ALIGN.CENTER
+
+
 def test_pptx_text_replace_preserves_paragraph_alignment():
     source = Presentation(); slide = source.slides.add_slide(source.slide_layouts[6])
     text = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))

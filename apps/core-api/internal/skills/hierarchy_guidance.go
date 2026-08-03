@@ -99,7 +99,7 @@ func formatHierarchyExample(lines []hierarchyLine) string {
 		"이 템플릿의 표/목록은 최대 %d단계 들여쓰기 구조를 사용합니다 (%s — 이 예시 문구는 깊이 구조를 보여주기 위한 것으로, "+
 			"내용을 생성할 때 그대로 재사용하지 말고 새 내용을 쓰세요). "+
 			"내용을 생성할 때도 각 줄이 대분류인지 하위 항목인지 스스로 판단해 이런 깊이의 계층 구조로 작성하고, "+
-			"bullets의 level(0~4)을 정확히 지정하세요.",
+			"bullets의 level을 정확히 지정하세요.",
 		maxHierarchyLevel(lines)+1, strings.Join(examples, ", "),
 	)
 }

@@ -338,7 +338,9 @@ class PPTXGenerator:
     def _run_has_explicit_style(run_item: Optional[dict]) -> bool:
         if not run_item:
             return False
-        return any(run_item.get(key) not in (None, "") for key in ("bold", "italic", "underline", "color", "fontSize", "fontFamily"))
+        if any(run_item.get(key) is True for key in ("bold", "italic", "underline")):
+            return True
+        return any(run_item.get(key) for key in ("color", "fontSize", "fontFamily"))
 
     @staticmethod
     def _set_first_run_text(paragraph_element, text: str) -> None:
@@ -355,6 +357,8 @@ class PPTXGenerator:
     def _write_paragraphs(self, frame: Any, paragraphs: list) -> None:
         prototypes_by_level: dict[int, list] = {}
         for paragraph in frame.paragraphs:
+            if not paragraph.runs:
+                continue  # a run-less prototype has nowhere to put the generated text
             prototypes_by_level.setdefault(paragraph.level or 0, []).append(copy.deepcopy(paragraph._p))
 
         # frame.clear() special-cases the first paragraph (keeps its <a:pPr>,
@@ -381,12 +385,19 @@ class PPTXGenerator:
                 continue
             runs = item.get("runs")
             level = max(0, item["level"]) if isinstance(item.get("level"), int) else 0
-            single_run = runs[0] if isinstance(runs, list) and len(runs) == 1 else None
+            single_run = runs[0] if isinstance(runs, list) and len(runs) == 1 and isinstance(runs[0], dict) else None
             is_simple = (not isinstance(runs, list) or len(runs) <= 1) and not self._run_has_explicit_style(single_run)
 
             if is_simple:
                 prototype = pick_prototype(level)
                 if prototype is not None:
+                    # The edit's own "align" is not applied here on purpose: every
+                    # AI-generated line currently carries a uniform "left" default
+                    # regardless of the template's real alignment, so honoring it
+                    # would silently override a deliberately centered/right-aligned
+                    # template paragraph with a meaningless value. The template's
+                    # own alignment wins on this path; only the from-scratch branch
+                    # below (explicit per-run styling) applies a requested align.
                     text = str(single_run.get("text", "")) if single_run else str(item.get("text", ""))
                     text = self._strip_leading_bullet_marker(text)
                     clone = copy.deepcopy(prototype)
