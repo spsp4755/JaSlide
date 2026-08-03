@@ -15,6 +15,9 @@ type Skill = {
     tone: string;
     purpose: string;
     recommendedSlideCount: number;
+    isPublic: boolean;
+    organizationId: string | null;
+    templateId: string | null;
 };
 
 export function SkillsGallery({ preview = false }: { preview?: boolean }) {

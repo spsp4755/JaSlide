@@ -138,6 +138,10 @@ export const skillsApi = {
         });
     },
     deleteMany: (ids: string[]) => api.delete('/skills', { data: { ids } }),
+    update: (id: string, data: { name?: string; scope?: 'private' | 'organization' | 'public' }) =>
+        api.patch(`/skills/${id}`, data),
+    delete: (id: string) => api.delete(`/skills/${id}`),
+    previewHtml: (id: string) => api.get(`/skills/${id}/preview-html`),
 };
 
 // Export
