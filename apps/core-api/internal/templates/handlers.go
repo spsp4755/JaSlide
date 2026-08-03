@@ -21,6 +21,7 @@ import (
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/auth"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/contentsecurity"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/db"
+	"github.com/spsp4755/JaSlide/apps/core-api/internal/generation"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/httpjson"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/renderer"
 	"github.com/spsp4755/JaSlide/apps/core-api/internal/storagepath"
@@ -32,10 +33,11 @@ type Service struct {
 	db       *db.Store
 	renderer *renderer.Client
 	root     string
+	roles    generation.RoleClassifier
 }
 
-func NewService(store *db.Store, renderer *renderer.Client, root string) *Service {
-	return &Service{db: store, renderer: renderer, root: filepath.Clean(root)}
+func NewService(store *db.Store, renderer *renderer.Client, root string, roles generation.RoleClassifier) *Service {
+	return &Service{db: store, renderer: renderer, root: filepath.Clean(root), roles: roles}
 }
 
 func NewHandlers(service *Service) http.Handler {
@@ -257,6 +259,9 @@ func (service *Service) importPPTX(writer http.ResponseWriter, request *http.Req
 		source = map[string]any{"kind": "pptx"}
 	}
 	source["storageKey"] = key
+	if classified, classifyErr := generation.ApplyRoleClassification(request.Context(), service.roles, source); classifyErr == nil {
+		source = classified
+	}
 	config["source"] = source
 	config["pptxTemplate"] = map[string]any{"storageKey": key, "originalname": header.Filename}
 	configRaw, _ := json.Marshal(config)

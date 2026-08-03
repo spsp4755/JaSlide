@@ -64,7 +64,6 @@ func run() error {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	rendererClient := renderer.New(cfg.RendererURL, &http.Client{Timeout: 180 * time.Second})
-	templateService := templates.NewService(store, rendererClient, cfg.LocalStoragePath)
 	generationStore := generation.NewSQLStore(store)
 	generationQueue := generation.NewRedisQueue(store.Redis())
 	llmPolicy, err := outboundpolicy.New(cfg.AllowedLLMEndpoints, cfg.AllowedLLMAPIKeyEnvVars)
@@ -74,6 +73,7 @@ func run() error {
 	llmClient := generation.NewOpenAIClient(generationStore, &http.Client{Timeout: 5 * time.Minute}, generation.EnvironmentModel{
 		BaseURL: cfg.OpenAIBaseURL, APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIModel, MaxTokens: cfg.OpenAIMaxTokens,
 	}, llmPolicy)
+	templateService := templates.NewService(store, rendererClient, cfg.LocalStoragePath, llmClient)
 	generationService := generation.NewService(generationStore, llmClient, generationQueue)
 	go generationService.Run(signalContext)
 
