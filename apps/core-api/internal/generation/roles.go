@@ -69,10 +69,15 @@ func pptxObjectEdits(objects []map[string]any, slide int, content roleContent) [
 // run for this slide's objects. A classified template always tags every
 // eligible object with a non-empty role (mergeTemplateRoles defaults
 // unclassified-but-eligible objects to "static"), so "zero objects have a
-// role" means classification hasn't happened yet or failed.
+// role" means classification hasn't happened yet or failed. This reads the
+// raw "role" field (not effectiveRole) deliberately -- a locked object with
+// no underlying role must not report as "classified", or the font-rank
+// legacy fallback would be silently disabled for a never-classified
+// template. See needsRoleClassification (role_classification.go), which
+// reads the same raw field for the same reason.
 func anyObjectHasRole(objects []map[string]any) bool {
 	for _, object := range objects {
-		if effectiveRole(object) != "" {
+		if role, ok := object["role"].(string); ok && role != "" {
 			return true
 		}
 	}

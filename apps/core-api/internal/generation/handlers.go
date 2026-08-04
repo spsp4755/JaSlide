@@ -209,8 +209,9 @@ func (handler *handlers) lockObject(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	user, _ := auth.PrincipalFromContext(request.Context())
+	isAdmin := user.Role == "ADMIN" || user.Role == "ORG_ADMIN" || user.Role == "SYSTEM_ADMIN"
 	result, err := handler.service.LockObject(
-		request.Context(), chi.URLParam(request, "templateId"), user.ID, chi.URLParam(request, "objectId"), input.Locked,
+		request.Context(), chi.URLParam(request, "templateId"), user.ID, isAdmin, chi.URLParam(request, "objectId"), input.Locked,
 	)
 	writeServiceResult(writer, http.StatusOK, result, err)
 }

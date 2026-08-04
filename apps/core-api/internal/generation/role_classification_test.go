@@ -60,6 +60,19 @@ func TestNeedsRoleClassificationFalseWhenAnyObjectHasARole(t *testing.T) {
 	}
 }
 
+func TestNeedsRoleClassificationIgnoresLockedAndOnlyChecksRawRole(t *testing.T) {
+	source := map[string]any{
+		"slides": []any{
+			map[string]any{"objects": []any{
+				map[string]any{"id": "shape-1", "kind": "text", "locked": true},
+			}},
+		},
+	}
+	if !needsRoleClassification(source) {
+		t.Fatal("needsRoleClassification() = false, want true (a locked-but-unclassified object still has no role field, so classification still needs to run)")
+	}
+}
+
 func TestMergeTemplateRolesAppliesReturnedRolesAndDefaultsRestToStatic(t *testing.T) {
 	source := map[string]any{"slides": []any{
 		map[string]any{"objects": []any{

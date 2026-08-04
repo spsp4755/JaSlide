@@ -409,6 +409,9 @@ function DashboardContent() {
                     setRolePreview(response.data.slides);
                     return;
                 }
+                if (response.data.status === 'unavailable') {
+                    return;
+                }
             } catch {
                 // Best-effort: role preview failing does not block generation
                 // (the font-rank fallback still applies), so fail silently.
@@ -420,10 +423,10 @@ function DashboardContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rolePreviewKey, outlineContext?.templateId]);
 
-    const handleToggleLock = async (templateId: string, objectId: string, slideIndex: number, locked: boolean) => {
+    const handleToggleLock = async (templateId: string, objectId: string, locked: boolean) => {
         try {
             const response = await generationApi.lockObject(templateId, objectId, locked);
-            setRolePreview((prev) => prev && prev.map((slide, i) => (i !== slideIndex ? slide : {
+            setRolePreview((prev) => prev && prev.map((slide) => ({
                 items: slide.items.map((item) => (item.objectId === objectId ? response.data : item)),
             })));
         } catch (error: any) {
@@ -534,7 +537,7 @@ function DashboardContent() {
                                                             {!isClassifierStatic && (
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => handleToggleLock(outlineContext!.templateId!, item.objectId, i, !isUserLocked)}
+                                                                    onClick={() => handleToggleLock(outlineContext!.templateId!, item.objectId, !isUserLocked)}
                                                                     className="text-primary hover:underline"
                                                                 >
                                                                     {isUserLocked ? '고정 해제' : '고정하기'}

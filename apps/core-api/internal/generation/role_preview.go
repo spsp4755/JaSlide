@@ -98,10 +98,12 @@ func (service *Service) classifyInBackground(templateID, userID string) {
 // LockObject sets (or clears) one template object's user-forced "locked"
 // override -- see effectiveRole. The underlying "role" field is never
 // touched, so clearing the override (locked=false) restores whatever the
-// classifier originally assigned. Persists via UpdateTemplateConfig, the
-// same repo method classifyTemplateRoles already uses, so the change is
-// permanent and visible to every future generation.
-func (service *Service) LockObject(ctx context.Context, templateID, userID, objectID string, locked bool) (RolePreviewItem, error) {
+// classifier originally assigned. Reading uses VisibleTemplateConfig (public
+// OR owner OR same-org), same as generation, but the WRITE is restricted to
+// the template's owner or an admin (UpdateOwnedTemplateConfig) -- merely
+// being able to see a public template must not let every user permanently
+// lock/unlock its shapes for everyone else.
+func (service *Service) LockObject(ctx context.Context, templateID, userID string, isAdmin bool, objectID string, locked bool) (RolePreviewItem, error) {
 	raw, err := service.repo.VisibleTemplateConfig(ctx, templateID, userID)
 	if err != nil {
 		return RolePreviewItem{}, fmt.Errorf("%w: Template not found", ErrBadInput)
@@ -117,8 +119,12 @@ func (service *Service) LockObject(ctx context.Context, templateID, userID, obje
 	if err != nil {
 		return RolePreviewItem{}, err
 	}
-	if err := service.repo.UpdateTemplateConfig(ctx, templateID, encoded); err != nil {
+	updated, err := service.repo.UpdateOwnedTemplateConfig(ctx, templateID, userID, isAdmin, encoded)
+	if err != nil {
 		return RolePreviewItem{}, err
+	}
+	if !updated {
+		return RolePreviewItem{}, fmt.Errorf("%w: You do not have permission to modify this template", ErrBadInput)
 	}
 	return RolePreviewItem{ObjectID: objectID, Role: effectiveRole(object), Locked: locked}, nil
 }

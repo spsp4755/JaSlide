@@ -66,6 +66,14 @@ func (store *SQLStore) UpdateTemplateConfig(ctx context.Context, id string, conf
 	return err
 }
 
+func (store *SQLStore) UpdateOwnedTemplateConfig(ctx context.Context, id, userID string, isAdmin bool, config json.RawMessage) (bool, error) {
+	result, err := store.db.Pool().Exec(ctx,
+		`UPDATE "Template" SET "config"=$4,"updatedAt"=NOW() WHERE "id"=$1 AND ("userId"=$2 OR $3)`,
+		id, userID, isAdmin, config,
+	)
+	return result.RowsAffected() == 1, err
+}
+
 func (store *SQLStore) CreateGeneration(ctx context.Context, presentation Presentation, job Job) error {
 	tx, err := store.db.Pool().Begin(ctx)
 	if err != nil {

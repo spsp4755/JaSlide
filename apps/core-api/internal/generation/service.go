@@ -103,6 +103,7 @@ type Repository interface {
 	VisibleSkill(context.Context, string, string, *string) (Skill, error)
 	VisibleTemplateConfig(context.Context, string, string) (json.RawMessage, error)
 	UpdateTemplateConfig(context.Context, string, json.RawMessage) error
+	UpdateOwnedTemplateConfig(ctx context.Context, id, userID string, isAdmin bool, config json.RawMessage) (bool, error)
 	CreateGeneration(context.Context, Presentation, Job) error
 	GenerationJob(context.Context, string, string) (Job, error)
 	SetGenerationStatus(context.Context, string, string, int, json.RawMessage) (bool, error)

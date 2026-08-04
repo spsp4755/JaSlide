@@ -26,6 +26,15 @@ func TestEffectiveRoleReturnsEmptyWhenNeverClassified(t *testing.T) {
 	}
 }
 
+func TestAnyObjectHasRoleIgnoresLockedWithNoUnderlyingRole(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "shape-1", "kind": "text", "locked": true},
+	}
+	if anyObjectHasRole(objects) {
+		t.Fatal("anyObjectHasRole() = true, want false (locked alone must not count as classified -- font-rank fallback must still apply)")
+	}
+}
+
 func TestPptxObjectEditsExcludesLockedObjectsEvenWithAGenerativeRole(t *testing.T) {
 	objects := []map[string]any{
 		{"id": "title-shape", "kind": "text", "role": "title"},

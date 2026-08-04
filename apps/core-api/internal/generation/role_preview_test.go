@@ -157,14 +157,14 @@ func TestLockObjectSetsLockedAndPreservesOriginalRole(t *testing.T) {
 	repo := newMemoryRepository()
 	repo.users["user-1"] = db.User{ID: "user-1"}
 	repo.templates["pptx-template"] = memoryTemplate{
-		public: true,
+		public: true, userID: "user-1",
 		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
 			`{"id":"shape-1","kind":"text","role":"subtitle"}` +
 			`]}]}}`),
 	}
 	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
 
-	item, err := service.LockObject(context.Background(), "pptx-template", "user-1", "shape-1", true)
+	item, err := service.LockObject(context.Background(), "pptx-template", "user-1", false, "shape-1", true)
 	if err != nil {
 		t.Fatalf("LockObject() error = %v", err)
 	}
@@ -191,14 +191,14 @@ func TestLockObjectUnlockRevertsToOriginalClassifiedRole(t *testing.T) {
 	repo := newMemoryRepository()
 	repo.users["user-1"] = db.User{ID: "user-1"}
 	repo.templates["pptx-template"] = memoryTemplate{
-		public: true,
+		public: true, userID: "user-1",
 		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
 			`{"id":"shape-1","kind":"text","role":"subtitle","locked":true}` +
 			`]}]}}`),
 	}
 	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
 
-	item, err := service.LockObject(context.Background(), "pptx-template", "user-1", "shape-1", false)
+	item, err := service.LockObject(context.Background(), "pptx-template", "user-1", false, "shape-1", false)
 	if err != nil {
 		t.Fatalf("LockObject() error = %v", err)
 	}
@@ -211,12 +211,44 @@ func TestLockObjectReturnsBadInputForUnknownObjectID(t *testing.T) {
 	repo := newMemoryRepository()
 	repo.users["user-1"] = db.User{ID: "user-1"}
 	repo.templates["pptx-template"] = memoryTemplate{
-		public: true,
+		public: true, userID: "user-1",
 		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[{"id":"shape-1","kind":"text","role":"body"}]}]}}`),
 	}
 	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
 
-	if _, err := service.LockObject(context.Background(), "pptx-template", "user-1", "does-not-exist", true); !errors.Is(err, ErrBadInput) {
+	if _, err := service.LockObject(context.Background(), "pptx-template", "user-1", false, "does-not-exist", true); !errors.Is(err, ErrBadInput) {
 		t.Fatalf("LockObject() error = %v, want ErrBadInput", err)
+	}
+}
+
+func TestLockObjectRejectsNonOwnerNonAdminOnSomeoneElsesTemplate(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["stranger"] = db.User{ID: "stranger"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true, userID: "owner",
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[{"id":"shape-1","kind":"text","role":"body"}]}]}}`),
+	}
+	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
+
+	if _, err := service.LockObject(context.Background(), "pptx-template", "stranger", false, "shape-1", true); !errors.Is(err, ErrBadInput) {
+		t.Fatalf("LockObject() error = %v, want ErrBadInput (a non-owner, non-admin viewer of a public template must not be able to lock its shapes)", err)
+	}
+}
+
+func TestLockObjectAllowsAdminToLockSomeoneElsesTemplate(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["admin-1"] = db.User{ID: "admin-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true, userID: "owner",
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[{"id":"shape-1","kind":"text","role":"body"}]}]}}`),
+	}
+	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
+
+	item, err := service.LockObject(context.Background(), "pptx-template", "admin-1", true, "shape-1", true)
+	if err != nil {
+		t.Fatalf("LockObject() error = %v, want nil (an admin must be able to lock any template's shapes)", err)
+	}
+	if item.Role != "static" || !item.Locked {
+		t.Fatalf("LockObject() = %+v, want role=static locked=true", item)
 	}
 }

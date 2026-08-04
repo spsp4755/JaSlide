@@ -78,6 +78,16 @@ func (repo *memoryRepository) UpdateTemplateConfig(_ context.Context, id string,
 	return nil
 }
 
+func (repo *memoryRepository) UpdateOwnedTemplateConfig(_ context.Context, id, userID string, isAdmin bool, config json.RawMessage) (bool, error) {
+	template, ok := repo.templates[id]
+	if !ok || (template.userID != userID && !isAdmin) {
+		return false, nil
+	}
+	template.config = config
+	repo.templates[id] = template
+	return true, nil
+}
+
 func (repo *memoryRepository) CreateGeneration(_ context.Context, presentation Presentation, job Job) error {
 	repo.presentations[presentation.ID] = presentation
 	repo.jobs[job.ID] = job
