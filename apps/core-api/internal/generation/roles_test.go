@@ -5,6 +5,43 @@ import (
 	"testing"
 )
 
+func TestEffectiveRoleReturnsStaticWhenLockedRegardlessOfRole(t *testing.T) {
+	object := map[string]any{"id": "shape-1", "kind": "text", "role": "subtitle", "locked": true}
+	if got := effectiveRole(object); got != "static" {
+		t.Fatalf("effectiveRole() = %q, want static", got)
+	}
+}
+
+func TestEffectiveRoleReturnsUnderlyingRoleWhenNotLocked(t *testing.T) {
+	object := map[string]any{"id": "shape-1", "kind": "text", "role": "subtitle", "locked": false}
+	if got := effectiveRole(object); got != "subtitle" {
+		t.Fatalf("effectiveRole() = %q, want subtitle", got)
+	}
+}
+
+func TestEffectiveRoleReturnsEmptyWhenNeverClassified(t *testing.T) {
+	object := map[string]any{"id": "shape-1", "kind": "text"}
+	if got := effectiveRole(object); got != "" {
+		t.Fatalf("effectiveRole() = %q, want empty", got)
+	}
+}
+
+func TestPptxObjectEditsExcludesLockedObjectsEvenWithAGenerativeRole(t *testing.T) {
+	objects := []map[string]any{
+		{"id": "title-shape", "kind": "text", "role": "title"},
+		{"id": "locked-subtitle", "kind": "text", "role": "subtitle", "locked": true, "text": "AI 엔지니어링 파트"},
+	}
+	content := roleContent{Title: "Q3 Results", Subtitle: "New Subtitle That Must Not Appear"}
+
+	edits := pptxObjectEdits(objects, 0, content)
+
+	for _, edit := range edits {
+		if edit["objectId"] == "locked-subtitle" {
+			t.Fatalf("edits = %v, want locked-subtitle excluded (locked forces static regardless of role)", edits)
+		}
+	}
+}
+
 func TestRequestedGenerativeRolesReturnsSortedDistinctRoles(t *testing.T) {
 	objects := []map[string]any{
 		{"id": "a", "kind": "text", "role": "kpi"},

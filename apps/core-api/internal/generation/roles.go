@@ -6,6 +6,20 @@ import (
 	"strings"
 )
 
+// effectiveRole returns an object's role for generation/assignment purposes:
+// "static" unconditionally when the user has locked it (regardless of the
+// classifier's own role), otherwise the classified role as-is. The
+// underlying "role" field is never modified by this function -- unlocking
+// (see Service.LockObject) restores whatever the classifier originally
+// assigned.
+func effectiveRole(object map[string]any) string {
+	if locked, _ := object["locked"].(bool); locked {
+		return "static"
+	}
+	role, _ := object["role"].(string)
+	return role
+}
+
 // requestedGenerativeRoles returns the sorted, de-duplicated set of
 // subtitle/date/kpi roles actually present among a slide's template
 // objects, so slidePrompt only asks the model for fields this specific
@@ -14,7 +28,7 @@ import (
 func requestedGenerativeRoles(objects []map[string]any) []string {
 	seen := map[string]bool{}
 	for _, object := range objects {
-		role, _ := object["role"].(string)
+		role := effectiveRole(object)
 		if role == "subtitle" || role == "date" || role == "kpi" {
 			seen[role] = true
 		}
@@ -58,7 +72,7 @@ func pptxObjectEdits(objects []map[string]any, slide int, content roleContent) [
 // role" means classification hasn't happened yet or failed.
 func anyObjectHasRole(objects []map[string]any) bool {
 	for _, object := range objects {
-		if role, ok := object["role"].(string); ok && role != "" {
+		if effectiveRole(object) != "" {
 			return true
 		}
 	}
@@ -78,7 +92,7 @@ func rolePptxObjectEdits(objects []map[string]any, slide int, content roleConten
 	}
 	var edits []map[string]any
 	for _, object := range objects {
-		role, _ := object["role"].(string)
+		role := effectiveRole(object)
 		if role == "static" {
 			continue
 		}
