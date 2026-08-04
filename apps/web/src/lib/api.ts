@@ -106,6 +106,10 @@ export const generationApi = {
     cancel: (jobId: string) => api.post(`/generation/${jobId}/cancel`),
     edit: (data: { slideId?: string; slideIds?: string[]; instruction: string }, signal?: AbortSignal) =>
         api.post('/generation/edit', data, { signal }),
+    rolePreview: (templateId: string, slides: { type: string; templateIndex: number | null }[]) =>
+        api.post(`/generation/templates/${templateId}/role-preview`, { slides }),
+    lockObject: (templateId: string, objectId: string, locked: boolean) =>
+        api.patch(`/generation/templates/${templateId}/objects/${objectId}/lock`, { locked }),
 };
 
 // Templates

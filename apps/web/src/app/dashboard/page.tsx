@@ -37,12 +37,27 @@ interface OutlineSlide {
     title: string;
     type: string;
     keyPoints: string[];
+    templateIndex?: number | null;
 }
 
 interface Outline {
     title: string;
     slides: OutlineSlide[];
 }
+
+interface RolePreviewItem {
+    objectId: string;
+    role: string;
+    locked: boolean;
+}
+
+interface RolePreviewSlide {
+    items: RolePreviewItem[];
+}
+
+const ROLE_LABELS: Record<string, string> = {
+    title: '제목', subtitle: '부제목', body: '본문', date: '날짜', kpi: 'KPI', static: '고정',
+};
 
 interface RecentWork {
     presentationId: string;
@@ -95,6 +110,7 @@ function DashboardContent() {
     const [outline, setOutline] = useState<Outline | null>(null);
     const [pendingContent, setPendingContent] = useState('');
     const [outlineContext, setOutlineContext] = useState<{ skillId: string | null; templateId: string | null } | null>(null);
+    const [rolePreview, setRolePreview] = useState<RolePreviewSlide[] | null>(null);
 
     useEffect(() => {
         if (!hasHydrated) return;
@@ -369,6 +385,56 @@ function DashboardContent() {
         poll();
     };
 
+    const rolePreviewKey = outline
+        ? JSON.stringify(outline.slides.map((slide) => ({ type: slide.type, templateIndex: slide.templateIndex ?? null })))
+        : null;
+
+    useEffect(() => {
+        if (!outline || !outlineContext?.templateId) {
+            setRolePreview(null);
+            return;
+        }
+        setRolePreview(null);
+        let cancelled = false;
+        let attempts = 0;
+        const templateId = outlineContext.templateId;
+        const slides = outline.slides.map((slide) => ({ type: slide.type, templateIndex: slide.templateIndex ?? null }));
+        const poll = async () => {
+            if (cancelled) return;
+            attempts += 1;
+            try {
+                const response = await generationApi.rolePreview(templateId, slides);
+                if (cancelled) return;
+                if (response.data.status === 'ready') {
+                    setRolePreview(response.data.slides);
+                    return;
+                }
+            } catch {
+                // Best-effort: role preview failing does not block generation
+                // (the font-rank fallback still applies), so fail silently.
+            }
+            if (!cancelled && attempts < 30) setTimeout(poll, 2000);
+        };
+        poll();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rolePreviewKey, outlineContext?.templateId]);
+
+    const handleToggleLock = async (templateId: string, objectId: string, slideIndex: number, locked: boolean) => {
+        try {
+            const response = await generationApi.lockObject(templateId, objectId, locked);
+            setRolePreview((prev) => prev && prev.map((slide, i) => (i !== slideIndex ? slide : {
+                items: slide.items.map((item) => (item.objectId === objectId ? response.data : item)),
+            })));
+        } catch (error: any) {
+            toast({
+                title: locked ? '고정 실패' : '고정 해제 실패',
+                description: error.response?.data?.message || (locked ? '도형을 고정하지 못했습니다.' : '고정을 해제하지 못했습니다.'),
+                variant: 'destructive',
+            });
+        }
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -454,6 +520,31 @@ function DashboardContent() {
                                             ))}
                                             <button type="button" onClick={() => addKeyPoint(i)} className="text-sm text-muted-foreground hover:text-foreground">+ 요점 추가</button>
                                         </div>
+                                        {rolePreview?.[i] && rolePreview[i].items.length > 0 && (
+                                            <div className="mt-3 space-y-1 border-t border-border pt-3 pl-8">
+                                                {rolePreview[i].items.map((item) => {
+                                                    const label = ROLE_LABELS[item.role] ?? item.role;
+                                                    const isUserLocked = item.role === 'static' && item.locked;
+                                                    const isClassifierStatic = item.role === 'static' && !item.locked;
+                                                    return (
+                                                        <div key={item.objectId} className="flex items-center justify-between text-xs text-muted-foreground">
+                                                            <span>
+                                                                {label} · {isClassifierStatic ? '🔒 고정됨(템플릿 원본)' : isUserLocked ? '🔒 고정됨' : '채워질 예정'}
+                                                            </span>
+                                                            {!isClassifierStatic && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleLock(outlineContext!.templateId!, item.objectId, i, !isUserLocked)}
+                                                                    className="text-primary hover:underline"
+                                                                >
+                                                                    {isUserLocked ? '고정 해제' : '고정하기'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
