@@ -37,6 +37,7 @@ func NewHandlers(service *Service, authService *auth.Service, renderer *renderer
 	router.Post("/{jobId}/cancel", handler.cancel)
 	router.Post("/edit", handler.edit)
 	router.Post("/templates/{templateId}/role-preview", handler.rolePreview)
+	router.Patch("/templates/{templateId}/objects/{objectId}/lock", handler.lockObject)
 	return router
 }
 
@@ -196,6 +197,21 @@ func (handler *handlers) rolePreview(writer http.ResponseWriter, request *http.R
 	}
 	user, _ := auth.PrincipalFromContext(request.Context())
 	result, err := handler.service.RolePreview(request.Context(), chi.URLParam(request, "templateId"), user.ID, slides)
+	writeServiceResult(writer, http.StatusOK, result, err)
+}
+
+func (handler *handlers) lockObject(writer http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Locked bool `json:"locked"`
+	}
+	if err := decode(writer, request, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	user, _ := auth.PrincipalFromContext(request.Context())
+	result, err := handler.service.LockObject(
+		request.Context(), chi.URLParam(request, "templateId"), user.ID, chi.URLParam(request, "objectId"), input.Locked,
+	)
 	writeServiceResult(writer, http.StatusOK, result, err)
 }
 

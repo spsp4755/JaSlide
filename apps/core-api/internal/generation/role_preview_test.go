@@ -3,6 +3,7 @@ package generation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -149,5 +150,73 @@ func TestRolePreviewReturnsReadyItemsResolvedByChooseTemplateIndex(t *testing.T)
 	}
 	if byID["shape-2"].Role != "static" || !byID["shape-2"].Locked {
 		t.Fatalf("shape-2 = %+v, want role=static locked=true", byID["shape-2"])
+	}
+}
+
+func TestLockObjectSetsLockedAndPreservesOriginalRole(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
+			`{"id":"shape-1","kind":"text","role":"subtitle"}` +
+			`]}]}}`),
+	}
+	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
+
+	item, err := service.LockObject(context.Background(), "pptx-template", "user-1", "shape-1", true)
+	if err != nil {
+		t.Fatalf("LockObject() error = %v", err)
+	}
+	if item.Role != "static" || !item.Locked {
+		t.Fatalf("LockObject() = %+v, want role=static locked=true", item)
+	}
+
+	var fields map[string]any
+	_ = json.Unmarshal(repo.templates["pptx-template"].config, &fields)
+	source, _ := fields["source"].(map[string]any)
+	slides, _ := source["slides"].([]any)
+	slide, _ := slides[0].(map[string]any)
+	objects, _ := slide["objects"].([]any)
+	object, _ := objects[0].(map[string]any)
+	if locked, _ := object["locked"].(bool); !locked {
+		t.Fatal("locked was not persisted to the template config")
+	}
+	if object["role"] != "subtitle" {
+		t.Fatalf("role = %v, want subtitle preserved (locking must not overwrite the classified role)", object["role"])
+	}
+}
+
+func TestLockObjectUnlockRevertsToOriginalClassifiedRole(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[` +
+			`{"id":"shape-1","kind":"text","role":"subtitle","locked":true}` +
+			`]}]}}`),
+	}
+	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
+
+	item, err := service.LockObject(context.Background(), "pptx-template", "user-1", "shape-1", false)
+	if err != nil {
+		t.Fatalf("LockObject() error = %v", err)
+	}
+	if item.Role != "subtitle" || item.Locked {
+		t.Fatalf("LockObject() = %+v, want role=subtitle locked=false", item)
+	}
+}
+
+func TestLockObjectReturnsBadInputForUnknownObjectID(t *testing.T) {
+	repo := newMemoryRepository()
+	repo.users["user-1"] = db.User{ID: "user-1"}
+	repo.templates["pptx-template"] = memoryTemplate{
+		public: true,
+		config: json.RawMessage(`{"source":{"kind":"pptx","slides":[{"objects":[{"id":"shape-1","kind":"text","role":"body"}]}]}}`),
+	}
+	service := NewService(repo, &maliciousHTMLLLM{}, new(recordingQueue))
+
+	if _, err := service.LockObject(context.Background(), "pptx-template", "user-1", "does-not-exist", true); !errors.Is(err, ErrBadInput) {
+		t.Fatalf("LockObject() error = %v, want ErrBadInput", err)
 	}
 }

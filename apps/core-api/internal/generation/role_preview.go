@@ -1,6 +1,10 @@
 package generation
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+)
 
 // RolePreviewSlideInput is the minimal per-outline-slide shape the
 // role-preview endpoint needs to resolve which template slide an outline
@@ -89,4 +93,56 @@ func (service *Service) classifyInBackground(templateID, userID string) {
 		defer service.classifying.Delete(templateID)
 		_, _ = service.template(context.Background(), &templateID, userID, true)
 	}()
+}
+
+// LockObject sets (or clears) one template object's user-forced "locked"
+// override -- see effectiveRole. The underlying "role" field is never
+// touched, so clearing the override (locked=false) restores whatever the
+// classifier originally assigned. Persists via UpdateTemplateConfig, the
+// same repo method classifyTemplateRoles already uses, so the change is
+// permanent and visible to every future generation.
+func (service *Service) LockObject(ctx context.Context, templateID, userID, objectID string, locked bool) (RolePreviewItem, error) {
+	raw, err := service.repo.VisibleTemplateConfig(ctx, templateID, userID)
+	if err != nil {
+		return RolePreviewItem{}, fmt.Errorf("%w: Template not found", ErrBadInput)
+	}
+	fields := rawObject(raw)
+	source, _ := fields["source"].(map[string]any)
+	object, err := findObjectByID(source, objectID)
+	if err != nil {
+		return RolePreviewItem{}, err
+	}
+	object["locked"] = locked
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return RolePreviewItem{}, err
+	}
+	if err := service.repo.UpdateTemplateConfig(ctx, templateID, encoded); err != nil {
+		return RolePreviewItem{}, err
+	}
+	return RolePreviewItem{ObjectID: objectID, Role: effectiveRole(object), Locked: locked}, nil
+}
+
+// findObjectByID locates one object by id across every slide in source,
+// returning a wrapped ErrBadInput if no slide's objects contain it -- the
+// same "not found -> ErrBadInput" convention service.template() already
+// uses for a missing template, rather than the ErrNotFound sentinel (that
+// one is reserved for generation jobs -- see writeServiceResult's hardcoded
+// "Job not found" message).
+func findObjectByID(source map[string]any, objectID string) (map[string]any, error) {
+	rawSlides, _ := source["slides"].([]any)
+	for _, rawSlide := range rawSlides {
+		slide, _ := rawSlide.(map[string]any)
+		rawObjects, _ := slide["objects"].([]any)
+		for _, rawObject := range rawObjects {
+			object, ok := rawObject.(map[string]any)
+			if !ok {
+				continue
+			}
+			if id, _ := object["id"].(string); id == objectID {
+				return object, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("%w: Object not found", ErrBadInput)
 }
