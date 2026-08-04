@@ -36,8 +36,7 @@ func TestRolePreviewTriggersBackgroundClassificationAndReturnsPendingImmediately
 			`{"id":"shape-1","kind":"text","fontSize":32,"text":"Heading"}` +
 			`]}]}}`),
 	}
-	done := make(chan struct{})
-	llm := &classifyingLLM{maliciousHTMLLLM: &maliciousHTMLLLM{}, roles: map[string]string{"shape-1": "title"}, done: done}
+	llm := &classifyingLLM{maliciousHTMLLLM: &maliciousHTMLLLM{}, roles: map[string]string{"shape-1": "title"}}
 	service := NewService(repo, llm, new(recordingQueue))
 
 	result, err := service.RolePreview(context.Background(), "pptx-template", "user-1", []RolePreviewSlideInput{{Type: "content"}})
@@ -48,10 +47,21 @@ func TestRolePreviewTriggersBackgroundClassificationAndReturnsPendingImmediately
 		t.Fatalf("Status = %q, want pending", result.Status)
 	}
 
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("background classification never ran")
+	// Poll service.classifying instead of an llm-level done channel: the
+	// in-flight flag only clears (classifyInBackground's deferred Delete)
+	// after service.template(..., classify=true) fully returns, which is
+	// after the classification result is persisted -- an llm-level done
+	// channel closes earlier, before that persistence write, and would
+	// race with the read below.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, inFlight := service.classifying.Load("pptx-template"); !inFlight {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("background classification never finished (in-flight flag never cleared)")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	var fields map[string]any
