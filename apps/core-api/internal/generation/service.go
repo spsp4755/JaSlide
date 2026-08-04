@@ -168,6 +168,11 @@ type Service struct {
 	queue Queue
 	mu    sync.Mutex
 	jobs  map[string]*runningJob
+	// classifying tracks template IDs with a background role-classification
+	// goroutine currently running (see RolePreview/classifyInBackground in
+	// role_preview.go) so concurrent callers for the same unclassified
+	// template don't each start their own LLM round-trip.
+	classifying sync.Map
 }
 
 func NewService(repo Repository, llm LLM, queue Queue) *Service {

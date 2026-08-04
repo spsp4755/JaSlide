@@ -889,15 +889,27 @@ func TestProcessAssignsRoleBasedContentToMatchingShapes(t *testing.T) {
 // classifyingLLM adds ClassifyTemplateRoles on top of maliciousHTMLLLM's
 // existing full LLM implementation, so it satisfies both LLM and (via the
 // service.llm.(RoleClassifier) type assertion in template()) RoleClassifier.
+// release/done let a test control and observe a background classification
+// goroutine deterministically instead of sleeping: if release is non-nil,
+// ClassifyTemplateRoles blocks on it before proceeding; if done is
+// non-nil, it's closed right before returning.
 type classifyingLLM struct {
 	*maliciousHTMLLLM
 	classifyCalls int
 	roles         map[string]string
 	classifyErr   error
+	release       chan struct{}
+	done          chan struct{}
 }
 
 func (llm *classifyingLLM) ClassifyTemplateRoles(_ context.Context, _ RoleClassificationRequest) (map[string]string, error) {
+	if llm.release != nil {
+		<-llm.release
+	}
 	llm.classifyCalls++
+	if llm.done != nil {
+		defer close(llm.done)
+	}
 	if llm.classifyErr != nil {
 		return nil, llm.classifyErr
 	}

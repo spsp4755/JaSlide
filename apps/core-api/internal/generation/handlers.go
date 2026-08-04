@@ -36,6 +36,7 @@ func NewHandlers(service *Service, authService *auth.Service, renderer *renderer
 	router.Get("/{jobId}/status", handler.status)
 	router.Post("/{jobId}/cancel", handler.cancel)
 	router.Post("/edit", handler.edit)
+	router.Post("/templates/{templateId}/role-preview", handler.rolePreview)
 	return router
 }
 
@@ -176,6 +177,26 @@ func (handler *handlers) edit(writer http.ResponseWriter, request *http.Request)
 		result["slide"] = slides[0]
 	}
 	writeJSON(writer, http.StatusCreated, result)
+}
+
+func (handler *handlers) rolePreview(writer http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Slides []struct {
+			Type          string `json:"type"`
+			TemplateIndex *int   `json:"templateIndex"`
+		} `json:"slides"`
+	}
+	if err := decode(writer, request, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	slides := make([]RolePreviewSlideInput, len(input.Slides))
+	for index, slide := range input.Slides {
+		slides[index] = RolePreviewSlideInput{Type: slide.Type, TemplateIndex: slide.TemplateIndex}
+	}
+	user, _ := auth.PrincipalFromContext(request.Context())
+	result, err := handler.service.RolePreview(request.Context(), chi.URLParam(request, "templateId"), user.ID, slides)
+	writeServiceResult(writer, http.StatusOK, result, err)
 }
 
 type extractedSource struct {
